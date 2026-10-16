@@ -2,8 +2,8 @@
 
 Audit date: 2026-10-17. Updated scope: **no Jetson currently available; define the
 stack and plan a software simulation first**. Earlier decisions below preserve
-the original audit. Sections 7-10 supersede the hardware-first implementation
-order and previously deferred software choices; radio acceptance remains pending.
+the original audit. Sections 7-10 record the simulation-first plan; section 11
+supersedes their Python choices with Rust. Radio acceptance remains pending.
 
 ## Evidence collected
 
@@ -238,3 +238,35 @@ and the 200-device design remain later work.
 
 **Evidence / test:** Existing local commit `cde588c`; review plan dependencies,
 Markdown links, and Git whitespace checks before committing this documentation.
+
+## 11. Rust to align with the fleet
+
+**Decision:** Replace the Python implementation plan with Rust throughout.
+
+**Original proposal:** Python, asyncio, pytest, Bleak, and dbus-fast.
+
+**Final choice:** Rust 1.88.0/edition 2024, Tokio, Cargo tests, Rustfmt, and Clippy.
+Use `bluer` with `bluetoothd` for both BLE roles, behind an optional `ble` feature.
+In the later Wi-Fi phase, use `dbus`/`dbus-tokio` for NetworkManager, matching the
+library family already used by `bluer`. One Cargo package: shared protocol
+library, simulation example, and two explicit binary targets under `device/`
+and `configurator/`. Retain systemd and optional Docker test packaging.
+
+**Reason:** The user reports Teton's fleet uses Rust and explicitly requests
+alignment. [BlueR (`bluer`)](https://docs.rs/bluer/0.17.4/bluer/) covers local
+and remote GATT, advertising, and discovery using Tokio. Its
+[manifest](https://docs.rs/crate/bluer/0.17.4/source/Cargo.toml.orig) declares
+Rust >=1.75 and libdbus-based async dependencies; the installed compiler is newer.
+Use a single Linux BLE library rather than separate role-specific wrappers.
+
+**Trade-off:** Native libdbus build/link requirements and device ABI compatibility
+must be tested. Optional hardware features isolate those requirements from the
+simulation. The crate graph may impose a higher MSRV than bluer itself; pin only
+after resolution/build against the selected compiler. Exact fleet dependencies
+are unknown. No current code or stored data needs migration.
+
+**Evidence / test:** Locally observed rustc/Cargo 1.88.0, Rustfmt 1.8.0-stable,
+Clippy 0.1.88, and x86-64 target only. `pkg-config --modversion dbus-1` returns
+1.12.20. Crate APIs/metadata reviewed; no application/crate build or ARM64 test
+performed. README, architecture, task commands, file paths, and ignore rules
+are revised; the existing AGENTS.md remains untouched.
