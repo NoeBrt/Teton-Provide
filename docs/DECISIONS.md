@@ -3,7 +3,8 @@
 Audit date: 2026-10-17. Updated scope: **no Jetson currently available; define the
 stack and plan a software simulation first**. Earlier decisions below preserve
 the original audit. Sections 7-10 record the simulation-first plan; section 11
-supersedes their Python choices with Rust. Radio acceptance remains pending.
+supersedes their Python choices with Rust. Section 12 records the executable
+offline simulation. Radio acceptance remains pending.
 
 ## Evidence collected
 
@@ -270,3 +271,33 @@ Clippy 0.1.88, and x86-64 target only. `pkg-config --modversion dbus-1` returns
 1.12.20. Crate APIs/metadata reviewed; no application/crate build or ARM64 test
 performed. README, architecture, task commands, file paths, and ignore rules
 are revised; the existing AGENTS.md remains untouched.
+
+## 12. Executable simulation without uncached crates
+
+**Decision:** Use standard-library channels and threads for the simulator;
+keep Tokio and bluer planned for real BLE.
+
+**Original proposal:** Tokio channels/tests for the local software milestone.
+
+**Final choice:** Dependency-free Rust library, software transport, demo, and
+Cargo tests. `std::sync::mpsc::sync_channel(1)` provides each direction; one
+worker runs the shared handler. Check input size before copying, use nonblocking
+send plus finite receive deadlines, close the reply receiver before the request
+sender, and join the worker on session closure. Timeout invalidates the session.
+
+**Reason:** Tokio/bluer are absent from the Cargo cache; `curl` to the crate
+index fails DNS. There is no `/dev/vhci` or `btvirt`. This implementation can
+actually build/test offline and advances the software gate without replacing
+the future BlueZ integration with claims about simulated radios.
+
+**Trade-off:** Simulated thread/channel timings cannot predict Tokio, BLE,
+crypto, Wi-Fi, or fleet throughput. Device stop invalidates sessions; an already
+pending request retains its receive deadline. Hardware code remains unimplemented.
+Rustup's compiler installation is separate from Cargo's offline dependency flag.
+
+**Evidence / test:** Rust 1.88.0 via the installed `stable` toolchain;
+`RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline`, Clippy,
+formatting, and demo pass. Independent agent review verified 14 tests and
+session cleanup; subsequent validation/evidence will record the final suite.
+The named 1.88.0 toolchain is pinned for reproducibility but must be preinstalled
+on a new machine. No application dependency, privilege, or network is needed.
