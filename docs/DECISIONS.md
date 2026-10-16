@@ -301,3 +301,33 @@ formatting, and demo pass. Independent agent review verified 14 tests and
 session cleanup; subsequent validation/evidence will record the final suite.
 The named 1.88.0 toolchain is pinned for reproducibility but must be preinstalled
 on a new machine. No application dependency, privilege, or network is needed.
+
+## 13. Measured software checkpoint, bounded endurance
+
+**Decision:** Establish a reproducible simulation baseline and recovery evidence
+without turning software timings into radio or fleet claims.
+
+**Original proposal:** Continue autonomous tests and benchmarks during the night;
+sub-agents explicitly authorized for collaboration.
+
+**Final choice:** Three release benchmark processes, each with seven batches per
+mode and checked responses; separately time reused-session exchange and full
+connect/exchange/close. Run a bounded 300-second mixed-failure endurance test.
+Keep commands, compiler, code commit, raw results, and resource snapshots in
+`demo/`, with interpretation in `docs/BENCHMARKS.md`.
+
+**Reason:** Fixed, checked work plus independent review gives a defensible
+software milestone. Benchmarks retain validation and worker cleanup. No
+optimization is justified by the present requirements; preserve the baseline.
+
+**Trade-off:** Five minutes is not an overnight reliability test. Thread/channel
+latency is not BLE/cryptographic/network throughput. A first statistics collector
+failed on an empty `/proc` field; that incomplete observation is retained and
+excluded. The corrected fresh run is the only reported endurance result.
+
+**Evidence / test:** 18 tests pass in debug and release; Rustfmt, Clippy with
+warnings denied, and a release build pass. Independent agents reviewed the
+protocol, connection cleanup, timeout/late-reply behavior, benchmark percentiles,
+and soak accounting. The completed 300.001-second run checked 609,640 successful
+responses, 853,496 expected errors, and 853,496 closed/joined sessions with zero
+unexpected errors. Hardware checkpoint H remains open.

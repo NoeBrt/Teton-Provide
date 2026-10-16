@@ -1,0 +1,17 @@
+SIMULATION ONLY — no BLE or Wi-Fi measurement
+UTC started: 2026-10-16T23:42:46.526057+00:00
+Code commit: 5f3f4cc2a8fe083cf3b87bf41c3c1ed3fbcf85e0
+OS: Linux-6.8.0-138-generic-x86_64-with-glibc2.35
+CPU: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+Compiler: rustc 1.88.0 (6b00bc388 2025-06-23)
+Profile: release, default Cargo optimization
+Dependencies: standard library only
+CPU affinity/governor not controlled; shared workstation
+
+Command: target/release/examples/simulation
+SIMULATION — in-memory software transport; no BLE or Wi-Fi
+DISCOVERED TETON-DEMO-001 (synthetic discovery)
+CONNECTED (local worker)
+REQUEST hello -> RESPONSE world
+CLOSED (worker joined)
+Exit code: 0

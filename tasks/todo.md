@@ -1,8 +1,14 @@
 # Task Checklist
 
-Status: revised to Rust; no application implementation started. Commands below
-are planned acceptance commands until their task is implemented. Keep the
-existing incomplete tasks; this revision changes their stack, not their scope.
+Status: software checkpoint S complete. The 18 tests pass in debug and release;
+demo, three benchmark trials, and a 300-second recovery soak have captured
+evidence in `demo/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
+their commands are planned acceptance commands, not currently available targets.
+
+The installed `stable` compiler is Rust 1.88.0. The override below avoids rustup
+trying to download the separately named toolchain in this offline environment.
+Elsewhere, preinstall the pinned toolchain and Rustfmt/Clippy, or verify the
+override compiler version before using it.
 
 ## 1. Shared hello contract
 
@@ -10,56 +16,65 @@ existing incomplete tasks; this revision changes their stack, not their scope.
 
 **Acceptance criteria:**
 
-- [ ] `hello` produces `world`; all other input is rejected without echo/logging.
-- [ ] Tests cover empty, malformed, oversized, and credential-like input.
-- [ ] One Cargo package and Rust 1.88.0 pin; no third-party dependency needed yet.
+- [x] `hello` produces `world`; all other input is rejected without echo/logging.
+- [x] Tests cover empty, malformed, oversized, and credential-like input.
+- [x] One Cargo package and Rust 1.88.0 pin; no third-party dependency needed.
 
-**Verification:** `cargo test --lib protocol --locked`; `cargo fmt --all -- --check`.
+**Verification:** `RUSTUP_TOOLCHAIN=stable cargo test --lib protocol --locked --offline`;
+`RUSTUP_TOOLCHAIN=stable cargo fmt --all -- --check`.
 **Dependencies:** None.
 **Files:** `src/lib.rs`, `src/protocol.rs`, `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`.
 **Scope:** Medium, five files. Unit tests live beside the handler; Cargo generates the lockfile.
 
 ## 2. Local simulated round trip
 
-**Description:** Run distinct device/configurator flows through bounded Tokio channels,
-with synthetic discovery and the actual shared handler.
+**Description:** Run distinct device/configurator flows through two capacity-one
+standard-library channels and a worker thread, with synthetic discovery and the shared handler.
 
 **Acceptance criteria:**
 
-- [ ] `cargo run --example simulation --locked` shows discovery, connection, request, response, and close.
-- [ ] Output says `SIMULATION`; no sockets, root, Docker, BLE, or Internet required.
-- [ ] A focused test checks the returned response and finite wait deadlines.
+- [x] The simulation example shows discovery, connection, request, response, and close.
+- [x] Output says `SIMULATION`; no sockets, root, Docker, BLE, or Internet required.
+- [x] Focused tests check the returned response and finite wait deadlines.
 
-**Verification:** `cargo run --example simulation --locked`;
-`cargo test --example simulation --locked`.
+**Verification:** `RUSTUP_TOOLCHAIN=stable cargo run --example simulation --locked --offline`;
+`RUSTUP_TOOLCHAIN=stable cargo test --test simulation --locked --offline`.
 **Dependencies:** 1.
-**Files:** `examples/simulation.rs`, `Cargo.toml`, `Cargo.lock`, `README.md`.
-**Scope:** Medium, four files. Add only the necessary Tokio features; tests live in the example.
+**Files:** `src/lib.rs`, `src/simulation.rs`, `tests/simulation.rs`,
+`examples/simulation.rs`, `README.md`.
+**Scope:** Medium, five files. Shared simulation wiring supports the demo, tests, and measurements.
 
 ## 3. Simulated failures and recovery
 
-**Description:** Exercise a dropped response and a closed session, then retry
-through a fresh connection; simulate replacing the device instance.
+**Description:** Exercise dropped/late responses and closed sessions, retry through
+fresh connections, and simulate replacing the device instance. Measure this software
+transport and run a bounded soak using the same implementation.
 
 **Acceptance criteria:**
 
-- [ ] Timeout and disconnect give bounded, explicit failures; no hanging tasks.
-- [ ] Retry/new connection succeeds and receives no stale response from the old session.
-- [ ] Simulated restart clears transient state and allows synthetic rediscovery.
+- [x] Timeout and disconnect give bounded, explicit failures; no hanging tasks.
+- [x] Retry/new connection succeeds and receives no stale response from the old session.
+- [x] Simulated restart clears transient state and allows synthetic rediscovery.
+- [x] Release benchmark and bounded soak verify responses, exercise recovery, and record actual results.
+- [x] Sanitized evidence states commands, host, sample counts, elapsed time, and simulation limitations.
 
-**Verification:** `cargo test --example simulation --locked`; use Tokio's paused
-test clock for timeout injection. Repeat the round trip 20 times in a bounded
-test without real-time sleeps or flaky timing assertions.
+**Verification:** `RUSTUP_TOOLCHAIN=stable cargo test --lib --test simulation --locked --offline`.
+Unit tests cover late replies and worker joining; integration tests include 20
+sessions of 20 exchanges. Use finite real-time receive deadlines without tight
+timing assertions. Run `examples/benchmark.rs` with `--release --locked --offline`
+after its harness is verified; capture benchmark and bounded-soak output separately.
+Stop prevents discovery/new requests; an already pending wait keeps its deadline.
 **Dependencies:** 2.
-**Files:** `examples/simulation.rs`, `Cargo.toml`, `Cargo.lock`, `demo/simulation.txt`, `README.md`.
-**Scope:** Medium, five files. Enable Tokio `test-util` for tests; evidence records actual output.
+**Files:** `src/simulation.rs`, `tests/simulation.rs`, `examples/benchmark.rs`,
+`demo/`, `README.md`.
+**Scope:** Medium. Evidence records actual output; no BLE or 200-device throughput claim.
 
 ## Checkpoint S: software demonstration
 
-- [ ] Tasks 1-3 pass with `cargo test --all-targets --locked` and `git diff --check`.
-- [ ] `cargo fmt --all -- --check` and `cargo clippy --all-targets --locked -- -D warnings` pass.
-- [ ] Evidence labels discovery, disconnect, and restart as simulated.
-- [ ] No claim of working BLE, secure provisioning, or Wi-Fi connection.
+- [x] Tasks 1-3 pass with `RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline` and `git diff --check`.
+- [x] `RUSTUP_TOOLCHAIN=stable cargo fmt --all -- --check` and `RUSTUP_TOOLCHAIN=stable cargo clippy --all-targets --locked --offline -- -D warnings` pass.
+- [x] Evidence labels discovery, disconnect, and restart as simulated.
+- [x] No claim of working BLE, secure provisioning, or Wi-Fi connection.
 
 ## 4. Audit available hardware and lock BLE dependencies
 

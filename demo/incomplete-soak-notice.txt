@@ -1,0 +1,4 @@
+INCOMPLETE OBSERVATION ATTEMPT — excluded from reported results.
+The first statistics sampler failed with IndexError while parsing an empty /proc status field.
+No complete endurance result/exit status was collected. A new bounded run follows in soak.txt.
+This was a measurement-script failure, not evidence of a simulator failure or success.

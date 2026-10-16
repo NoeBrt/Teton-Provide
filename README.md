@@ -11,6 +11,7 @@ and closes its worker. It supports fault injection and recoverable failures.
 - [Implementation plan](tasks/plan.md)
 - [Task checklist and acceptance criteria](tasks/todo.md)
 - [Counter-review and decision history](docs/DECISIONS.md)
+- [Benchmark methodology and results](docs/BENCHMARKS.md)
 
 The real milestone still requires actual advertisements, GATT exchanges,
 reconnect, service restart, and reboot on two machines. The simulator accepts
@@ -63,7 +64,7 @@ Use Rust with Cargo's built-in tests, following the user's report that Teton's
 fleet uses Rust. The simulator uses `std::sync::mpsc` and one worker thread per
 connection because Tokio is not cached and crate downloads are unavailable here.
 The planned hardware adapters use Tokio and
-use `bluer` for both BlueZ GATT roles, and later `dbus`/`dbus-tokio` for
+`bluer` for both BlueZ GATT roles, and later `dbus`/`dbus-tokio` for
 NetworkManager. systemd will manage the real device binary. `Cargo.lock` and
 the Rust 1.88.0 pin are committed. See decision 12 for the simulation runtime change.
 
@@ -82,6 +83,24 @@ Stopping/dropping a fake device invalidates discovery, new connections, and
 subsequent requests on old sessions. In-flight requests retain their existing
 deadline. A replacement fake device is rediscovered. This is a model of restart,
 not evidence of a systemd restart or machine reboot. Docker remains optional.
+
+## Benchmarks and endurance
+
+```sh
+cargo run --release --example benchmark --locked --offline
+cargo run --release --example benchmark --locked --offline -- --soak 300
+```
+
+The first command checks and times exchanges on a reused session separately
+from connect/exchange/close operations. The second mixes valid requests,
+invalid input, timeout, disconnect, retry, and simulated restart for the requested
+duration (1-3600 seconds). Failures outside the expected injected outcomes cause
+a nonzero exit. Prepared binaries can run these checks without Cargo or Rustup.
+
+These are local thread/channel measurements. Commands, environment, raw output,
+and bounded-run evidence are retained in `demo/`; see the benchmark report for
+the measured scope and limitations. No wireless, credential protection, network
+activation, systemd, or 200-device throughput is measured.
 
 ## Hardware audit
 

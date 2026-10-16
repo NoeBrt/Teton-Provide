@@ -1,0 +1,81 @@
+SIMULATION ONLY — no BLE or Wi-Fi measurement
+UTC started: 2026-10-16T23:42:46.526057+00:00
+Code commit: 5f3f4cc2a8fe083cf3b87bf41c3c1ed3fbcf85e0
+OS: Linux-6.8.0-138-generic-x86_64-with-glibc2.35
+CPU: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+Compiler: rustc 1.88.0 (6b00bc388 2025-06-23)
+Profile: release, default Cargo optimization
+Dependencies: standard library only
+CPU affinity/governor not controlled; shared workstation
+
+Independent process trial 1/3
+Command: target/release/examples/benchmark
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Release build recommended. 200 checked warmup operations per mode; 7 sequential samples.
+Latency is observed per operation, including response checks. Throughput includes Instant/recording overhead; sample buffer allocation, sorting, and printing are outside samples.
+Operations run serially. New-session measurements include connect/request/close and worker join; device creation is excluded.
+reused-session sample=1/7 operations=5000 p50_us=4.539 p95_us=7.393 ops_per_s=208876.6
+reused-session sample=2/7 operations=5000 p50_us=4.839 p95_us=8.055 ops_per_s=198850.6
+reused-session sample=3/7 operations=5000 p50_us=4.709 p95_us=5.941 ops_per_s=203533.3
+reused-session sample=4/7 operations=5000 p50_us=4.729 p95_us=6.121 ops_per_s=194441.7
+reused-session sample=5/7 operations=5000 p50_us=4.789 p95_us=8.276 ops_per_s=197094.8
+reused-session sample=6/7 operations=5000 p50_us=4.939 p95_us=8.216 ops_per_s=185637.8
+reused-session sample=7/7 operations=5000 p50_us=4.669 p95_us=7.283 ops_per_s=199510.6
+reused-session summary checked_operations=35000 pooled_p50_us=4.699 pooled_p95_us=7.413 median_ops_per_s=198850.6 min_ops_per_s=185637.8 max_ops_per_s=208876.6
+new-session sample=1/7 operations=1000 p50_us=27.812 p95_us=57.969 ops_per_s=26895.4
+new-session sample=2/7 operations=1000 p50_us=27.712 p95_us=49.653 ops_per_s=31483.5
+new-session sample=3/7 operations=1000 p50_us=27.943 p95_us=49.012 ops_per_s=30869.3
+new-session sample=4/7 operations=1000 p50_us=29.345 p95_us=48.611 ops_per_s=31037.0
+new-session sample=5/7 operations=1000 p50_us=28.254 p95_us=55.173 ops_per_s=29595.5
+new-session sample=6/7 operations=1000 p50_us=28.503 p95_us=56.346 ops_per_s=28388.8
+new-session sample=7/7 operations=1000 p50_us=27.983 p95_us=50.324 ops_per_s=30020.5
+new-session summary checked_operations=7000 pooled_p50_us=28.173 pooled_p95_us=51.908 median_ops_per_s=30020.5 min_ops_per_s=26895.4 max_ops_per_s=31483.5
+Exit code: 0
+
+Independent process trial 2/3
+Command: target/release/examples/benchmark
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Release build recommended. 200 checked warmup operations per mode; 7 sequential samples.
+Latency is observed per operation, including response checks. Throughput includes Instant/recording overhead; sample buffer allocation, sorting, and printing are outside samples.
+Operations run serially. New-session measurements include connect/request/close and worker join; device creation is excluded.
+reused-session sample=1/7 operations=5000 p50_us=4.899 p95_us=7.855 ops_per_s=186794.2
+reused-session sample=2/7 operations=5000 p50_us=4.859 p95_us=8.135 ops_per_s=196953.0
+reused-session sample=3/7 operations=5000 p50_us=4.688 p95_us=5.250 ops_per_s=222412.7
+reused-session sample=4/7 operations=5000 p50_us=4.960 p95_us=7.263 ops_per_s=197845.6
+reused-session sample=5/7 operations=5000 p50_us=4.699 p95_us=6.802 ops_per_s=203570.2
+reused-session sample=6/7 operations=5000 p50_us=4.709 p95_us=5.460 ops_per_s=210830.9
+reused-session sample=7/7 operations=5000 p50_us=4.699 p95_us=6.843 ops_per_s=212511.3
+reused-session summary checked_operations=35000 pooled_p50_us=4.719 pooled_p95_us=6.902 median_ops_per_s=203570.2 min_ops_per_s=186794.2 max_ops_per_s=222412.7
+new-session sample=1/7 operations=1000 p50_us=36.448 p95_us=55.384 ops_per_s=26910.6
+new-session sample=2/7 operations=1000 p50_us=29.245 p95_us=50.445 ops_per_s=28134.0
+new-session sample=3/7 operations=1000 p50_us=28.293 p95_us=53.260 ops_per_s=27474.0
+new-session sample=4/7 operations=1000 p50_us=30.567 p95_us=56.997 ops_per_s=27259.7
+new-session sample=5/7 operations=1000 p50_us=28.033 p95_us=48.160 ops_per_s=29221.6
+new-session sample=6/7 operations=1000 p50_us=28.403 p95_us=49.202 ops_per_s=28785.1
+new-session sample=7/7 operations=1000 p50_us=27.852 p95_us=50.916 ops_per_s=29387.3
+new-session summary checked_operations=7000 pooled_p50_us=28.764 pooled_p95_us=51.427 median_ops_per_s=28134.0 min_ops_per_s=26910.6 max_ops_per_s=29387.3
+Exit code: 0
+
+Independent process trial 3/3
+Command: target/release/examples/benchmark
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Release build recommended. 200 checked warmup operations per mode; 7 sequential samples.
+Latency is observed per operation, including response checks. Throughput includes Instant/recording overhead; sample buffer allocation, sorting, and printing are outside samples.
+Operations run serially. New-session measurements include connect/request/close and worker join; device creation is excluded.
+reused-session sample=1/7 operations=5000 p50_us=5.310 p95_us=6.973 ops_per_s=186294.4
+reused-session sample=2/7 operations=5000 p50_us=4.719 p95_us=7.313 ops_per_s=209402.4
+reused-session sample=3/7 operations=5000 p50_us=4.849 p95_us=5.380 ops_per_s=209582.8
+reused-session sample=4/7 operations=5000 p50_us=4.708 p95_us=7.234 ops_per_s=204381.9
+reused-session sample=5/7 operations=5000 p50_us=4.709 p95_us=5.881 ops_per_s=214114.9
+reused-session sample=6/7 operations=5000 p50_us=4.709 p95_us=7.023 ops_per_s=204134.6
+reused-session sample=7/7 operations=5000 p50_us=4.519 p95_us=6.953 ops_per_s=208650.6
+reused-session summary checked_operations=35000 pooled_p50_us=4.719 pooled_p95_us=7.003 median_ops_per_s=208650.6 min_ops_per_s=186294.4 max_ops_per_s=214114.9
+new-session sample=1/7 operations=1000 p50_us=27.892 p95_us=49.293 ops_per_s=30257.3
+new-session sample=2/7 operations=1000 p50_us=27.481 p95_us=47.499 ops_per_s=30878.0
+new-session sample=3/7 operations=1000 p50_us=27.322 p95_us=46.808 ops_per_s=31615.7
+new-session sample=4/7 operations=1000 p50_us=27.692 p95_us=50.665 ops_per_s=29180.5
+new-session sample=5/7 operations=1000 p50_us=27.662 p95_us=47.439 ops_per_s=30826.6
+new-session sample=6/7 operations=1000 p50_us=28.042 p95_us=52.488 ops_per_s=29248.5
+new-session sample=7/7 operations=1000 p50_us=27.923 p95_us=48.671 ops_per_s=29305.6
+new-session summary checked_operations=7000 pooled_p50_us=27.692 pooled_p95_us=48.652 median_ops_per_s=30257.3 min_ops_per_s=29180.5 max_ops_per_s=31615.7
+Exit code: 0

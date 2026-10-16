@@ -1,0 +1,50 @@
+SIMULATION ONLY — Rust tests, not radio evidence
+UTC: 2026-10-16T23:43:57.129026+00:00
+Command: RUSTUP_TOOLCHAIN=stable cargo test --release --all-targets --locked --offline
+
+
+running 7 tests
+test protocol::tests::errors_contain_no_request_data ... ok
+test protocol::tests::hello_returns_world ... ok
+test protocol::tests::rejects_every_single_byte_mutation ... ok
+test protocol::tests::rejects_other_inputs ... ok
+test simulation::tests::client_disappearing_joins_an_idle_worker ... ok
+test simulation::tests::errors_do_not_echo_arbitrary_payloads ... ok
+test simulation::tests::late_response_is_rejected_after_the_actual_session_times_out ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 7 tests
+test discover_connect_exchange_and_close ... ok
+test disconnect_after_request_is_distinct_from_timeout ... ok
+test dropping_the_device_invalidates_a_live_session ... ok
+test restart_invalidates_existing_sessions_and_restores_discovery ... ok
+test malformed_input_is_rejected_and_a_valid_request_can_follow ... ok
+test repeated_sessions_exchange_and_join_cleanly ... ok
+test dropped_reply_times_out_and_invalidates_the_session ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 4 tests
+test tests::accepts_default_help_and_bounded_soak ... ok
+test tests::rejects_unbounded_invalid_and_extra_arguments ... ok
+test tests::uses_nearest_rank_percentiles_of_sorted_observations ... ok
+test tests::soak_checks_recovery_and_joins_every_session_worker ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `release` profile [optimized] target(s) in 0.34s
+     Running unittests src/lib.rs (target/release/deps/teton_provisioning-a18a1f7fda4bcfaf)
+     Running tests/simulation.rs (target/release/deps/simulation-0d72d86c594ef4c8)
+     Running unittests examples/benchmark.rs (target/release/examples/benchmark-aa72c03b7f75d7c0)
+     Running unittests examples/simulation.rs (target/release/examples/simulation-2e5b044ac0df1efd)
+
+Exit code: 0
