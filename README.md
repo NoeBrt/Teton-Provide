@@ -19,22 +19,30 @@ Do not send credentials during this milestone.
 
 ## Observed environment
 
-The development session exposes Ubuntu 22.04.5 LTS, Python 3.10.12,
+The development session exposes Ubuntu 22.04.5 LTS, Rust/Cargo 1.88.0,
 BlueZ 5.64, and nmcli 1.36.6. Bluetooth `hci0` and Wi-Fi `wlo1` are visible
-through sysfs. Access to host D-Bus and network sockets is restricted.
+through sysfs. Rustfmt and Clippy are installed. Access to host D-Bus and
+network sockets is restricted.
 Jetson model, software versions, radio capabilities, and connectivity remain
 unverified. Docker CLI 27.0.3 is present, but its daemon is inaccessible in this
-session. pytest 8.3.3 is installed. BLE/D-Bus project libraries are not installed.
+session. `pkg-config` detects libdbus 1.12.20. Only the x86-64 Rust target is
+installed; no project crates have been resolved or built.
 
 ## Development approach
 
-Use Python 3.10 and `asyncio` for the simulator, with pytest for tests. The planned
-hardware adapters use BlueZ GATT via `dbus-fast` on the device, Bleak on the
-configurator, and later NetworkManager via D-Bus. systemd manages the real device
-service. Exact hardware dependency versions will be locked after installation
-and compatibility testing; documentation review alone is not a tested lockfile.
+Use Rust and Tokio for the simulator, with Cargo's built-in tests. This follows
+the user's report that the fleet uses Rust. The planned hardware adapters
+use `bluer` for both BlueZ GATT roles, and later `dbus`/`dbus-tokio` for
+NetworkManager. systemd manages the real device binary. Commit a generated
+`Cargo.lock` and pin the tested toolchain when implementation starts; upstream
+crate documentation alone is not a successful dependency build.
 
-The simulator will use in-memory queues, synthetic discovery, and the actual
+Start with one Cargo package: a shared protocol library, a simulation example,
+and later `device/` and `configurator/` binary targets. Gate the real binaries
+and optional `bluer` dependency behind a `ble` feature. No multi-crate workspace,
+web framework, serialization framework, or CLI library is needed for `hello`.
+
+The simulator will use bounded Tokio channels, synthetic discovery, and the actual
 shared `hello` handler. It requires no Bluetooth, sockets, root access, or Docker.
 It will exercise timeout, disconnect, retry, and simulated restart behavior.
 Docker can later package the same tests, but is not required for development.
@@ -88,8 +96,10 @@ nearby patients' or staff members' device identifiers in submission evidence.
 - Operation works with Internet disconnected and no shared LAN.
 - Journal evidence shows outcomes without secrets or arbitrary payload logging.
 
-The tested offline setup must include dependencies installed beforehand;
-provisioning itself must not download packages or contact external services.
+The tested offline setup must include the toolchain, Cargo dependencies, and
+built binaries prepared beforehand; provisioning itself must not download
+packages or contact external services. `--locked` pins dependency resolution;
+offline builds also require a populated cache or vendored dependencies.
 There are currently no application run commands or test suite.
 
 ## Next phases
