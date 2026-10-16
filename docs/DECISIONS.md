@@ -1,7 +1,9 @@
 # Technical Counter-Review
 
-Audit date: 2026-10-17. Status: **feasibility gate blocked by environment access**.
-Decisions below are provisional where hardware evidence is unavailable.
+Audit date: 2026-10-17. Updated scope: **no Jetson currently available; define the
+stack and plan a software simulation first**. Earlier decisions below preserve
+the original audit. Sections 7-10 supersede the hardware-first implementation
+order and previously deferred software choices; radio acceptance remains pending.
 
 ## Evidence collected
 
@@ -148,3 +150,91 @@ local documentation or failed access attempts.
 
 **Evidence / test:** `gh api user` cannot reach GitHub. Publish only after confirming
 the authenticated account and private visibility; review artifacts for secrets first.
+
+## 7. Simulation before hardware
+
+**Decision:** Proceed with software work while retaining an explicit hardware gate.
+
+**Original proposal:** Block implementation until a Jetson advertisement is discovered.
+
+**Final choice:** The user confirmed no Jetson is available and requested a stack
+and plan first. Next implement a local `hello` simulator using in-memory
+`asyncio.Queue` endpoints and synthetic discovery. Reuse the shared protocol handler
+in the later real device adapter. No simulation has been implemented in this update.
+
+**Reason:** Software behavior can be tested without pretending to have a radio.
+Memory queues also work within this session's socket restrictions.
+
+**Trade-off:** Simulated discovery, disconnects, and restarts do not validate
+BlueZ, BLE timing/MTU, systemd recovery, offline wireless operation, or Wi-Fi joining.
+
+**Evidence / test:** User instruction, 2026-10-17. Planned executable checks and
+the distinct hardware acceptance checkpoint are in `tasks/todo.md`.
+
+## 8. Docker boundary
+
+**Decision:** Make Docker optional for packaging tests, not the simulation substrate.
+
+**Original proposal:** Host service preferred; user suggested Docker for simulation.
+
+**Final choice:** Native Python simulation first. Add an unprivileged container
+test runner only if repeatable isolated execution becomes necessary and a Docker
+engine is accessible. Do not mount host D-Bus or expose radios to the simulator.
+
+**Reason:** Docker CLI 27.0.3 exists, but `docker version` cannot contact the
+daemon. A container supplies neither a virtual Bluetooth controller nor a
+Wi-Fi access point automatically. BlueZ's [VHCI emulator implementation](https://kernel.googlesource.com/pub/scm/bluetooth/bluez.git/+/master/emulator/vhci.c)
+depends on the host virtual-controller device; it is a separate integration lab.
+
+**Trade-off:** Initial simulation will not exercise container deployment or
+Bluetooth emulation. A future container image must be prepared before offline use.
+
+**Evidence / test:** Docker daemon socket unavailable/access denied. Optional
+container validation should run the same tests with networking disabled and
+without privileged mode; no container execution is claimed now.
+
+## 9. Selected software stack
+
+**Decision:** Use one Python async stack and one D-Bus library.
+
+**Original proposal:** Python preferred, peripheral library undecided,
+NetworkManager API deferred.
+
+**Final choice:** Python 3.10 baseline; stdlib `asyncio` and `argparse`; pytest
+for testing. For hardware, select Bleak for the central and `dbus-fast` for
+device-side BlueZ service/advertisement exports. Select NetworkManager D-Bus
+through the same library in the later Wi-Fi phase. Host systemd, no database.
+
+**Reason:** [Bleak](https://bleak.readthedocs.io/en/latest/) is a GATT client,
+not a peripheral server. Its [project metadata](https://github.com/hbldh/bleak/blob/develop/pyproject.toml)
+declares Python >=3.10 and a Linux `dbus-fast` dependency. The
+[dbus-fast service API](https://dbus-fast.readthedocs.io/en/latest/)
+provides the other side of the D-Bus boundary. Reusing that library avoids
+another peripheral framework and a separate NetworkManager subprocess interface.
+
+**Trade-off:** Direct BlueZ exports need a small amount of explicit GATT plumbing.
+All selected hardware libraries remain uninstalled and untested here. Exact
+versions and ARM64 compatibility must be locked after installation checks.
+
+**Evidence / test:** Local Python 3.10.12 and pytest 8.3.3; official API review.
+Bleak documents BlueZ >=5.55, met by the workstation's tools, not yet verified on a device.
+
+## 10. Repository and current delivery scope
+
+**Decision:** Keep this delivery local and limited to stack/planning documentation.
+
+**Original proposal:** Private GitHub repository and hardware-first milestone.
+
+**Final choice:** Continue in the existing local `iot-provisioning/` Git
+repository. Write `docs/ARCHITECTURE.md`, `tasks/plan.md`, and `tasks/todo.md`.
+Do not change the existing workspace AGENTS.md or implement future features now.
+
+**Reason:** The latest request explicitly asks to define the stack and plan
+for now; a local repository already exists.
+
+**Trade-off:** The next code milestone will be a software demonstration, not
+completion of the original challenge. Security, real Wi-Fi, technician UI,
+and the 200-device design remain later work.
+
+**Evidence / test:** Existing local commit `cde588c`; review plan dependencies,
+Markdown links, and Git whitespace checks before committing this documentation.
