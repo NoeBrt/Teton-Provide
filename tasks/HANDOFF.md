@@ -29,6 +29,7 @@ review, and a measurement of the affected path. Document measurement limits.
 
 ## Step 1 — Bound stdout lifetime after command-parent exit
 
+- Revision: `7e6c407`.
 - Changed: `device/audit.rs`, public CLI regressions, and setup documentation.
   A draining Bash pipeline preserves GNU timeout supervision; quoted argv,
   pipefail, and privileged shell mode preserve failure and environment boundaries.
@@ -47,3 +48,25 @@ review, and a measurement of the affected path. Document measurement limits.
   transfer, Android/iPhone operation, and `ACTUAL_WIFI` remain **NOT_RUN**.
 - Next owner: implementation agent. Fix benchmark non-UTF-8 argv at the public
   executable boundary, then review/measure it and align dual-platform acceptance.
+
+## Step 2 — Redact invalid benchmark argv
+
+- Changed: `examples/benchmark.rs` reads OS arguments with fallible UTF-8
+  conversion; `tests/benchmark_cli.py` checks the actual release executable.
+- Evidence class: `COMMAND_FIXTURE` **PASS**. The [public red/green trace](../demo/tdd-benchmark-cli.txt)
+  shows old panic exit 101, then successful checks for help and three invalid
+  argument cases after the repair. No input is echoed on failure.
+- Review: an independent fresh-context reviewer found no issue and reran all
+  four public CLI cases plus four existing benchmark unit tests successfully.
+- Measurement: [84 startup calls](../docs/BENCHMARKS.md#benchmark-cli-argument-repair-startup-only)
+  confirm help is unchanged and invalid-byte argv changes from panic/leak to
+  controlled exit 1/static usage. Timing ranges overlap; no speed claim.
+- Valid-path verification: three release `--scale` processes pass 45 scenario
+  summaries and 80,073 measured synthetic jobs plus 11,439 warmup jobs. See the
+  [raw output](../demo/benchmark-scaled-continuation.txt). This does not measure
+  actual BLE or fleet capacity.
+- Gates: actual host remains **BLOCKED**; Android/iPhone BLE, authenticated
+  transfer, and actual Wi-Fi remain **NOT_RUN**. The core simulation is unchanged.
+- Next owner: implementation agent. Finish dual-platform acceptance review,
+  update current setup instructions, and record
+  remaining host/dependency prerequisites before any real BLE implementation.

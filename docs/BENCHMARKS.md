@@ -184,3 +184,65 @@ Before/after binary SHA-256 values:
 `5d60e5ee5b0117bbaca51cb9eb86f0c5e7ed89f47efe3ec9a2ebed5b4b2549e8`.
 These are command-fixture measurements; no Bluetooth, phone, or Wi-Fi behavior
 is measured. Descendants leaving the supervised group are outside this corpus.
+
+## Benchmark CLI argument repair: startup only
+
+The example now rejects non-UTF-8 argv through static usage instead of panicking
+and echoing input. Three batches of seven processes per case and binary check
+help and a raw-byte argument containing a synthetic canary: 84 calls total.
+
+| Case | Before | After | Before/after median, ms |
+| --- | --- | --- | ---: |
+| `--help`, 21 calls per binary | Exit 0, exact usage | Same | 0.567 / 0.606 |
+| Non-UTF-8 argv, 21 calls per binary | Exit 101, panic and canary present | Exit 1, static usage, neither present | 0.910 / 0.514 |
+
+Timing ranges overlap: help 0.461–1.027 / 0.478–1.274 ms; invalid argv
+0.479–1.120 / 0.481–0.941 ms. No speed improvement or regression is inferred.
+The result is controlled, redacted failure. The core simulation is unchanged.
+
+Both examples were built with `RUSTUP_TOOLCHAIN=stable cargo build --release
+--example benchmark --locked --offline`, before from `d3217fa`. Runtime uses
+Linux x86_64/kernel 6.8.0-138-generic, Python 3.10.12, Rust 1.88.0, 16 logical
+CPUs, and only PATH=/usr/bin:/bin, LC_ALL=C, LANG=C, RUST_BACKTRACE=0. Bytes are
+passed directly through subprocess argv; `perf_counter_ns` surrounds launch and
+output collection. No compilation ran during measurement. There is no warmup,
+pinning, randomized interleaving, or confidence interval.
+
+Evidence: [84 timings and behavior flags](../demo/benchmark-cli-startup.csv),
+[unchanged harness](../demo/bench-cli-startup.py), and
+[public executable red/green trace](../demo/tdd-benchmark-cli.txt). Copy the
+harness into a fresh private `/tmp` directory and run
+`python3 bench-cli-startup.py before /absolute/baseline/benchmark`, then
+`python3 bench-cli-startup.py after /absolute/corrected/benchmark`.
+Each batch uses a fresh working directory. Retained results contain output
+hashes/counts and behavior flags; the canary is deliberately fictitious.
+
+Measured example source SHA-256:
+`8549866e6a5714cdc9fa4e9b3272ca48e90b9dc582e03a4ed1ec1672d73b1220`.
+Before/after binary SHA-256 values:
+`1af60dace5c277136c43278e8495ec18949c0803f4d750b741399607e5d4a598` /
+`8ba75f7c85880ddcc5f12fb88b2668e0d033d65f359b2f60ac1d70e51b2f8e70`.
+This corpus executes no simulation workload or radio/network operation.
+
+## Scale-path verification after argv repair
+
+The same corrected release binary ran `--scale` in three separate sequential
+processes. Each covers 1/20/50/200/1000 synthetic jobs at 1/4/8 clients, one
+warmup batch and seven measured batches per case. All three processes exited 0
+with empty stderr: 45 scenario summaries, 315 measured batches, 80,073 checked
+measured jobs, and 11,439 warmup jobs. The agent checked scenario coverage,
+counts, bounds, finite metrics, and percentile/rate ordering against raw output.
+
+For 200 synthetic jobs, the median of three process-reported batch medians is
+7.028 ms at one client, 2.363 ms at four, and 2.430 ms at eight. Each configuration
+checks 4,200 measured jobs across 21 batches; observed peaks are 1/4/8. These are
+batch measurements of thread/channel jobs, not pooled radio/device latencies.
+
+Evidence: [raw output](../demo/benchmark-scaled-continuation.txt) and
+[45 scenario rows](../demo/benchmark-scaled-continuation.csv). Reproduce with
+`target/release/examples/benchmark --scale` three times after the release build.
+The binary/source hashes are the startup-repair hashes above; runtime environment
+is PATH=/usr/bin:/bin, LC_ALL=C, LANG=C, RUST_BACKTRACE=0 on the same host.
+No compilation overlapped the measurements. No optimization or cross-version
+throughput comparison is claimed: this verifies valid CLI dispatch and the
+unchanged simulation. It adds no real BLE, security, or fleet-capacity evidence.

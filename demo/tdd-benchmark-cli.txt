@@ -1,0 +1,15 @@
+COMMAND_FIXTURE: public benchmark CLI, before/after argv handling.
+Original example source matches d3217fa; no real credentials used.
+
+RED
+Command: python3 tests/benchmark_cli.py target/release/examples/benchmark
+Traceback (most recent call last):
+  File "/home/noe/noe-ws/teton-provisioning/tests/benchmark_cli.py", line 33, in <module>
+    check(Path(sys.argv[1]).resolve(strict=True))
+  File "/home/noe/noe-ws/teton-provisioning/tests/benchmark_cli.py", line 21, in check
+    assert result.returncode == expected_code, result.returncode
+AssertionError: 101
+
+GREEN
+Command: python3 tests/benchmark_cli.py target/release/examples/benchmark
+PASS benchmark CLI: help and three redacted invalid-argument cases
