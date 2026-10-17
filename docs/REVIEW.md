@@ -147,3 +147,25 @@ The corrected binary's [actual host run](../demo/host-preflight-continuation.txt
 still fails because BlueZ/NetworkManager access is blocked. Fixture success does
 not establish radio or Wi-Fi acceptance. External cross-model CLI review was
 skipped for this autonomous pass; agents used separate contexts.
+
+## Adversarial continuation: benchmark argv
+
+Review base: `7e6c407`; example source SHA-256:
+`8549866e6a5714cdc9fa4e9b3272ca48e90b9dc582e03a4ed1ec1672d73b1220`.
+The public black-box regression in `tests/benchmark_cli.py` failed on the old
+release executable with panic exit 101. The repaired executable passes help,
+an ordinary invalid flag, invalid-byte argv, and an invalid-byte soak value.
+It preserves the existing controlled error exit 1 without echoing arguments.
+
+A fresh-context reviewer inspected the parser, entry point, connected unit
+tests, and real-executable regression; no concrete issue remained. It then ran
+the four CLI cases and all four existing benchmark unit tests successfully.
+The benchmark agent independently checked 84 before/after startup calls; no
+speed claim follows from overlapping ranges. See [method and raw timings](BENCHMARKS.md#benchmark-cli-argument-repair-startup-only)
+and [red/green evidence](../demo/tdd-benchmark-cli.txt).
+
+The patch changes argv conversion only; it adds no Rust dependency or transport
+behavior. It provides no BLE, mobile-client, credential, or real-Wi-Fi evidence.
+Three independent release `--scale` processes also pass 45 scenario summaries
+and 80,073 measured jobs; [raw results](../demo/benchmark-scaled-continuation.txt)
+verify valid dispatch without a before/after throughput claim.

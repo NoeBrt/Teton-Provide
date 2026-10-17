@@ -235,7 +235,11 @@ fn scaled_benchmark() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mode = parse_args(&std::env::args().skip(1).collect::<Vec<_>>())?;
+    let args = std::env::args_os()
+        .skip(1)
+        .map(|value| value.into_string().map_err(|_| USAGE))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mode = parse_args(&args)?;
     if mode == Mode::Help {
         println!("{USAGE}");
         return Ok(());

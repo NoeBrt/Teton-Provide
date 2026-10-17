@@ -1,0 +1,74 @@
+SIMULATION ONLY: valid --scale path after benchmark argv repair.
+Measured release binary SHA-256: 8ba75f7c85880ddcc5f12fb88b2668e0d033d65f359b2f60ac1d70e51b2f8e70
+
+PROCESS 1
+Command: /tmp/iot-benchmark-cli-args-58mrruag/benchmark-after --scale
+Exit: 0; stderr empty
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.098,55.163,70.762,0.125,10249.8,6283.5,13028.6
+1,4,7,7,1,0.067,43.382,46.838,0.063,14906.2,13746.5,15057.1
+1,8,7,7,1,0.052,28.073,45.094,0.060,19073.4,14469.7,20147.9
+20,1,7,140,1,0.659,30.186,53.109,0.822,30329.4,18894.6,34361.9
+20,4,7,140,4,0.337,44.974,82.694,0.338,59269.4,47412.5,76728.9
+20,8,7,140,8,0.331,82.124,121.327,0.313,60483.4,57431.2,64526.5
+50,1,7,350,1,1.536,27.461,49.112,2.754,32557.9,15218.5,34636.5
+50,4,7,350,4,0.654,45.014,70.922,0.637,76402.8,64038.3,82195.1
+50,8,7,350,8,0.681,86.832,151.934,0.673,73379.8,59423.6,77712.8
+200,1,7,1400,1,7.028,29.305,53.420,6.789,28458.7,24341.5,32026.6
+200,4,7,1400,4,2.363,43.110,60.163,2.236,84654.1,81965.9,87575.7
+200,8,7,1400,8,2.430,84.859,146.364,2.327,82296.3,73691.9,89524.6
+1000,1,7,7000,1,35.212,29.265,55.183,33.484,28399.2,26557.0,29506.3
+1000,4,7,7000,4,11.202,41.588,60.945,10.693,89272.5,84254.4,92888.8
+1000,8,7,7000,8,11.760,84.177,162.975,11.163,85036.5,74605.1,88288.3
+
+PROCESS 2
+Command: /tmp/iot-benchmark-cli-args-58mrruag/benchmark-after --scale
+Exit: 0; stderr empty
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.086,50.214,74.069,0.114,11664.4,7254.4,12690.7
+1,4,7,7,1,0.086,39.674,65.163,0.092,11690.4,8702.8,13565.0
+1,8,7,7,1,0.063,28.574,36.429,0.063,15866.0,13255.4,16780.8
+20,1,7,140,1,0.652,28.333,54.051,0.671,30677.6,22020.8,34063.5
+20,4,7,140,4,0.307,46.787,70.422,0.291,65124.3,62437.6,69139.1
+20,8,7,140,8,0.342,86.272,127.149,0.323,58494.9,54497.7,60093.8
+50,1,7,350,1,2.024,33.573,60.433,1.982,24706.4,22649.7,31644.6
+50,4,7,350,4,0.756,50.725,82.544,0.710,66116.1,57665.9,74893.9
+50,8,7,350,8,0.751,90.860,180.237,0.733,66564.0,58174.0,77368.1
+200,1,7,1400,1,6.974,28.123,55.574,6.765,28677.8,25875.5,32230.5
+200,4,7,1400,4,2.397,43.401,66.294,2.273,83437.0,73551.8,90169.1
+200,8,7,1400,8,2.380,83.737,149.149,2.256,84022.4,79181.5,86502.2
+1000,1,7,7000,1,35.173,28.393,50.184,33.224,28430.9,27736.7,29404.4
+1000,4,7,7000,4,12.390,44.944,66.294,11.676,80711.0,76917.9,87809.6
+1000,8,7,7000,8,12.106,84.558,165.991,11.614,82604.9,75928.8,87615.5
+
+PROCESS 3
+Command: /tmp/iot-benchmark-cli-args-58mrruag/benchmark-after --scale
+Exit: 0; stderr empty
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.060,31.268,52.107,0.074,16699.5,11429.5,19381.0
+1,4,7,7,1,0.055,28.554,39.134,0.060,18197.4,14169.9,20050.5
+1,8,7,7,1,0.052,27.221,28.814,0.045,19388.5,18741.0,20002.8
+20,1,7,140,1,0.694,30.337,57.879,0.854,28828.4,17474.8,34252.2
+20,4,7,140,4,0.301,47.519,82.725,0.362,66550.6,42797.6,74163.3
+20,8,7,140,8,0.362,84.298,150.993,0.347,55305.6,50230.3,61578.4
+50,1,7,350,1,1.973,40.215,59.772,2.069,25347.6,20698.8,30477.3
+50,4,7,350,4,0.627,43.051,69.220,0.611,79808.0,67269.2,83077.6
+50,8,7,350,8,0.707,85.290,156.613,0.662,70718.0,68360.2,74526.0
+200,1,7,1400,1,7.101,28.623,51.607,6.999,28166.2,23858.5,31009.5
+200,4,7,1400,4,2.261,41.398,59.211,2.135,88469.6,85673.2,91759.0
+200,8,7,1400,8,2.457,82.915,155.201,2.307,81407.6,70928.5,87941.5
+1000,1,7,7000,1,34.206,28.153,53.992,32.608,29234.9,26931.6,30251.2
+1000,4,7,7000,4,11.357,41.548,62.427,10.981,88054.1,78816.2,91393.6
+1000,8,7,7000,8,11.696,84.198,158.847,11.077,85497.5,83698.0,88015.8
