@@ -1,0 +1,92 @@
+COMMAND_FIXTURE evidence; audit runtime diff from d3217fa.
+
+RED
+Command: RUSTUP_TOOLCHAIN=stable cargo test --test host_audit an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit --locked --offline
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+
+running 1 test
+test an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit ... FAILED
+
+failures:
+
+---- an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit stdout ----
+
+thread 'an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit' panicked at tests/host_audit.rs:260:5:
+assertion `left == right` failed
+  left: Some(0)
+ right: Some(1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 15 filtered out; finished in 12.02s
+
+error: test failed, to rerun pass `--test host_audit`
+
+GREEN
+Command: Same command after fixing supervision
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+
+running 1 test
+test an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 4.01s
+
+
+MUTATION
+Command: Isolated copy: delete Bash -p; cargo test --test host_audit inherited_shell_code_cannot_replace_the_audit_commands --locked --offline
+   Compiling teton-provisioning v0.1.0 (/tmp/teton-audit-mutation.FWTNUk)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+
+running 1 test
+test inherited_shell_code_cannot_replace_the_audit_commands ... FAILED
+
+failures:
+
+---- inherited_shell_code_cannot_replace_the_audit_commands stdout ----
+
+thread 'inherited_shell_code_cannot_replace_the_audit_commands' panicked at tests/host_audit.rs:280:9:
+assertion failed: output.status.success()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    inherited_shell_code_cannot_replace_the_audit_commands
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test host_audit`
+
+ALL HOST REGRESSIONS
+Command: RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+
+running 17 tests
+test non_utf8_arguments_are_rejected_without_panicking_or_leaking ... ok
+test failed_commands_never_expose_their_stdout_or_stderr ... ok
+test a_stopped_bluetooth_service_is_not_activated_by_the_audit ... ok
+test invalid_arguments_are_rejected_without_echo_or_command_execution ... ok
+test excessive_stdout_is_bounded_and_never_printed ... ok
+test missing_commands_fail_explicitly ... ok
+test malformed_successful_output_is_rejected_without_being_echoed ... ok
+test a_visible_advertising_api_with_no_supported_instance_is_not_ready ... ok
+test observed_prerequisites_do_not_claim_a_radio_or_wifi_success ... ok
+test an_explicit_adapter_is_used_for_all_bluetooth_checks ... ok
+test available_advertising_slots_are_not_reduced_by_active_slots_again ... ok
+test missing_or_malformed_advertising_capacity_is_not_ready ... ok
+test inherited_shell_code_cannot_replace_the_audit_commands ... ok
+test managed_ethernet_does_not_make_unmanaged_wifi_acceptable ... ok
+test an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit ... ok
+test a_blocked_command_and_its_child_are_subject_to_a_deadline ... ok
+test a_descendant_ignoring_term_cannot_hold_the_audit_open ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.02s

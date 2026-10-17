@@ -1,0 +1,9 @@
+ACTUAL_HOST; corrected audit runtime, 2026-10-17.
+Command: ./target/release/audit-host
+Exit status: 1
+
+HOST PREFLIGHT (read-only, adapter hci0)
+FAIL BLUEZ_RUNNING COMMAND_FAILED
+FAIL NETWORKMANAGER_MANAGED_WIFI COMMAND_FAILED
+Host preflight blocked; run from the Ubuntu host terminal and check the failed prerequisites.
+Phone client, secure provisioning, and real Wi-Fi joining remain unverified.

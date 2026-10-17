@@ -5,7 +5,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::{Command, ExitCode, Stdio};
 
 const MAX_OUTPUT: u64 = 8192;
-const USAGE: &str = "Usage: audit-host [hciN]\nRead-only Ubuntu preflight; defaults to hci0. Requires busctl, nmcli, and GNU timeout.";
+const USAGE: &str = "Usage: audit-host [hciN]\nRead-only Ubuntu preflight; defaults to hci0. Requires busctl, nmcli, GNU timeout, /bin/bash, and /bin/cat.";
 
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -169,9 +169,22 @@ fn check(label: &str, program: &str, args: &[&str], accept: impl FnOnce(&str) ->
 }
 
 fn read_command(program: &str, args: &[&str]) -> Result<String, &'static str> {
-    // Kill the whole read-only group; TERM can leave descendants holding stdout open.
+    // Keep timeout alive until stdout closes; -p rejects inherited shell startup code.
     let mut child = Command::new("timeout")
-        .args(["--signal=KILL", "4s", program])
+        .args([
+            "--signal=KILL",
+            "4s",
+            "/bin/bash",
+            "--noprofile",
+            "--norc",
+            "-p",
+            "-o",
+            "pipefail",
+            "-c",
+            "\"$@\" | /bin/cat",
+            "audit-command",
+            program,
+        ])
         .args(args)
         .env("LC_ALL", "C")
         .stdin(Stdio::null())

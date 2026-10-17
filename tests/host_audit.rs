@@ -243,6 +243,47 @@ fn a_descendant_ignoring_term_cannot_hold_the_audit_open() {
 }
 
 #[test]
+fn an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit() {
+    let host = HostFixture::new();
+    let script = fs::read_to_string(host.0.join("busctl")).unwrap();
+    let owner = "org.bluez') printf";
+    assert!(script.contains(owner));
+    host.replace(
+        "busctl",
+        &script.replace(owner, "org.bluez') /bin/sleep 12 & printf"),
+    );
+    let start = Instant::now();
+    let output = host.run(&[]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(start.elapsed() < Duration::from_secs(10));
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .contains("FAIL BLUEZ_RUNNING TIMEOUT")
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn inherited_shell_code_cannot_replace_the_audit_commands() {
+    let host = HostFixture::new();
+    let startup = host.0.join("startup");
+    fs::write(&startup, "printf 'CANARY-STARTUP\\n'; exit 0\n").unwrap();
+    for (key, value) in [
+        ("BASH_ENV", startup.as_os_str()),
+        (
+            "BASH_FUNC_busctl%%",
+            std::ffi::OsStr::new("() { printf 'CANARY-FUNCTION\\n'; }"),
+        ),
+    ] {
+        let output = host.command(&[]).env(key, value).output().unwrap();
+        assert!(output.status.success());
+        assert!(!String::from_utf8(output.stdout).unwrap().contains("CANARY"));
+        assert!(output.stderr.is_empty());
+    }
+}
+
+#[test]
 fn excessive_stdout_is_bounded_and_never_printed() {
     let host = HostFixture::new();
     host.replace("busctl", "#!/bin/sh\n/usr/bin/head -c 16384 /dev/zero\n");
@@ -273,7 +314,7 @@ fn invalid_arguments_are_rejected_without_echo_or_command_execution() {
         assert!(output.stdout.is_empty());
         assert_eq!(
             String::from_utf8(output.stderr).unwrap(),
-            "Usage: audit-host [hciN]\nRead-only Ubuntu preflight; defaults to hci0. Requires busctl, nmcli, and GNU timeout.\n"
+            "Usage: audit-host [hciN]\nRead-only Ubuntu preflight; defaults to hci0. Requires busctl, nmcli, GNU timeout, /bin/bash, and /bin/cat.\n"
         );
     }
     let help = host.run(&["--help"]);
