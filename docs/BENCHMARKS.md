@@ -141,3 +141,46 @@ Thread/channel timing does not predict BLE scheduling, reconnect behavior,
 cryptography, systemd recovery, Wi-Fi activation, or capacity for 200 devices.
 No physical device authentication or secret transfer is exercised. Those remain
 separate gates requiring actual supported hardware and a reviewed secure channel.
+
+## Audit supervision repair: command fixtures
+
+The adversarial continuation found that an owner command can exit while its
+same-group descendant keeps stdout open. The old audit waits for that descendant
+and incorrectly reports success. A draining Bash pipeline now keeps GNU timeout
+active until stdout closes. This is a correctness repair, not an optimization.
+
+| Workload | Samples per binary | Before median (range), ms | After median (range), ms |
+| --- | ---: | ---: | ---: |
+| Normal audit, five mocked commands | 3 batches × 7 | 7.596 (5.935–8.730) | 14.451 (12.298–16.245) |
+| Parent exits; stdout-holding child sleeps six seconds | 3 | 6013.658 (6010.825–6014.071), false success | 4008.137 (4007.198–4009.068), TIMEOUT failure |
+
+All 48 runs check exact constructed output, empty stderr, exit code, and ordered
+command calls. Correct failure skips owner-dependent Bluetooth checks, reducing
+that case from five calls to two; its elapsed difference is not a throughput
+comparison. Normal-path overhead is +6.855 ms (+90.2% on this short fixture).
+Keep this measured cost to restore bounded behavior without a custom supervisor.
+
+The before binary uses `d3217fa`; both binaries were built with
+`RUSTUP_TOOLCHAIN=stable cargo build --release --bin audit-host --locked --offline`.
+Environment: Linux x86_64, kernel 6.8.0-138-generic, 16 logical CPUs, Rust/Cargo
+1.88.0, Python 3.10.12, GNU timeout 8.32, and `/bin/sh` resolving to dash.
+`perf_counter_ns` surrounds each CLI process and output collection. Only busctl
+and nmcli are mocked. Commands run with a private PATH, C locale, and a private
+call-log variable. No compilation ran during measurement. Sequential samples
+have no warmup, CPU pinning, randomized interleaving, or confidence intervals.
+
+Evidence: [48 raw timings](../demo/benchmark-audit-deadline.csv),
+[unchanged before/after harness](../demo/bench-audit-deadline.py), and
+[red/green plus mutation trace](../demo/tdd-audit-deadline.txt). To replay, copy
+the harness into a fresh private `/tmp` directory, then run
+`python3 bench-audit-deadline.py before /absolute/baseline/audit-host` and
+`python3 bench-audit-deadline.py after /absolute/corrected/audit-host` there.
+Existing fixture directories are rejected to prevent stale-log reuse.
+
+Measured source SHA-256, `device/audit.rs`:
+`829229dc4accf5af0b51bf3e1f3cadc8b1f2d6ef035d32fb8b447548285fb0a3`.
+Before/after binary SHA-256 values:
+`ae7c915467467a9b5d7c3f7ff75d8774b77674f039b52b83bb74362f08c8b153` /
+`5d60e5ee5b0117bbaca51cb9eb86f0c5e7ed89f47efe3ec9a2ebed5b4b2549e8`.
+These are command-fixture measurements; no Bluetooth, phone, or Wi-Fi behavior
+is measured. Descendants leaving the supervised group are outside this corpus.

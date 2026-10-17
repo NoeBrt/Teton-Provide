@@ -120,3 +120,30 @@ The prepared release binary was also run against the actual environment at
 No registration, radio exchange, phone compatibility, or real Wi-Fi join was
 validated. Baseline simulation benchmarks were not repeated because the simulated
 transport and benchmark code did not change.
+
+## Adversarial continuation: audit supervision
+
+Review base: `d3217fa`; reviewed runtime source SHA-256:
+`829229dc4accf5af0b51bf3e1f3cadc8b1f2d6ef035d32fb8b447548285fb0a3`.
+An independent code reviewer reproduced a same-group stdout holder after its
+parent exited. The public CLI regression returned success after 12.02 seconds
+before the repair and fails safely after 4.01 seconds afterward.
+
+A fresh-context reviewer inspected all command callers, quoted argv boundaries,
+pipeline exit propagation, shell environment isolation, output limits, and
+D-Bus behavior; no unresolved correctness/security issue remained. It ran the
+then-16 host tests and private startup/function/xtrace fixtures. After the retained
+environment regression was added, follow-up static review accepted that test and
+the dependency documentation. Main ran all 17 host tests. An isolated mutation
+removing Bash `-p` makes the new environment regression fail.
+
+All 40 Rust tests pass in debug and release; Rustfmt and Clippy with warnings
+denied pass. The separate benchmark agent checked 48 before/after CLI runs;
+normal startup costs about 7 ms more, while the pipe-holder case now returns a
+correct timeout. See [measurement method](BENCHMARKS.md#audit-supervision-repair-command-fixtures)
+and [TDD evidence](../demo/tdd-audit-deadline.txt).
+
+The corrected binary's [actual host run](../demo/host-preflight-continuation.txt)
+still fails because BlueZ/NetworkManager access is blocked. Fixture success does
+not establish radio or Wi-Fi acceptance. External cross-model CLI review was
+skipped for this autonomous pass; agents used separate contexts.

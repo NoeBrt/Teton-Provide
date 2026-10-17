@@ -103,15 +103,19 @@ cargo build --release --bin audit-host --locked --offline
 ```
 
 Optionally pass an adapter, for example `./target/release/audit-host hci1`.
-It needs Ubuntu's `busctl` (systemd), `nmcli` (NetworkManager), and GNU `timeout`
-(coreutils). The prepared binary runs offline without Rustup, Cargo, or root.
+It needs Ubuntu's `busctl` (systemd), `nmcli` (NetworkManager), GNU `timeout`
+(coreutils), `/bin/bash`, and `/bin/cat`. The prepared binary runs offline
+without Rustup, Cargo, or root.
 
 The audit checks the running BlueZ owner, adapter power, local GATT registration
 API, a free advertising instance, and a Wi-Fi device managed by NetworkManager.
 It does not require Wi-Fi to be connected. It never powers an adapter, starts
 BlueZ, registers a service, or changes network configuration. Each command gets
-a four-second process-group deadline; captured stdout is limited to 8 KiB,
-stderr is discarded, and only constructed statuses are printed.
+a four-second process-group deadline. A draining Bash pipeline keeps supervision
+active while stdout remains open, including after the command parent exits;
+privileged shell mode ignores inherited startup code and functions. Captured
+stdout is limited to 8 KiB, stderr is discarded, and only constructed statuses
+are printed.
 
 Exit 0 means these prerequisites were observed; permissions for registration,
 radio exchange, the phone client, and Wi-Fi joining remain unverified. Exit 1
