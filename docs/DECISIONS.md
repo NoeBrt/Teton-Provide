@@ -6,7 +6,9 @@ the original audit. Sections 7-10 record the simulation-first plan; section 11
 supersedes their Python choices with Rust. Section 12 records the executable
 offline simulation. Section 15 corrects the demo roles and makes graphical
 technician UX mandatory. Section 18 excludes SoftAP from the MVP and supersedes
-earlier fallback guidance. Radio acceptance remains pending.
+earlier fallback guidance. Sections 19-20 require Android/iPhone coverage and
+preserve offline builds while the BLE dependency graph is unavailable.
+Radio acceptance remains pending.
 
 ## Evidence collected
 
@@ -505,3 +507,59 @@ and reassess hardware/client options; do not silently substitute SoftAP.
 objection recorded on 2026-10-17. README and architecture fallback guidance are
 aligned with this decision. This is a scope decision, not evidence of a passed
 radio or real Wi-Fi test; existing simulation results remain unchanged.
+
+## 19. Require Android and iPhone acceptance
+
+**Decision:** Support both mobile platforms with a prepared offline configurator.
+
+**Original proposal:** Select a phone adapter after the user identifies one OS.
+
+**Final choice:** Android and iPhone are required; actual models/OS versions,
+clients, build/signing/distribution, permissions, and physical evidence remain
+to verify separately. Keep the Ubuntu alternative. Review authenticated-bootstrap
+feasibility on both mobile platforms before selecting a framework; implement
+security and transfer credentials only after the harmless real BLE milestone.
+An established authenticated and encrypted channel is mandatory before any
+credential bytes leave a client; confidentiality and integrity need explicit
+validation alongside peer authentication.
+
+**Reason:** The user explicitly confirms both platforms on 2026-10-17. Android
+browser success cannot establish iPhone support. A trusted physical identity and
+a viable offline channel must work with the headless device on both platforms.
+
+**Trade-off:** Both platforms need preparation and real acceptance tests. Do not
+choose an untested shared framework or create client scaffolding before its BLE
+and authentication paths are feasible. A simulator or HTML mockup proves neither.
+
+**Evidence / test:** An independent agent checked the official platform references
+linked in `docs/ARCHITECTURE.md` and updated plan/checklist acceptance. Final
+success needs fresh authenticated state for the requested connection and its IP;
+an interrupted result needs authenticated status recovery before success/retry.
+No Android/iPhone runtime or real Wi-Fi test has passed yet.
+
+## 20. Preserve default offline builds before adding BLE crates
+
+**Decision:** Resolve and test the complete BLE graph before changing the manifest.
+
+**Original proposal:** Add optional `bluer` dependencies behind a `ble` feature so
+default simulation checks remain independent of Bluetooth.
+
+**Final choice:** Retain the dependency-free tested manifest for now. When crate
+access is available, resolve compatible pinned dependencies, cache/vendor the
+graph, and verify default and BLE-enabled locked offline builds before claiming
+reproducibility. Do not substitute an unused fake GATT adapter or uncompiled source.
+
+**Reason:** Fresh inspection finds no BLE/D-Bus runtime alternatives in the local
+cache; a bounded crates-index request fails hostname resolution. In an isolated
+manifest, even disabled optional `bluer` fails default offline resolution.
+Feature gating avoids compilation, not dependency resolution.
+
+**Trade-off:** The real endpoint remains blocked on host access and dependencies.
+Software correctness, measurements, and planning can proceed without weakening
+the offline baseline or pretending another simulation is radio evidence.
+
+**Evidence / test:** Independent feasibility review: Rust/Cargo 1.88.0,
+205 cached crates, required BLE/runtime crates absent, temporary-manifest
+`cargo check --locked --offline` fails with package `bluer` unavailable.
+Actual BlueZ/NetworkManager access remains prohibited; see the separate
+`demo/host-preflight-continuation.txt` and `tasks/HANDOFF.md`.

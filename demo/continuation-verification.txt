@@ -1,0 +1,58 @@
+Continuation verification — runtime code revision 4eff13c
+Evidence: SIMULATION / COMMAND_FIXTURE; no radio or real Wi-Fi acceptance.
+Toolchain: rustc 1.88.0 (6b00bc388 2025-06-23); installed stable override.
+
+DEBUG
+Command: RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline
+Exit: 0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/iot_provisioning-4f606155ec9216ed)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests device/audit.rs (target/debug/deps/audit_host-837ea2430c6e32a0)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.02s
+     Running tests/scaled.rs (target/debug/deps/scaled-5813f69bae28df51)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/simulation.rs (target/debug/deps/simulation-602b90e136fdaa30)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests examples/benchmark.rs (target/debug/examples/benchmark-560393177adeb8c7)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples/simulation.rs (target/debug/examples/simulation-a3cf0db6999032bb)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+RELEASE
+Command: RUSTUP_TOOLCHAIN=stable cargo test --release --all-targets --locked --offline
+Exit: 0
+    Finished `release` profile [optimized] target(s) in 0.20s
+     Running unittests src/lib.rs (target/release/deps/iot_provisioning-a18a1f7fda4bcfaf)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests device/audit.rs (target/release/deps/audit_host-73b09bff84971cb7)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/host_audit.rs (target/release/deps/host_audit-6ffca82b02b56f39)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.02s
+     Running tests/scaled.rs (target/release/deps/scaled-ecbd9bd0560da0c9)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/simulation.rs (target/release/deps/simulation-3e5ec1189fdf0d57)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests examples/benchmark.rs (target/release/examples/benchmark-aa72c03b7f75d7c0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests examples/simulation.rs (target/release/examples/simulation-2e5b044ac0df1efd)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Additional checks, all exit 0:
+RUSTUP_TOOLCHAIN=stable cargo fmt --all -- --check
+RUSTUP_TOOLCHAIN=stable cargo clippy --all-targets --locked --offline -- -D warnings
+RUSTUP_TOOLCHAIN=stable cargo build --release --all-targets --locked --offline
+python3 tests/benchmark_cli.py target/release/examples/benchmark
+PASS benchmark CLI: help and three redacted invalid-argument cases
+
+Measured and final rebuilt executable SHA-256 values match:
+8ba75f7c85880ddcc5f12fb88b2668e0d033d65f359b2f60ac1d70e51b2f8e70  target/release/examples/benchmark
+5d60e5ee5b0117bbaca51cb9eb86f0c5e7ed89f47efe3ec9a2ebed5b4b2549e8  target/release/audit-host
+
+No Rust dependency/lockfile change. Actual host audit remains blocked.
+Mobile build-tool discovery (PATH only, not a filesystem-wide inventory):
+adb, gradle, javac, kotlinc, flutter, dart, swift, xcodebuild not found.
+/usr/bin/sdkmanager resolves to /opt/nvidia/sdkmanager/sdkmanager; it is not evidence of Android tools.
+No Android/iPhone build or physical client test performed.

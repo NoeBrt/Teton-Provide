@@ -1,12 +1,14 @@
 # Task Checklist
 
 Status: software checkpoint S and follow-up review/TDD/scale verification complete.
-The 38 tests pass in debug and release, including 15 host-preflight CLI tests;
-demo, three benchmark trials, and a 300-second recovery soak have captured
+The 40 Rust tests pass in debug and release, including 17 host-preflight CLI tests.
+Four additional public release-executable CLI cases pass with Python 3.
+The demo, three benchmark trials, and a 300-second recovery soak have captured
 evidence in `demo/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
 their commands are planned acceptance commands, not currently available targets.
-The real demo uses a phone configurator and a headless Ubuntu computer; no
-Jetson is required. Graphical technician UX is required for final acceptance.
+The real demo requires Android and iPhone configurators and a headless Ubuntu
+computer; no Jetson is required. Graphical technician UX on both mobile platforms
+is required for final acceptance; keep the Ubuntu configurator alternative.
 
 The installed `stable` compiler is Rust 1.88.0. The override below avoids rustup
 trying to download the separately named toolchain in this offline environment.
@@ -88,6 +90,8 @@ Preparation slice (does not close the hardware gate):
 - [x] Public CLI tests cover clean success, blocked/missing services, malformed
   output, timeout/output limits, invalid adapter input, and secret-safe errors.
 - [x] Capture actual host result separately from command-fixture tests.
+- [x] An exited command parent with stdout-holding descendants still times out;
+  inherited shell startup/functions cannot replace audited commands.
 
 Command: `cargo run --bin audit-host --locked --offline`; optional `hciN` argument.
 Evidence: `demo/host-preflight.txt` (blocked), `demo/host-audit-verification.txt`,
@@ -95,16 +99,25 @@ and `demo/tdd-host-audit.txt`. No radio or provisioning acceptance is implied.
 
 **Description:** Inspect the Ubuntu device and any Linux diagnostic configurator
 using the README commands; confirm adapter capabilities and Rust/libdbus/BlueZ
-compatibility. Audit the actual phone's OS and client preparation separately.
+compatibility. Audit actual Android and iPhone models/OS versions and client
+preparation separately; platform selection itself is settled.
 
 **Acceptance criteria:**
 
 - [ ] Identify device, OS, BlueZ, radios, NetworkManager ownership, and usable D-Bus APIs.
 - [ ] Resolve/build `bluer` with `bluetoothd` behind the optional `ble` feature;
-  lock tested crates and document native build prerequisites and ARM64 differences.
+  lock/cache the complete tested graph and document native prerequisites and ARM64
+  differences. Verify both default and BLE-enabled locked offline builds; a disabled
+  optional dependency still requires resolution.
 - [ ] Required host access is available; otherwise record the exact unpassed gate.
-- [ ] Confirm phone OS, Bluetooth permissions, and a client that starts offline;
-  choose native or browser access based on verified platform/build constraints.
+- [ ] Before mobile framework selection, review an offline authenticated bootstrap
+  for both Android and iPhone: trusted physical device identity, technician
+  authorization, channel/library support, replay protection, and status recovery.
+  This is feasibility/design review; no security implementation before checkpoint H.
+- [ ] Record model/OS versions, Bluetooth permission denial/retry, build/signing,
+  distribution, and prepared client installation/startup offline for each platform.
+  Select native/shared/browser access only against those verified constraints;
+  Android browser support alone cannot satisfy the iPhone requirement.
 
 **Verification:** README hardware audit; `cargo check --features ble --locked`
 on the Ubuntu device after dependency resolution. Test a Jetson or additional
@@ -150,21 +163,22 @@ Capture repeated exchanges/failures without nearby-device inventories.
 **Files:** `configurator/main.rs`, `configurator/ble.rs`, `Cargo.toml`, `README.md`.
 **Scope:** Medium, four files.
 
-## 6a. Phone hello round trip
+## 6a. Android and iPhone hello round trips
 
-**Description:** Use the selected phone client to discover the headless Ubuntu
-device, connect, send only `hello`, and read `world`. This is a transport probe,
-not the final provisioning UI.
+**Description:** Use a prepared client on each of Android and iPhone to discover
+the headless Ubuntu device, connect, send only `hello`, and read `world`. This is
+a transport probe, not the final provisioning UI.
 
 **Acceptance criteria:**
 
-- [ ] Prepared client starts with Internet disabled and no shared LAN.
-- [ ] Actual phone discovers/connects/exchanges hello with the Ubuntu device.
-- [ ] Disconnect/reconnect succeeds; no device screen, SSH, credentials, or
-  technical operator commands are required to complete the exchange.
+- [ ] Android client starts offline, discovers/connects/exchanges hello, and reconnects.
+- [ ] iPhone client starts offline, discovers/connects/exchanges hello, and reconnects.
+- [ ] Both runs use Internet disabled and no shared LAN; no device screen, SSH,
+  credentials, or technical operator commands are required to complete the exchange.
 
-**Verification:** Record phone OS/client versions, offline startup, repeated
-successful GATT exchanges, and retry after disconnect. A generic BLE diagnostic
+**Verification:** Record model/OS/client/build versions and installation method,
+offline startup, repeated successful GATT exchanges, and retry after disconnect
+separately for Android and iPhone. A generic BLE diagnostic
 app may help feasibility testing but does not replace submitted configurator code.
 **Dependencies:** 4, 5.
 **Files:** Phone adapter under `configurator/` once selected, `README.md`,
@@ -178,8 +192,8 @@ validate restart/reboot and collect honest hardware evidence.
 
 **Acceptance criteria:**
 
-- [ ] Service restart and device reboot restore discovery and successful hello exchange.
-- [ ] Repeated reconnects pass, with Internet disabled and no shared LAN.
+- [ ] Service restart and device reboot restore discovery and successful hello exchange from both Android and iPhone.
+- [ ] Repeated reconnects pass from each platform, with Internet disabled and no shared LAN.
 - [ ] Journal and demo evidence contain no secrets or arbitrary payloads.
 
 **Verification:** `systemctl status iot-provisioning --no-pager`;
@@ -191,7 +205,7 @@ validate restart/reboot and collect honest hardware evidence.
 
 ## Checkpoint H: real transport milestone
 
-- [ ] Tasks 4, 5, 6a, and 7 pass on phone + device; simulation evidence remains distinct.
+- [ ] Tasks 4, 5, 6a, and 7 pass separately on Android + device and iPhone + device; simulation evidence remains distinct.
 - [ ] Record optional task 6 separately if a Linux configurator is tested; do not claim desktop support from phone-only evidence.
 - [ ] Dependency/setup instructions reproduce the radio flow on supported Ubuntu.
 - [ ] Rustfmt, tests, release build, and Clippy pass with `--features ble --locked` where applicable.
@@ -212,12 +226,24 @@ Hardware tasks 4-7 remain open.
 
 ## Later scope, not implementation tasks yet
 
-After checkpoint H, write a focused plan for authenticated credential transfer,
-real NetworkManager activation/IP verification, and failure-safe retries.
+Review authenticated bootstrap feasibility for both platforms in task 4, before
+framework selection. After checkpoint H, write a focused plan to validate and
+implement authenticated and encrypted credential transfer, real NetworkManager activation/IP
+verification, and failure-safe retries.
 Then deliver technician UX, scaling/security documentation, and final evidence.
 Preserve the original challenge's real-network requirement throughout.
-The final phone and Ubuntu graphical flow must guide device identification,
+Before credential bytes may leave a client, validate confidentiality, integrity,
+and peer authentication of an established encrypted channel. Reject transfer
+while these conditions are unmet; record the security tests and their outcomes.
+The final Android, iPhone, and Ubuntu graphical flow must guide device identification,
 SSID/password entry, progress, verified success, and actionable failures/retry.
+Final acceptance on each mobile platform must show fresh authenticated device
+status tied to the current attempt, the requested target connection active, and
+its assigned IP. An old/fallback connection or cached address cannot count as
+success; a fresh observation may report the same IP. Interrupt the result after
+submission, reconnect/authenticate, and recover status for that attempt before
+success or resubmission; unavailable status stays unknown. Include wrong password,
+unavailable target, and old/fallback-network cases in physical failure testing.
 Test it without operator commands or a screen on the device. This is a required
 acceptance criterion; implement it after transport/security/network gates, rather
 than treating the CLI or a generic Bluetooth diagnostic app as the final interface.

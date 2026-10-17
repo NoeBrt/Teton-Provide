@@ -6,8 +6,9 @@ transport milestone. **Real BLE and Wi-Fi provisioning are not implemented.**
 No Jetson is currently available. The local simulator discovers a synthetic
 device, connects through bounded memory channels, exchanges `hello`/`world`,
 and closes its worker. It supports fault injection and recoverable failures.
-The final demo will use the technician's phone as configurator and a headless
-Ubuntu computer as the device; a Jetson can replace that computer later.
+The final demo requires Android and iPhone support, each used as configurator
+with a headless Ubuntu computer as the device; a Jetson can replace that
+computer later.
 The computer still needs a verified BLE peripheral and Wi-Fi adapter.
 BLE is the planned provisioning channel; the demo will not create a temporary
 Wi-Fi network. See [decision 18](docs/DECISIONS.md#18-exclude-softap-from-the-mvp).
@@ -15,6 +16,7 @@ Wi-Fi network. See [decision 18](docs/DECISIONS.md#18-exclude-softap-from-the-mv
 - [Selected stack and architecture](docs/ARCHITECTURE.md)
 - [Implementation plan](tasks/plan.md)
 - [Task checklist and acceptance criteria](tasks/todo.md)
+- [Step-by-step engineering handoff](tasks/HANDOFF.md)
 - [Counter-review and decision history](docs/DECISIONS.md)
 - [Benchmark methodology and results](docs/BENCHMARKS.md)
 - [Skill-based review and TDD verification](docs/REVIEW.md)
@@ -47,8 +49,9 @@ From the phone, the technician will:
 The device runs its service automatically without a screen, keyboard, or an SSH
 session during provisioning. An Ubuntu computer used as configurator should
 offer the same guided workflow. App installation and device setup happen before
-the offline demo. Phone OS, mobile client, and authenticated device bootstrap
-are still open; a page served on the unprovisioned computer is not automatically
+the offline demo. Actual models/OS versions, mobile clients, build/distribution,
+and authenticated device bootstrap remain unverified on both platforms; a page
+served on the unprovisioned computer is not automatically
 reachable from the phone. See [the interface and platform plan](docs/ARCHITECTURE.md#technician-interface-and-demo-topology).
 
 ## Run and test the simulation
@@ -67,6 +70,13 @@ cargo test --all-targets --locked --offline
 cargo fmt --all -- --check
 cargo clippy --all-targets --locked --offline -- -D warnings
 cargo build --release --examples --locked --offline
+```
+
+After building the release examples, run the public CLI regression on Ubuntu
+with Python 3 (standard library only):
+
+```sh
+python3 tests/benchmark_cli.py target/release/examples/benchmark
 ```
 
 The example prints `SIMULATION`, synthetic discovery, a local connection,
@@ -178,13 +188,17 @@ and bounded-run evidence are retained in `demo/`; see the benchmark report for
 the measured scope and limitations. No wireless, credential protection, network
 activation, systemd, or 200-device throughput is measured.
 
-The current 38 tests pass in debug/release, including 15 public host-preflight
-tests. Two independent review axes and a
+The current 40 Rust tests pass in debug/release, including 17 public host-preflight
+tests. Four additional black-box CLI cases check the actual release benchmark.
+Two independent review axes and a
 focused review of the scaling additions found no blocking defect. TDD verification
 also caught a response-test weakness using an isolated mutation; the hardened
 test now checks the literal wire contract. See the review report and raw traces.
 Host-audit follow-up review also caught argument-redaction and D-Bus activation
 defects; the final audit includes regressions for both and strict process cleanup.
+Continuation reviews fixed an exited-parent stdout deadline escape and a
+non-UTF-8 benchmark-argument panic. Matched measurements, accepted startup cost,
+and per-step handoffs are recorded in the linked reports.
 
 ## Hardware audit
 
