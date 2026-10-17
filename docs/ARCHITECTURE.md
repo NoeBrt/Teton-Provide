@@ -14,6 +14,7 @@ as the device. A Jetson is an optional later device target.
 | Current runtime | Standard-library threads | No third-party dependencies; builds offline |
 | Simulation | Two bounded `std::sync::mpsc` channels per session, synthetic discovery | Capacity one each; no radio, sockets, root, or Bluetooth dependency |
 | Tests | `cargo test`, `#[test]` | Handler unit tests and simulation integration tests; finite real-time receive deadlines |
+| Developer host preflight | Rust std + busctl/nmcli/GNU timeout | Read-only prerequisites; no radio success claim |
 | Planned real BLE runtime | Tokio | Needed by `bluer`; not installed or declared yet |
 | Planned device BLE | BlueZ GATT/advertising via `bluer` | Supported local GATT role; hardware validation pending |
 | Planned Linux diagnostic configurator BLE | `bluer` remote GATT/discovery | Linux role only; not a phone client |
@@ -122,6 +123,8 @@ tests/simulation.rs           discovery, exchange, rejection, recovery tests
 tests/scaled.rs               public batch API coverage and concurrency bounds
 examples/simulation.rs        labeled hello demonstration
 examples/benchmark.rs         local measurements and bounded soak runner
+device/audit.rs               read-only Ubuntu host preflight binary
+tests/host_audit.rs           public CLI tests with external-command fixtures
 ```
 
 Add `device/main.rs` / `device/ble.rs` and `configurator/main.rs` /
@@ -168,7 +171,8 @@ The secure provisioning protocol may need a different framing scheme later.
 Do not label software logs as successful BLE provisioning. Future fake network
 results must also be labeled simulations; they cannot satisfy the real-Wi-Fi requirement.
 
-The 23 tests (15 handler/simulation, four scaled batches, four benchmark harness)
+The 38 tests (15 handler/simulation, four scaled batches, four benchmark harness,
+15 host-preflight CLI tests)
 pass in debug and release on the installed Rust 1.88.0 compiler. The software checkpoint includes
 three benchmark trials and a completed 300-second recovery soak; see
 [the measured results and raw evidence](BENCHMARKS.md).
@@ -184,6 +188,17 @@ sample counts, elapsed time, and outcomes. Thread/channel measurements describe
 this software harness only; they predict neither BLE throughput nor capacity
 for 200 real devices. A simulated restart replaces an object, not a systemd
 service or machine reboot.
+
+`audit-host [hciN]` prepares actual Ubuntu checks without requiring Rust BLE
+libraries. It resolves the current BlueZ unique bus name before reading the
+selected adapter's power, GATT method, and advertising method/capacity. Unique
+names cannot autoactivate BlueZ if it is stopped or disappears. NetworkManager
+is queried only for device type and management status, not profiles or addresses.
+GNU timeout kills each read-only command group at four seconds; stdout capture
+is capped at 8 KiB and stderr is discarded. Exit 0 means observed prerequisites,
+not working registration permissions, advertisements, or Wi-Fi activation.
+The actual restricted-host run fails closed; public-command fixtures validate
+software behavior only. See decision 16 and the README preflight command.
 
 The scaled software workload queues task indices at batch start. A bounded
 pool creates an independent fake device/session for each job, checks literal

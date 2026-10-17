@@ -399,3 +399,42 @@ connection; retain that stricter acceptance criterion. Platform references and
 the operator flow are recorded in `docs/ARCHITECTURE.md`. Phone OS, actual radio
 exchange, mobile startup, and headless lifecycle remain unverified. Existing
 simulation evidence is unchanged and does not claim to validate this interface.
+
+## 16. Executable host preflight while real transport remains blocked
+
+**Decision:** Deliver a read-only Rust diagnostic as task 4 preparation, without
+replacing the actual BLE gate with another simulated success.
+
+**Original proposal:** Run manual hardware commands once the actual host is usable.
+
+**Final choice:** Add `audit-host [hciN]` with no Cargo dependencies. Resolve
+BlueZ's current unique D-Bus name, then read power and GATT/advertising APIs on
+that adapter. Require a free advertising instance and a NetworkManager-managed
+Wi-Fi device, regardless of whether it is connected. Only print constructed
+statuses. Bound each command group to four seconds, cap stdout at 8 KiB, discard
+stderr, and reject invalid/non-UTF-8 arguments without echoing them.
+
+**Reason:** Host D-Bus/sockets and dependency downloads remain unavailable here;
+the prepared binary can qualify an actual Ubuntu terminal offline. Large
+Bluetooth/network inventories can expose names and addresses unnecessarily.
+BlueZ 5.64 [SupportedInstances](https://github.com/bluez/bluez/blob/5.64/src/advertising.c)
+already counts remaining slots; do not subtract ActiveInstances again.
+[nmcli 1.36.6](https://github.com/NetworkManager/NetworkManager/blob/1.36.6/src/nmcli/devices.c)
+exposes the two selected fields. In [systemd 249](https://github.com/systemd/systemd/blob/v249/src/busctl/busctl.c),
+ordinary get-property/introspect can autoactivate a well-known service; a unique
+owner avoids starting BlueZ during an audit.
+
+**Trade-off:** This depends on standard Ubuntu command formats and GNU timeout;
+it is not the runtime BLE implementation. A point-in-time free slot does not
+reserve it. Registration authorization, peripheral behavior, phone compatibility,
+and radio reliability remain unverified. Trusted system commands must not detach
+from the timeout process group. No radio libraries or UI are added.
+
+**Evidence / test:** 38 tests pass in debug/release, including 15 public CLI
+tests with command fixtures. Six recorded red/green cycles include capacity
+semantics, a descendant retaining stdout after TERM, non-UTF-8 argument leakage,
+and D-Bus autoactivation. Separate Standards/Spec reviews identified defects
+that were reproduced and fixed. Rustfmt, Clippy, and release builds pass.
+The actual prepared-binary run returns exit 1 because host service access is
+blocked; see `demo/host-preflight.txt`, `demo/tdd-host-audit.txt`, and
+`demo/host-audit-verification.txt`. This does not close checkpoint H.

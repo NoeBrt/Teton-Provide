@@ -15,7 +15,7 @@ Support the same workflow on an Ubuntu configurator. Confirm the phone OS and
 offline client installation before fixing its adapter or UI framework.
 
 The shared contract and software transport now run without third-party crates.
-All 23 tests and the labeled demo pass locally; baseline/scale benchmark trials,
+All 38 tests (including 15 host-preflight CLI tests) and the labeled demo pass locally; baseline/scale benchmark trials,
 a 300-second recovery soak, and skill-based review/TDD verification are complete. Tasks are tracked
 in [todo.md](todo.md); architecture choices live in
 [ARCHITECTURE.md](../docs/ARCHITECTURE.md) and their history in
@@ -78,10 +78,15 @@ Add a dependency-free Rust `audit-host [hciN]` diagnostic that runs read-only
 Ubuntu commands with finite deadlines. Check adapter power and the local GATT /
 advertising APIs on the same adapter, plus a Wi-Fi device managed by NetworkManager.
 Emit only constructed statuses, never command output, SSIDs, MACs, or secrets.
+Resolve the current BlueZ unique owner to avoid autoactivation. Use GNU timeout
+with a direct KILL to bound read-only process groups at four seconds; limit
+stdout to 8 KiB and discard stderr. Non-UTF-8 arguments must fail without echo.
 An affirmative result means prerequisites observed, not a successful radio test.
 Tests exercise the executable's exit status and output, substituting commands
 only at the operating-system boundary. Capture the actual restricted-host result.
 This prepares task 4 without starting credential, security, or UI implementation.
+The diagnostic is implemented and tested; its actual host result remains blocked
+by service access. See decision 16 and the separate evidence under `demo/`.
 
 ## Verification strategy
 

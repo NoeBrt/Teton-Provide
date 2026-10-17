@@ -87,3 +87,36 @@ there is no worst finding on either axis. The separate TDD mutation check expose
 and closed a test weakness. Resource-exhaustion/panic cleanup was reviewed rather
 than fault-injected. Fresh Ubuntu/ARM64 installation, BLE, Wi-Fi, device identity,
 secure credentials, and systemd lifecycle remain unverified hardware gates.
+
+## Host preflight review and follow-up
+
+The next review pins `ce1b4b3..fd0fd89`, covering the read-only Rust host audit,
+its public CLI tests, and preparation tasks. The separate Standards and Spec
+agents found the following defects; `1c2d62e` closes them:
+
+| Axis | Finding | Fix and verification |
+| --- | --- | --- |
+| Standards | P2: non-UTF-8 argv panicked and exposed the argument | `args_os` with controlled validation; public regression and independent targeted reproduction pass |
+| Standards | P3: SIGKILL reported a generic command failure | Inspect Unix exit signal; an independently tested TERM-ignoring command stops in 4.012 s and reports TIMEOUT |
+| Spec | P2: a query to `org.bluez` could start the service | Resolve current unique owner first; service-absent fixture checks no activation, positive fixture only accepts the unique destination |
+
+Parent verification also reproduced a descendant retaining stdout after its
+parent terminated on TERM: the audit took 12 seconds. Direct KILL of the read-only
+process group at four seconds fixes this; the public regression passes. BlueZ
+source review caught a capacity interpretation error: SupportedInstances already
+counts free slots. A positive regression prevents subtracting active slots again.
+All six actual red/green traces are retained in
+[the TDD evidence](../demo/tdd-host-audit.txt).
+
+Both agents reviewed the corrected commit and reported no remaining concrete
+defect. The Standards agent reran targeted argument/deadline checks; the Spec
+follow-up was static. The complete 38-test suite passes in debug/release,
+alongside Rustfmt, Clippy, and release builds; see
+[the commands and source hashes](../demo/host-audit-verification.txt).
+
+The prepared release binary was also run against the actual environment at
+`1c2d62e`; it returns exit 1 with failed BlueZ/NetworkManager service access.
+[This actual result](../demo/host-preflight.txt) is separate from fixture tests.
+No registration, radio exchange, phone compatibility, or real Wi-Fi join was
+validated. Baseline simulation benchmarks were not repeated because the simulated
+transport and benchmark code did not change.
