@@ -9,8 +9,8 @@ No Jetson is available. The simulation is a development aid; real BLE and
 real Wi-Fi remain required for the final challenge submission.
 
 The shared contract and software transport now run without third-party crates.
-All 18 tests and the labeled demo pass locally; three benchmark trials and a
-300-second recovery soak are complete. Tasks are tracked
+All 23 tests and the labeled demo pass locally; baseline/scale benchmark trials,
+a 300-second recovery soak, and skill-based review/TDD verification are complete. Tasks are tracked
 in [todo.md](todo.md); architecture choices live in
 [ARCHITECTURE.md](../docs/ARCHITECTURE.md) and their history in
 [DECISIONS.md](../docs/DECISIONS.md).
@@ -109,6 +109,16 @@ vendored dependencies and native libraries before they can build offline.
 | Simulation becomes a second product | Reuse handler; keep only fault injection and wiring in the fake adapter |
 | Security is bolted onto plaintext provisioning | Credential endpoint blocked until authenticated-channel review and tests |
 | No Wi-Fi hardware by submission | Explicitly report incomplete challenge; simulated success cannot replace real evidence |
+
+The follow-up verification uses the installed `code-review`, `tdd`, and
+`performance-optimization` skills. The review compares the fixed pre-code plan
+with the software checkpoint on separate Standards and Spec axes. New tests
+use the existing public protocol/session interfaces and the bounded batch API;
+record actual red/green output and an isolated mutation check. The scaled
+benchmark runs 1/20/50/200/1,000 simulated jobs with 1/4/8 concurrent clients,
+three independent processes, and seven measured batches per case. Report
+queue-inclusive completion separately from service time; keep concurrency bounded
+and retain raw data. See `docs/REVIEW.md` and `docs/BENCHMARKS.md` for results.
 
 The future device model, adapter capability, host permissions, and authenticated
 channel remain open. These do not block the harmless simulation. Confirm them

@@ -1,0 +1,81 @@
+SIMULATION ONLY — independent device jobs; no radio, credentials, or network activation
+UTC started: 2026-10-17T09:33:37.150590+00:00
+Code commit: d21d09e02f6a918271488b609c3308298646a895
+OS: Linux-6.8.0-138-generic-x86_64-with-glibc2.35
+CPU: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics
+Compiler: rustc 1.88.0 (6b00bc388 2025-06-23)
+Profile: release
+Dependencies: standard library only
+CPU affinity/governor not controlled; shared workstation
+
+Independent process trial 1/3
+Command: target/release/examples/benchmark --scale
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.068,39.504,104.646,0.147,14615.8,5842.8,20213.0
+1,4,7,7,1,0.056,31.189,46.367,0.069,17738.0,11509.7,19194.6
+1,8,7,7,1,0.053,28.473,80.261,0.108,18793.5,7715.3,20312.0
+20,1,7,140,1,0.803,37.981,63.379,0.856,24920.1,18728.3,33105.8
+20,4,7,140,4,0.310,44.333,76.483,0.302,64511.6,50927.3,78008.9
+20,8,7,140,8,0.347,76.914,166.012,0.328,57625.1,55505.3,64511.6
+50,1,7,350,1,1.548,27.351,50.775,1.736,32295.7,24237.4,34909.0
+50,4,7,350,4,0.615,43.362,66.975,0.642,81342.7,61889.9,86879.6
+50,8,7,350,8,0.662,84.940,141.616,0.632,75513.6,68988.4,78333.4
+200,1,7,1400,1,6.713,27.813,50.494,6.432,29792.0,28409.3,32051.1
+200,4,7,1400,4,2.228,40.716,57.207,2.107,89772.7,85309.1,94755.4
+200,8,7,1400,8,2.307,81.143,143.248,2.171,86677.0,83573.6,91591.2
+1000,1,7,7000,1,34.714,27.822,51.276,32.857,28806.4,27533.4,30954.7
+1000,4,7,7000,4,12.149,42.880,63.980,11.335,82308.0,80896.3,92542.1
+1000,8,7,7000,8,11.386,81.813,152.155,10.768,87823.9,82996.0,92146.2
+Exit code: 0
+
+Independent process trial 2/3
+Command: target/release/examples/benchmark --scale
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.102,54.583,86.703,0.126,9833.7,6602.2,14394.7
+1,4,7,7,1,0.068,44.514,46.326,0.061,14676.1,14380.2,15150.6
+1,8,7,7,1,0.055,30.848,58.810,0.077,18263.8,10422.1,20204.9
+20,1,7,140,1,0.664,27.361,61.706,0.845,30100.7,18681.0,34422.8
+20,4,7,140,4,0.298,45.275,75.291,0.297,67024.1,41548.7,70213.9
+20,8,7,140,8,0.349,87.114,136.355,0.330,57371.7,51938.3,68444.4
+50,1,7,350,1,1.890,29.535,54.823,1.848,26453.6,22936.2,35047.0
+50,4,7,350,4,0.622,43.021,71.544,0.642,80335.9,66394.7,91903.1
+50,8,7,350,8,0.691,87.674,149.701,0.654,72369.8,66506.2,76052.2
+200,1,7,1400,1,6.573,28.043,53.981,6.739,30426.6,24435.4,33618.8
+200,4,7,1400,4,2.311,42.660,60.874,2.228,86549.6,72839.6,92400.1
+200,8,7,1400,8,2.581,89.819,163.947,2.619,77477.6,52365.6,78324.8
+1000,1,7,7000,1,35.219,28.203,53.210,33.565,28393.5,26616.4,29541.5
+1000,4,7,7000,4,11.422,43.020,63.028,11.111,87553.4,78198.3,94049.5
+1000,8,7,7000,8,11.438,82.375,152.286,10.959,87426.0,79873.7,89627.5
+Exit code: 0
+
+Independent process trial 3/3
+Command: target/release/examples/benchmark --scale
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.120,75.281,110.657,0.146,8351.8,6395.8,11493.9
+1,4,7,7,1,0.080,47.089,88.606,0.112,12440.9,8110.8,13510.0
+1,8,7,7,1,0.066,41.909,56.106,0.084,15236.2,9383.5,17065.1
+20,1,7,140,1,0.937,42.499,60.012,0.879,21338.6,20798.6,34689.6
+20,4,7,140,4,0.277,44.023,86.933,0.370,72283.3,43065.3,77911.7
+20,8,7,140,8,0.341,86.202,133.270,0.314,58628.7,57399.8,63767.8
+50,1,7,350,1,2.011,39.885,52.799,1.949,24861.2,22841.6,32069.7
+50,4,7,350,4,0.610,41.407,68.899,0.599,81973.4,66919.1,84575.3
+50,8,7,350,8,0.691,86.562,136.827,0.647,72357.2,67742.0,76697.5
+200,1,7,1400,1,6.890,27.531,54.672,6.649,29028.5,24875.5,32899.8
+200,4,7,1400,4,2.237,40.977,58.099,2.138,89388.8,80775.0,92909.7
+200,8,7,1400,8,2.431,81.613,151.915,2.260,82283.9,80619.4,87734.1
+1000,1,7,7000,1,34.839,28.353,51.296,33.427,28703.2,25344.3,29387.9
+1000,4,7,7000,4,11.336,41.899,64.551,10.907,88214.4,77089.5,90346.5
+1000,8,7,7000,8,11.276,81.924,149.170,10.690,88683.1,85780.4,90980.6
+Exit code: 0

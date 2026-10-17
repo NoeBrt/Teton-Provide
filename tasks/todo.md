@@ -1,6 +1,7 @@
 # Task Checklist
 
-Status: software checkpoint S complete. The 18 tests pass in debug and release;
+Status: software checkpoint S and follow-up review/TDD/scale verification complete.
+The 23 tests pass in debug and release;
 demo, three benchmark trials, and a 300-second recovery soak have captured
 evidence in `demo/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
 their commands are planned acceptance commands, not currently available targets.
@@ -153,6 +154,19 @@ validate restart/reboot and collect honest hardware evidence.
 - [ ] Dependency/setup instructions reproduce the radio flow on supported Ubuntu.
 - [ ] Rustfmt, tests, release build, and Clippy pass with `--features ble --locked` where applicable.
 - [ ] Stop here before adding credentials, security implementation, or technician UI.
+
+## Follow-up: skill-based software verification
+
+- [x] Independent Standards and Spec review of `b4aaae8...4e1b9fa`, with separate reports.
+- [x] Public-interface TDD red/green trace; isolated response mutation exposes and closes a test gap.
+- [x] Queue uniqueness, resource limits, 200-job coverage, and stop/request-race regressions.
+- [x] Three release scale trials: 1/20/50/200/1,000 jobs, 1/4/8 clients, seven timed batches per case.
+- [x] Check 80,073 timed jobs, retain raw data and queue/service latency definitions.
+- [x] All 23 tests pass in debug/release; formatting, Clippy, and release build pass.
+
+Reports: `docs/REVIEW.md`, `docs/BENCHMARKS.md`; evidence: `demo/tdd-scaled.txt`,
+`demo/verification-tests.txt`, `demo/benchmark-scaled.txt`, `demo/benchmark-scaled.csv`.
+Hardware tasks 4-7 remain open.
 
 ## Later scope, not implementation tasks yet
 

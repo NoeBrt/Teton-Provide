@@ -59,7 +59,9 @@ The current single Cargo package contains:
 Cargo.toml / Cargo.lock / rust-toolchain.toml
 src/lib.rs / src/protocol.rs   shared byte handler, unit tests beside code
 src/simulation.rs             reusable fake transport, lifecycle unit tests
+src/simulation/batch.rs       bounded pool of independent simulated device jobs
 tests/simulation.rs           discovery, exchange, rejection, recovery tests
+tests/scaled.rs               public batch API coverage and concurrency bounds
 examples/simulation.rs        labeled hello demonstration
 examples/benchmark.rs         local measurements and bounded soak runner
 ```
@@ -108,10 +110,11 @@ The secure provisioning protocol may need a different framing scheme later.
 Do not label software logs as successful BLE provisioning. Future fake network
 results must also be labeled simulations; they cannot satisfy the real-Wi-Fi requirement.
 
-The 18 tests (14 handler/simulation, four benchmark harness) pass in debug and
-release on the installed Rust 1.88.0 compiler. The software checkpoint includes
+The 23 tests (15 handler/simulation, four scaled batches, four benchmark harness)
+pass in debug and release on the installed Rust 1.88.0 compiler. The software checkpoint includes
 three benchmark trials and a completed 300-second recovery soak; see
 [the measured results and raw evidence](BENCHMARKS.md).
+The follow-up scale matrix also has three independent process trials.
 Run the full suite with
 `RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline`; use this
 override only after confirming `stable` is 1.88.0. Standard Ubuntu setup must
@@ -123,6 +126,16 @@ sample counts, elapsed time, and outcomes. Thread/channel measurements describe
 this software harness only; they predict neither BLE throughput nor capacity
 for 200 real devices. A simulated restart replaces an object, not a systemd
 service or machine reboot.
+
+The scaled software workload queues task indices at batch start. A bounded
+pool creates an independent fake device/session for each job, checks literal
+`hello`/`world`, and closes/joins it. The public batch API rejects sizes outside
+1-10,000 jobs and concurrency outside 1-32 clients before allocation/spawning.
+Each active client uses at most one session worker; a healthy batch therefore
+uses at most twice its client limit plus the calling thread. This is a per-batch
+limit; callers running several batches at once must bound their aggregate load.
+The example uses at most eight clients. Indices identify synthetic jobs, not
+advertised physical identities. BLE discovery and production queueing remain future work.
 
 ## Docker and alternatives
 

@@ -12,6 +12,7 @@ and closes its worker. It supports fault injection and recoverable failures.
 - [Task checklist and acceptance criteria](tasks/todo.md)
 - [Counter-review and decision history](docs/DECISIONS.md)
 - [Benchmark methodology and results](docs/BENCHMARKS.md)
+- [Skill-based review and TDD verification](docs/REVIEW.md)
 
 The real milestone still requires actual advertisements, GATT exchanges,
 reconnect, service restart, and reboot on two machines. The simulator accepts
@@ -71,7 +72,8 @@ the Rust 1.88.0 pin are committed. See decision 12 for the simulation runtime ch
 One Cargo package contains `src/protocol.rs` (shared byte handler),
 `src/simulation.rs` (fake discovery and connection lifecycle),
 `examples/simulation.rs` (demo), and tests in `tests/simulation.rs` and beside
-library code. Future `device/` and `configurator/` binaries and `bluer` will be
+library code. `src/simulation/batch.rs` adds bounded batches, tested through its
+public API in `tests/scaled.rs`. Future `device/` and `configurator/` binaries and `bluer` will be
 gated behind a `ble` feature; that feature is not present yet.
 
 Both channel queues hold at most one message; requests are capped at 20 bytes
@@ -88,11 +90,18 @@ not evidence of a systemd restart or machine reboot. Docker remains optional.
 
 ```sh
 cargo run --release --example benchmark --locked --offline
+cargo run --release --example benchmark --locked --offline -- --scale
 cargo run --release --example benchmark --locked --offline -- --soak 300
 ```
 
-The first command checks and times exchanges on a reused session separately
-from connect/exchange/close operations. The second mixes valid requests,
+The default command checks and times exchanges on a reused session separately
+from connect/exchange/close operations. `--scale` measures batches of 1, 20, 50,
+200, and 1,000 independent fake device jobs at 1, 4, and 8 concurrent clients.
+It checks every reply, exact job coverage, and the observed concurrency bound.
+Batch time includes queueing, client-pool setup, and worker cleanup; per-job
+service and completion percentiles distinguish processing from queue wait.
+
+`--soak` mixes valid requests,
 invalid input, timeout, disconnect, retry, and simulated restart for the requested
 duration (1-3600 seconds). Failures outside the expected injected outcomes cause
 a nonzero exit. Prepared binaries can run these checks without Cargo or Rustup.
@@ -101,6 +110,11 @@ These are local thread/channel measurements. Commands, environment, raw output,
 and bounded-run evidence are retained in `demo/`; see the benchmark report for
 the measured scope and limitations. No wireless, credential protection, network
 activation, systemd, or 200-device throughput is measured.
+
+The current 23 tests pass in debug/release. Two independent review axes and a
+focused review of the scaling additions found no blocking defect. TDD verification
+also caught a response-test weakness using an isolated mutation; the hardened
+test now checks the literal wire contract. See the review report and raw traces.
 
 ## Hardware audit
 
