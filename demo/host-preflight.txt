@@ -1,0 +1,12 @@
+ACTUAL HOST PREFLIGHT — NOT A RADIO TEST
+Code commit: 1c2d62e
+Captured UTC: 2026-10-17T10:07:58.598420+00:00
+Host: Linux x86_64 6.8.0-138-generic
+Profile: release; Rust 1.88.0; prepared executable; no Internet or root needed
+$ target/release/audit-host
+HOST PREFLIGHT (read-only, adapter hci0)
+FAIL BLUEZ_RUNNING COMMAND_FAILED
+FAIL NETWORKMANAGER_MANAGED_WIFI COMMAND_FAILED
+Host preflight blocked; run from the Ubuntu host terminal and check the failed prerequisites.
+Phone client, secure provisioning, and real Wi-Fi joining remain unverified.
+Exit: 1

@@ -1,7 +1,7 @@
 # Task Checklist
 
 Status: software checkpoint S and follow-up review/TDD/scale verification complete.
-The 23 tests pass in debug and release;
+The 38 tests pass in debug and release, including 15 host-preflight CLI tests;
 demo, three benchmark trials, and a 300-second recovery soak have captured
 evidence in `demo/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
 their commands are planned acceptance commands, not currently available targets.
@@ -83,11 +83,15 @@ Stop prevents discovery/new requests; an already pending wait keeps its deadline
 
 Preparation slice (does not close the hardware gate):
 
-- [ ] Executable Rust audit reports selected-adapter power, GATT/advertising APIs,
+- [x] Executable Rust audit reports selected-adapter power, GATT/advertising APIs,
   and NetworkManager-managed Wi-Fi without changing configuration.
-- [ ] Public CLI tests cover clean success, blocked/missing services, malformed
+- [x] Public CLI tests cover clean success, blocked/missing services, malformed
   output, timeout/output limits, invalid adapter input, and secret-safe errors.
-- [ ] Capture actual host result separately from command-fixture tests.
+- [x] Capture actual host result separately from command-fixture tests.
+
+Command: `cargo run --bin audit-host --locked --offline`; optional `hciN` argument.
+Evidence: `demo/host-preflight.txt` (blocked), `demo/host-audit-verification.txt`,
+and `demo/tdd-host-audit.txt`. No radio or provisioning acceptance is implied.
 
 **Description:** Inspect the Ubuntu device and any Linux diagnostic configurator
 using the README commands; confirm adapter capabilities and Rust/libdbus/BlueZ

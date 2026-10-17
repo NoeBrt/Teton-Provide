@@ -80,8 +80,37 @@ network sockets is restricted.
 Jetson model, software versions, radio capabilities, and connectivity remain
 unverified. Docker CLI 27.0.3 is present, but its daemon is inaccessible in this
 session. `pkg-config` detects libdbus 1.12.20. Only the x86-64 Rust target is
-installed. The simulation builds with no third-party crates; hardware dependencies
-have not been resolved or built.
+installed. The simulation and host preflight build with no third-party crates;
+BLE library dependencies have not been resolved or built.
+
+## Prepare the Ubuntu device
+
+The developer preflight is separate from the final technician interface:
+
+```sh
+cargo run --bin audit-host --locked --offline
+cargo build --release --bin audit-host --locked --offline
+./target/release/audit-host
+```
+
+Optionally pass an adapter, for example `./target/release/audit-host hci1`.
+It needs Ubuntu's `busctl` (systemd), `nmcli` (NetworkManager), and GNU `timeout`
+(coreutils). The prepared binary runs offline without Rustup, Cargo, or root.
+
+The audit checks the running BlueZ owner, adapter power, local GATT registration
+API, a free advertising instance, and a Wi-Fi device managed by NetworkManager.
+It does not require Wi-Fi to be connected. It never powers an adapter, starts
+BlueZ, registers a service, or changes network configuration. Each command gets
+a four-second process-group deadline; captured stdout is limited to 8 KiB,
+stderr is discarded, and only constructed statuses are printed.
+
+Exit 0 means these prerequisites were observed; permissions for registration,
+radio exchange, the phone client, and Wi-Fi joining remain unverified. Exit 1
+means a check failed or was inconclusive; exit 2 means invalid arguments.
+`COMMAND_FAILED` can indicate missing service access, including this restricted
+session. Run from the actual Ubuntu host terminal when qualifying hardware.
+The [captured host result](demo/host-preflight.txt) remains blocked; fixture tests
+are separate from real evidence.
 
 ## Development approach
 
@@ -136,10 +165,13 @@ and bounded-run evidence are retained in `demo/`; see the benchmark report for
 the measured scope and limitations. No wireless, credential protection, network
 activation, systemd, or 200-device throughput is measured.
 
-The current 23 tests pass in debug/release. Two independent review axes and a
+The current 38 tests pass in debug/release, including 15 public host-preflight
+tests. Two independent review axes and a
 focused review of the scaling additions found no blocking defect. TDD verification
 also caught a response-test weakness using an isolated mutation; the hardened
 test now checks the literal wire contract. See the review report and raw traces.
+Host-audit follow-up review also caught argument-redaction and D-Bus activation
+defects; the final audit includes regressions for both and strict process cleanup.
 
 ## Hardware audit
 
