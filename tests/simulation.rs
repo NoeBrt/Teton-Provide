@@ -110,3 +110,29 @@ fn repeated_sessions_exchange_and_join_cleanly() {
         assert_eq!(session.close(), Ok(()));
     }
 }
+
+#[test]
+fn stop_racing_with_a_request_leaves_the_old_session_unusable() {
+    let device = Device::new();
+    let mut session = device.connect(Fault::DropReply).unwrap();
+    let ready = std::sync::Barrier::new(2);
+    std::thread::scope(|scope| {
+        let request = scope.spawn(|| {
+            ready.wait();
+            session.request(b"hello", Duration::from_millis(5))
+        });
+        ready.wait();
+        device.stop();
+        assert!(matches!(
+            request.join().unwrap(),
+            Err(Error::Disconnected | Error::Timeout)
+        ));
+    });
+    assert_eq!(session.request(b"hello", TIMEOUT), Err(Error::Disconnected));
+    assert_eq!(device.discover(), None);
+    assert!(matches!(
+        device.connect(Fault::None),
+        Err(Error::Unavailable)
+    ));
+    assert_eq!(session.close(), Ok(()));
+}
