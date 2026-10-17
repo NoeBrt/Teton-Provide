@@ -3,6 +3,8 @@
 Status: the shared hello contract and dependency-free simulation are implemented
 and tested. No Jetson is currently available. Simulated acceptance and hardware
 acceptance are distinct; the original challenge requires the latter.
+The final demo uses the user's phone as configurator and a headless Ubuntu PC
+as the device. A Jetson is an optional later device target.
 
 ## Stack
 
@@ -14,7 +16,8 @@ acceptance are distinct; the original challenge requires the latter.
 | Tests | `cargo test`, `#[test]` | Handler unit tests and simulation integration tests; finite real-time receive deadlines |
 | Planned real BLE runtime | Tokio | Needed by `bluer`; not installed or declared yet |
 | Planned device BLE | BlueZ GATT/advertising via `bluer` | Supported local GATT role; hardware validation pending |
-| Planned configurator BLE | `bluer` remote GATT/discovery | Same library for both Linux roles |
+| Planned Linux diagnostic configurator BLE | `bluer` remote GATT/discovery | Linux role only; not a phone client |
+| Required technician interface | Guided graphical flow, phone first; Ubuntu alternative | Phone OS/client feasibility pending; not implemented |
 | Later Wi-Fi control | NetworkManager D-Bus via `dbus`/`dbus-tokio` | Match `bluer`'s library family; no password subprocess arguments |
 | Planned device lifecycle | systemd + compiled Rust binary | Host BlueZ/NetworkManager access; permissions/recovery checks pending |
 | Packaging and checks | Cargo.lock, rust-toolchain.toml, Rustfmt, Clippy | Manifest, dependency-free lockfile, and exact toolchain pin exist |
@@ -35,6 +38,61 @@ features; verify the selected crate graph against Rust 1.88 before locking it.
 Future BLE builds need the host D-Bus development libraries, `pkg-config`, and a C
 toolchain for libdbus bindings. `pkg-config` detects libdbus locally; complete
 build/link checks and device distribution compatibility are still pending.
+
+## Technician interface and demo topology
+
+The original three-page challenge PDF was reread on 2026-10-17. Pages 1-2 allow
+a phone or second laptop as configurator and require use by a non-developer.
+The user specifies a phone demo and a device without a screen. A graphical
+interface is therefore part of acceptance, rather than optional polish.
+
+```text
+Technician's phone                       Headless Ubuntu PC / later Jetson
+Prepared graphical configurator -- BLE --> Rust service -- Wi-Fi --> Target network
+```
+
+The technician opens the prepared configurator, identifies the device using its
+physical label, enters an SSID/password, and taps **Connect**. The interface
+guides Bluetooth permission/disabled-radio problems, then shows device checking,
+transfer, and network-connection progress. A label/name is a selection hint;
+cryptographic authentication must succeed before credentials leave the client.
+Its mechanism remains a security decision, not an implemented guarantee.
+
+Use labeled fields, a masked password with an explicit reveal control, readable
+touch targets, and text statuses that do not rely on color. Report success only
+after NetworkManager activates the target network and assigns an IP address.
+Wrong credentials or an unavailable network need an explanation and retry
+action. If the result is unknown after disconnection, recover status before
+reporting success or repeating a request. No command, SSH, or device-side
+screen interaction belongs in this operator flow. Technical installation and
+identity-label preparation happen beforehand; systemd starts the device service.
+
+An Ubuntu configurator should provide the same guided steps through its local
+Bluetooth adapter. Do not require the phone to reach a server on that computer:
+there is no shared LAN initially, and `localhost` on the phone is the phone.
+The BLE design must prepare the client before provisioning starts, including all
+assets needed for offline startup. Serving a web page from the unprovisioned
+device would need a separate, validated bootstrap channel.
+
+Select the mobile adapter after confirming the actual phone:
+
+- Android exposes native BLE central APIs for discovery and GATT exchange
+  ([Android documentation](https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview)).
+- iOS exposes native central operations through Core Bluetooth
+  ([Apple documentation](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/PerformingCommonCentralRoleTasks/PerformingCommonCentralRoleTasks.html)).
+  Verify build, signing, and preinstallation feasibility before choosing an iOS app.
+- A browser client is conditional: verify the exact phone/browser, secure context,
+  offline asset delivery, and user-initiated device selection. Chrome documents
+  Web Bluetooth on Android and requires a secure context and user gesture
+  ([Chrome documentation](https://developer.chrome.com/docs/capabilities/bluetooth)).
+  This does not establish support on every phone or encrypt the GATT payload.
+
+Rust remains the device stack. `bluer` is a Linux adapter, not a cross-platform
+mobile UI library. Choose the smallest verified phone client; do not commit to
+multiple mobile frameworks now. If phone-client installation is impractical,
+reassess SoftAP with actual adapter capability and security evidence. An AP
+created during provisioning differs from a pre-existing shared LAN, but remains
+an untested fallback. No phone interface or real transport is implemented yet.
 
 ## Responsibility boundaries
 
@@ -161,7 +219,7 @@ exchange is insufficient. Record sender authorization, replay policy, and
 post-success exposure in `docs/SECURITY.md` before enabling secrets.
 
 Then implement NetworkManager activation with an IP-based success criterion,
-technician-friendly errors, and a small local UI if needed. The demo targets
+technician-friendly errors, and the required guided graphical interface. The demo targets
 personal WPA Wi-Fi; hospital EAP/certificate requirements are a separate scope.
 Discuss site profiles, authenticated manifests, bounded queues, multiple operators,
 and staging versus corridor setup for 200 devices; do not implement orchestration now.

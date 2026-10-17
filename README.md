@@ -6,6 +6,9 @@ transport milestone. **Real BLE and Wi-Fi provisioning are not implemented.**
 No Jetson is currently available. The local simulator discovers a synthetic
 device, connects through bounded memory channels, exchanges `hello`/`world`,
 and closes its worker. It supports fault injection and recoverable failures.
+The final demo will use the technician's phone as configurator and a headless
+Ubuntu computer as the device; a Jetson can replace that computer later.
+The computer still needs a verified BLE peripheral and Wi-Fi adapter.
 
 - [Selected stack and architecture](docs/ARCHITECTURE.md)
 - [Implementation plan](tasks/plan.md)
@@ -17,6 +20,27 @@ and closes its worker. It supports fault injection and recoverable failures.
 The real milestone still requires actual advertisements, GATT exchanges,
 reconnect, service restart, and reboot on two machines. The simulator accepts
 only `hello`; it never configures a network or accepts credentials.
+
+## Technician experience: required final behavior
+
+The original challenge PDF, reread on 2026-10-17, requires a flow usable by a
+non-developer. A graphical interface is required for the final submission.
+The existing command-line simulation is a development tool.
+
+From the phone, the technician will:
+
+1. Open the prepared configurator and identify the device using its physical label.
+2. Enter the Wi-Fi network name and password in a simple form.
+3. Tap **Connect** and follow plain-language progress messages.
+4. See **Device connected** after network activation and IP assignment, or an
+   actionable error with a retry button.
+
+The device runs its service automatically without a screen, keyboard, or an SSH
+session during provisioning. An Ubuntu computer used as configurator should
+offer the same guided workflow. App installation and device setup happen before
+the offline demo. Phone OS, mobile client, and authenticated device bootstrap
+are still open; a page served on the unprovisioned computer is not automatically
+reachable from the phone. See [the interface and platform plan](docs/ARCHITECTURE.md#technician-interface-and-demo-topology).
 
 ## Run and test the simulation
 
@@ -73,8 +97,9 @@ One Cargo package contains `src/protocol.rs` (shared byte handler),
 `src/simulation.rs` (fake discovery and connection lifecycle),
 `examples/simulation.rs` (demo), and tests in `tests/simulation.rs` and beside
 library code. `src/simulation/batch.rs` adds bounded batches, tested through its
-public API in `tests/scaled.rs`. Future `device/` and `configurator/` binaries and `bluer` will be
-gated behind a `ble` feature; that feature is not present yet.
+public API in `tests/scaled.rs`. Future Linux `device/` and diagnostic
+`configurator/` binaries and `bluer` will be gated behind a `ble` feature; that
+feature is not present yet. The phone client requires its own platform adapter.
 
 Both channel queues hold at most one message; requests are capped at 20 bytes
 before allocation. A session accepts one request at a time. Invalid input is
@@ -118,9 +143,11 @@ test now checks the literal wire contract. See the review report and raw traces.
 
 ## Hardware audit
 
-When hardware is available, run these read-only commands from a host terminal
-on **each machine**, labeling which output belongs to the configurator and
-which belongs to the device:
+Use the Ubuntu computer as the first real device; a Jetson is not a prerequisite.
+The current session still lacks the host access needed for radio validation.
+Run these read-only commands from a host terminal on the Linux device and,
+if used, the Linux configurator. Label the outputs by role. Audit the phone's
+OS, Bluetooth permissions, client installation, and offline startup separately.
 
 ```sh
 uname -a
@@ -168,6 +195,8 @@ offline builds also require a populated cache or vendored dependencies.
 
 ## Next phases
 
-After the real first milestone passes, select authenticated credential protection,
-integrate NetworkManager, test real Wi-Fi joining and failure paths, then add
-technician UX and the scaling discussion. The full challenge is not complete.
+First validate phone-client feasibility and the real harmless transport against
+the headless Ubuntu device. After the real first milestone passes, select
+authenticated credential protection, integrate NetworkManager, test real Wi-Fi
+joining and failure paths, and deliver the required graphical technician flow.
+Include the scaling discussion and final evidence. The full challenge is not complete.
