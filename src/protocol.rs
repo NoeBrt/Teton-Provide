@@ -29,7 +29,7 @@ mod tests {
 
     #[test]
     fn hello_returns_world() {
-        assert_eq!(respond(REQUEST), Ok(RESPONSE));
+        assert_eq!(respond(b"hello"), Ok(b"world".as_slice()));
     }
 
     #[test]
