@@ -119,3 +119,136 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
      Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
 Exit: 0
+
+RED 4: descendant ignoring TERM retains stdout after the direct child exits
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit a_descendant_ignoring_term --locked --offline
+
+running 1 test
+test a_descendant_ignoring_term_cannot_hold_the_audit_open ... FAILED
+
+failures:
+
+---- a_descendant_ignoring_term_cannot_hold_the_audit_open stdout ----
+
+thread 'a_descendant_ignoring_term_cannot_hold_the_audit_open' panicked at tests/host_audit.rs:233:5:
+assertion failed: start.elapsed() < Duration::from_secs(10)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_descendant_ignoring_term_cannot_hold_the_audit_open
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 12.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+error: test failed, to rerun pass `--test host_audit`
+Exit: 101
+
+GREEN 4: kill the read-only command process group at the deadline
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit a_descendant_ignoring_term --locked --offline
+
+running 1 test
+test a_descendant_ignoring_term_cannot_hold_the_audit_open ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 4.02s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+Exit: 0
+
+RED 5: review found non-UTF-8 argv could panic and leak its contents
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit non_utf8_arguments --locked --offline
+
+running 1 test
+test non_utf8_arguments_are_rejected_without_panicking_or_leaking ... FAILED
+
+failures:
+
+---- non_utf8_arguments_are_rejected_without_panicking_or_leaking stdout ----
+
+thread 'non_utf8_arguments_are_rejected_without_panicking_or_leaking' panicked at tests/host_audit.rs:299:5:
+assertion `left == right` failed
+  left: Some(101)
+ right: Some(2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    non_utf8_arguments_are_rejected_without_panicking_or_leaking
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+error: test failed, to rerun pass `--test host_audit`
+Exit: 101
+
+GREEN 5: validate OS arguments without panics or argument echo
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit non_utf8_arguments --locked --offline
+
+running 1 test
+test non_utf8_arguments_are_rejected_without_panicking_or_leaking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+Exit: 0
+
+RED 6: querying an activatable name may start Bluetooth
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit a_stopped_bluetooth_service --locked --offline
+
+running 1 test
+test a_stopped_bluetooth_service_is_not_activated_by_the_audit ... FAILED
+
+failures:
+
+---- a_stopped_bluetooth_service_is_not_activated_by_the_audit stdout ----
+
+thread 'a_stopped_bluetooth_service_is_not_activated_by_the_audit' panicked at tests/host_audit.rs:311:5:
+A query to an activatable name would start Bluetooth
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_stopped_bluetooth_service_is_not_activated_by_the_audit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+error: test failed, to rerun pass `--test host_audit`
+Exit: 101
+
+GREEN 6: resolve the running BlueZ owner; never query its activatable name
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
+
+running 15 tests
+test non_utf8_arguments_are_rejected_without_panicking_or_leaking ... ok
+test a_stopped_bluetooth_service_is_not_activated_by_the_audit ... ok
+test failed_commands_never_expose_their_stdout_or_stderr ... ok
+test excessive_stdout_is_bounded_and_never_printed ... ok
+test missing_commands_fail_explicitly ... ok
+test invalid_arguments_are_rejected_without_echo_or_command_execution ... ok
+test available_advertising_slots_are_not_reduced_by_active_slots_again ... ok
+test an_explicit_adapter_is_used_for_all_bluetooth_checks ... ok
+test a_visible_advertising_api_with_no_supported_instance_is_not_ready ... ok
+test malformed_successful_output_is_rejected_without_being_echoed ... ok
+test observed_prerequisites_do_not_claim_a_radio_or_wifi_success ... ok
+test missing_or_malformed_advertising_capacity_is_not_ready ... ok
+test managed_ethernet_does_not_make_unmanaged_wifi_acceptable ... ok
+test a_descendant_ignoring_term_cannot_hold_the_audit_open ... ok
+test a_blocked_command_and_its_child_are_subject_to_a_deadline ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.02s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+Exit: 0
