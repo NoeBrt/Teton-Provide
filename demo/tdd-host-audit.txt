@@ -1,0 +1,121 @@
+HOST PREFLIGHT — PUBLIC CLI TDD
+
+RED 1: binary target does not exist
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+error: environment variable `CARGO_BIN_EXE_audit-host` not defined at compile time
+  --> tests/host_audit.rs:44:22
+   |
+44 |         Command::new(env!("CARGO_BIN_EXE_audit-host"))
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Cargo sets build script variables at run time. Use `std::env::var("CARGO_BIN_EXE_audit-host")` instead
+
+error: could not compile `iot-provisioning` (test "host_audit") due to 1 previous error
+Exit: 101
+
+GREEN 1: observed prerequisites, radio remains unverified
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
+
+running 1 test
+test observed_prerequisites_do_not_claim_a_radio_or_wifi_success ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+Exit: 0
+
+RED 2: visible advertising API with zero capacity was accepted
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit a_visible_advertising_api --locked --offline
+
+running 1 test
+test a_visible_advertising_api_with_no_supported_instance_is_not_ready ... FAILED
+
+failures:
+
+---- a_visible_advertising_api_with_no_supported_instance_is_not_ready stdout ----
+
+thread 'a_visible_advertising_api_with_no_supported_instance_is_not_ready' panicked at tests/host_audit.rs:86:5:
+assertion `left == right` failed
+  left: Some(0)
+ right: Some(1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_visible_advertising_api_with_no_supported_instance_is_not_ready
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+error: test failed, to rerun pass `--test host_audit`
+Exit: 101
+
+GREEN 2: require a supported, unused advertising instance
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
+
+running 2 tests
+test a_visible_advertising_api_with_no_supported_instance_is_not_ready ... ok
+test observed_prerequisites_do_not_claim_a_radio_or_wifi_success ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+Exit: 0
+
+RED 3: BlueZ 5.64 SupportedInstances is already the remaining capacity
+Source: https://github.com/bluez/bluez/blob/5.64/src/advertising.c (get_instances)
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit available_advertising_slots --locked --offline
+
+running 1 test
+test available_advertising_slots_are_not_reduced_by_active_slots_again ... FAILED
+
+failures:
+
+---- available_advertising_slots_are_not_reduced_by_active_slots_again stdout ----
+
+thread 'available_advertising_slots_are_not_reduced_by_active_slots_again' panicked at tests/host_audit.rs:123:5:
+assertion failed: host.run(&[]).status.success()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    available_advertising_slots_are_not_reduced_by_active_slots_again
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+error: test failed, to rerun pass `--test host_audit`
+Exit: 101
+
+GREEN 3: use BlueZ remaining capacity directly; public CLI regression cases
+$ RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
+
+running 12 tests
+test invalid_arguments_are_rejected_without_echo_or_command_execution ... ok
+test a_visible_advertising_api_with_no_supported_instance_is_not_ready ... ok
+test failed_commands_never_expose_their_stdout_or_stderr ... ok
+test observed_prerequisites_do_not_claim_a_radio_or_wifi_success ... ok
+test an_explicit_adapter_is_used_for_all_bluetooth_checks ... ok
+test available_advertising_slots_are_not_reduced_by_active_slots_again ... ok
+test missing_commands_fail_explicitly ... ok
+test excessive_stdout_is_bounded_and_never_printed ... ok
+test malformed_successful_output_is_rejected_without_being_echoed ... ok
+test missing_or_malformed_advertising_capacity_is_not_ready ... ok
+test managed_ethernet_does_not_make_unmanaged_wifi_acceptable ... ok
+test a_blocked_command_and_its_child_are_subject_to_a_deadline ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.01s
+
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
+Exit: 0
