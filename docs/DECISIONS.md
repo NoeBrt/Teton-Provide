@@ -331,3 +331,36 @@ protocol, connection cleanup, timeout/late-reply behavior, benchmark percentiles
 and soak accounting. The completed 300.001-second run checked 609,640 successful
 responses, 853,496 expected errors, and 853,496 closed/joined sessions with zero
 unexpected errors. Hardware checkpoint H remains open.
+
+## 14. Skill-based review, public-seam TDD, and scaled simulation
+
+**Decision:** Verify the software checkpoint with the installed review/TDD/performance
+skills and measure bounded multi-device workloads without implementing fleet management.
+
+**Original proposal:** Review the existing code, scale the benchmark, and use TDD.
+
+**Final choice:** Pin review to `b4aaae8...4e1b9fa`, using separate Standards/Spec
+agents and local versioned requirements. Add a public software-batch API and
+`benchmark --scale`: 1/20/50/200/1,000 independent fake jobs with 1/4/8 client
+workers. Cap the API at 10,000 jobs and 32 clients per batch, assign each index
+once, check literal responses, and join all workers even after an error. Record
+actual red/green execution and check the response test with an isolated mutation.
+
+**Reason:** A serial round-trip benchmark cannot describe queueing or contention.
+Public-interface tests establish coverage, bounded load, and failure behavior;
+an independent literal expectation detects an incorrect wire response that the
+old implementation-constant-based test allowed. No dependency download is required.
+
+**Trade-off:** This is a software workload harness with indexed jobs; it does
+not test authenticated identities, radio discovery, Wi-Fi, or fleet capacity.
+Client-pool/session thread creation contributes to measured latency. Resource
+caps are per batch, so concurrent callers must also bound their aggregate load.
+Thread-spawn/panic failure paths were reviewed, not deliberately exhausted.
+
+**Evidence / test:** `642b849` strengthens protocol/stop tests; `d21d09e` adds
+the bounded batch and CLI. Both review axes and a focused scaling review found
+no blocking defect. All 23 tests pass in debug/release, with formatting, Clippy,
+and release build passing. Three processes checked 80,073 timed jobs across
+45 scenario summaries, all with zero exit status. For 200 jobs, medians of
+per-process median batch times were 6.713/2.237/2.431 ms at 1/4/8 clients.
+See `docs/REVIEW.md`, `docs/BENCHMARKS.md`, and raw evidence under `demo/`.

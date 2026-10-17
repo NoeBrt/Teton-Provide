@@ -1,6 +1,7 @@
 # Software Simulation Measurements
 
-Measured code: `5f3f4cc2a8fe083cf3b87bf41c3c1ed3fbcf85e0`.
+Baseline measured code: `5f3f4cc2a8fe083cf3b87bf41c3c1ed3fbcf85e0`.
+Scaled follow-up: `d21d09e` (same compiler/host; details in its raw output).
 Environment: Ubuntu 22.04.5, x86-64 AMD Ryzen 7 7840HS, rustc 1.88.0,
 Cargo release profile. No third-party crates, radio, sockets, encryption, or
 Wi-Fi configuration. CPU affinity/governor were uncontrolled on a shared workstation.
@@ -51,10 +52,10 @@ no performance optimization or threshold is justified by the current challenge.
 The variation is visible in the raw per-batch results in
 [benchmark.txt](../demo/benchmark.txt).
 
-## Endurance and validation
+## Baseline endurance and validation
 
 An independent review checked session cleanup, stale-reply rejection, benchmark
-percentiles, and error accounting. The 18 tests pass in debug and release modes;
+percentiles, and error accounting. At the baseline checkpoint, 18 tests passed in debug and release modes;
 Rustfmt and Clippy with warnings denied pass. Release test evidence is in
 [tests-release.txt](../demo/tests-release.txt).
 
@@ -91,6 +92,47 @@ observation attempt is retained as [incomplete](../demo/incomplete-soak-notice.t
 and excluded from reported measurements. The sampler was corrected and the
 fresh run above completed successfully. The failure affected evidence collection;
 it establishes no result for the incomplete run.
+
+## Scaled software workload
+
+Run `target/release/examples/benchmark --scale` after the release build. Each
+of three independent processes measures 15 cases: 1/20/50/200/1,000 queued
+jobs at 1/4/8 concurrent clients. Each case has one full warmup batch, then
+seven measured batches. There are **80,073 checked timed jobs** plus 11,439
+warmup jobs; all processes exited zero. Every timed batch checks every exact
+response, complete/nonduplicated task-index coverage, and the concurrency cap.
+
+All jobs are available when the batch starts. Each job constructs a fake device,
+connects, exchanges literal hello/world, closes the session, and joins its worker.
+Batch time also includes client-pool creation and joining. Per-job service time
+excludes queue wait; completion time is measured from batch submission and
+includes it. The observed peak counts active clients, each with at most one
+additional session-worker thread. This workload measures independent instances;
+its indices do not test device identity or radio discovery.
+
+The table shows the median of the three processes' per-case median batch times.
+Raw results retain each process's seven-sample median/minimum/maximum throughput,
+pooled service p50/p95, and pooled completion p95. Percentiles are per process;
+no global p95 was inferred from the summarized CSV.
+
+| Simulated jobs | 1 client, ms | 4 clients, ms | 8 clients, ms |
+| ---: | ---: | ---: | ---: |
+| 1 | 0.102 | 0.068 | 0.055 |
+| 20 | 0.803 | 0.298 | 0.347 |
+| 50 | 1.890 | 0.615 | 0.691 |
+| 200 | 6.713 | 2.237 | 2.431 |
+| 1,000 | 34.839 | 11.422 | 11.386 |
+
+For 200 jobs, the per-process median batch ranges were 6.573-6.890 ms at one
+client, 2.228-2.311 ms at four, and 2.307-2.581 ms at eight. Eight clients added
+no clear benefit for that workload, while observed service p95 increased from
+57.207-60.874 µs at four to 143.248-163.947 µs at eight. No implementation
+optimization or production-radio setting was chosen from these software timings.
+
+Evidence: [raw output](../demo/benchmark-scaled.txt),
+[CSV](../demo/benchmark-scaled.csv), [23-test debug/release checks](../demo/verification-tests.txt),
+and [review/TDD report](REVIEW.md). These follow-up measurements do not extend
+the duration of the separate five-minute endurance run.
 
 ## Limits
 
