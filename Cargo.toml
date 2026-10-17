@@ -5,5 +5,9 @@ edition = "2024"
 rust-version = "1.88"
 publish = false
 
+[[bin]]
+name = "audit-host"
+path = "device/audit.rs"
+
 [lints.rust]
 unsafe_code = "forbid"

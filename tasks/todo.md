@@ -81,6 +81,14 @@ Stop prevents discovery/new requests; an already pending wait keeps its deadline
 
 ## 4. Audit available hardware and lock BLE dependencies
 
+Preparation slice (does not close the hardware gate):
+
+- [ ] Executable Rust audit reports selected-adapter power, GATT/advertising APIs,
+  and NetworkManager-managed Wi-Fi without changing configuration.
+- [ ] Public CLI tests cover clean success, blocked/missing services, malformed
+  output, timeout/output limits, invalid adapter input, and secret-safe errors.
+- [ ] Capture actual host result separately from command-fixture tests.
+
 **Description:** Inspect the Ubuntu device and any Linux diagnostic configurator
 using the README commands; confirm adapter capabilities and Rust/libdbus/BlueZ
 compatibility. Audit the actual phone's OS and client preparation separately.

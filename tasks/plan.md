@@ -72,6 +72,17 @@ and an available phone, but does not require a Jetson. Docker is optional
 and does not block any software task. Add a container runner only for a demonstrated
 reproducibility need; do not build a privileged Bluetooth lab by default.
 
+### Current independent slice: host preflight
+
+Add a dependency-free Rust `audit-host [hciN]` diagnostic that runs read-only
+Ubuntu commands with finite deadlines. Check adapter power and the local GATT /
+advertising APIs on the same adapter, plus a Wi-Fi device managed by NetworkManager.
+Emit only constructed statuses, never command output, SSIDs, MACs, or secrets.
+An affirmative result means prerequisites observed, not a successful radio test.
+Tests exercise the executable's exit status and output, substituting commands
+only at the operating-system boundary. Capture the actual restricted-host result.
+This prepares task 4 without starting credential, security, or UI implementation.
+
 ## Verification strategy
 
 Use Cargo's test harness: handler/lifecycle unit tests beside the code and
