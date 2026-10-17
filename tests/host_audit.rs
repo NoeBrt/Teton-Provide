@@ -1,6 +1,7 @@
 #![cfg(unix)]
 
 use std::fs;
+use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -23,9 +24,10 @@ impl HostFixture {
             (
                 "busctl",
                 "#!/bin/sh\ncase \"$*\" in\n\
-                 '--system --no-pager get-property org.bluez /org/bluez/hci0 org.bluez.Adapter1 Powered') printf 'b true\\n' ;;\n\
-                 '--system --no-pager introspect org.bluez /org/bluez/hci0 org.bluez.GattManager1') printf '.RegisterApplication method oa{sv} - -\\n' ;;\n\
-                 '--system --no-pager introspect org.bluez /org/bluez/hci0 org.bluez.LEAdvertisingManager1') printf '.RegisterAdvertisement method oa{sv} - -\\n.SupportedInstances property y 1 const\\n.ActiveInstances property y 0 -\\n' ;;\n\
+                 '--system --no-pager --auto-start=no call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetNameOwner s org.bluez') printf 's \":1.23\"\\n' ;;\n\
+                 '--system --no-pager get-property :1.23 /org/bluez/hci0 org.bluez.Adapter1 Powered') printf 'b true\\n' ;;\n\
+                 '--system --no-pager introspect :1.23 /org/bluez/hci0 org.bluez.GattManager1') printf '.RegisterApplication method oa{sv} - -\\n' ;;\n\
+                 '--system --no-pager introspect :1.23 /org/bluez/hci0 org.bluez.LEAdvertisingManager1') printf '.RegisterAdvertisement method oa{sv} - -\\n.SupportedInstances property y 1 const\\n.ActiveInstances property y 0 -\\n' ;;\n\
                  *) exit 78 ;;\nesac\n",
             ),
             (
@@ -158,7 +160,7 @@ fn failed_commands_never_expose_their_stdout_or_stderr() {
     let output = host.run(&[]);
     assert_eq!(output.status.code(), Some(1));
     let text = String::from_utf8(output.stdout).unwrap();
-    assert!(text.contains("FAIL BLUETOOTH_POWERED COMMAND_FAILED"));
+    assert!(text.contains("FAIL BLUEZ_RUNNING COMMAND_FAILED"));
     assert!(!text.contains("CANARY-NETWORK-PASSWORD"));
     assert!(output.stderr.is_empty());
 }
@@ -223,6 +225,24 @@ fn a_blocked_command_and_its_child_are_subject_to_a_deadline() {
 }
 
 #[test]
+fn a_descendant_ignoring_term_cannot_hold_the_audit_open() {
+    let host = HostFixture::new();
+    let script = fs::read_to_string(host.0.join("busctl")).unwrap();
+    host.replace(
+        "busctl",
+        &script.replace(
+            "printf 'b true\\n'",
+            "/bin/sh -c 'trap \"\" TERM; /bin/sleep 12' & wait; printf 'b true\\n'",
+        ),
+    );
+    let start = Instant::now();
+    let output = host.run(&[]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(start.elapsed() < Duration::from_secs(10));
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn excessive_stdout_is_bounded_and_never_printed() {
     let host = HostFixture::new();
     host.replace("busctl", "#!/bin/sh\n/usr/bin/head -c 16384 /dev/zero\n");
@@ -276,4 +296,36 @@ fn an_explicit_adapter_is_used_for_all_bluetooth_checks() {
             .unwrap()
             .contains("adapter hci12")
     );
+}
+
+#[test]
+fn non_utf8_arguments_are_rejected_without_panicking_or_leaking() {
+    let host = HostFixture::new();
+    let argument = std::ffi::OsString::from_vec(b"hci0\xffCANARY-NETWORK-PASSWORD".to_vec());
+    let output = host.command(&[]).arg(argument).output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(
+        !String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("CANARY-NETWORK-PASSWORD")
+    );
+}
+
+#[test]
+fn a_stopped_bluetooth_service_is_not_activated_by_the_audit() {
+    let host = HostFixture::new();
+    let script = fs::read_to_string(host.0.join("busctl")).unwrap();
+    host.replace("busctl", &format!("#!/bin/sh\ncase \"$*\" in\n*' GetNameOwner s org.bluez') exit 1 ;;\n*' org.bluez '*) : > \"$AUDIT_MUTATION_SENTINEL\" ;;\nesac\n{script}"));
+    let sentinel = host.0.join("bluetooth-was-started");
+    let output = host
+        .command(&[])
+        .env("AUDIT_MUTATION_SENTINEL", &sentinel)
+        .output()
+        .unwrap();
+    assert!(
+        !sentinel.exists(),
+        "A query to an activatable name would start Bluetooth"
+    );
+    assert_eq!(output.status.code(), Some(1));
 }
