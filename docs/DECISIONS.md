@@ -4,7 +4,8 @@ Audit date: 2026-10-17. Updated scope: **no Jetson currently available; define t
 stack and plan a software simulation first**. Earlier decisions below preserve
 the original audit. Sections 7-10 record the simulation-first plan; section 11
 supersedes their Python choices with Rust. Section 12 records the executable
-offline simulation. Radio acceptance remains pending.
+offline simulation. Section 15 corrects the demo roles and makes graphical
+technician UX mandatory. Radio acceptance remains pending.
 
 ## Evidence collected
 
@@ -364,3 +365,37 @@ and release build passing. Three processes checked 80,073 timed jobs across
 45 scenario summaries, all with zero exit status. For 200 jobs, medians of
 per-process median batch times were 6.713/2.237/2.431 ms at 1/4/8 clients.
 See `docs/REVIEW.md`, `docs/BENCHMARKS.md`, and raw evidence under `demo/`.
+
+## 15. Phone configurator and headless Ubuntu device
+
+**Decision:** Make the non-technical graphical workflow required, with the user's
+phone as demo configurator and a headless Ubuntu PC as the first device target.
+
+**Original proposal:** Ubuntu configurator first, Jetson device preferred, CLI
+first and a small local interface only if needed; mobile deferred to production.
+
+**Final choice:** Phone demo first; an Ubuntu configurator should offer the same
+guided workflow. Keep Rust/BlueZ on the device and systemd for unattended startup.
+Choose the phone adapter after verifying its OS, offline client availability,
+and harmless GATT exchange. `bluer` remains Linux-only. Preserve the real transport
+gate before implementing secure credentials, Wi-Fi activation, or the final UI.
+
+**Reason:** The user explicitly requires a non-technical operator and phone demo
+without an on-device screen. The original PDF, `Technical_Interview_Challenge_Platform.pdf`,
+pages 1-2, allows a phone/second laptop and requires use by a non-developer.
+A terminal workflow cannot satisfy that requirement. A headless Ubuntu computer
+is an allowed device; waiting specifically for a Jetson is unnecessary.
+
+**Trade-off:** A mobile client adds platform/build/distribution constraints.
+A page hosted on the unprovisioned computer has no automatic route to the phone.
+Web Bluetooth requires browser support, secure context, and offline preparation;
+loading an HTTPS interface does not secure BLE credentials. Device identity must
+work from a prepared physical label/bootstrap, without an on-device display.
+
+**Evidence / test:** All three PDF pages extracted with `pdftotext -layout` and
+reviewed, including an independent requirements review. The final evidence wording
+allows simulated output, but page 1 still explicitly requires a real network
+connection; retain that stricter acceptance criterion. Platform references and
+the operator flow are recorded in `docs/ARCHITECTURE.md`. Phone OS, actual radio
+exchange, mobile startup, and headless lifecycle remain unverified. Existing
+simulation evidence is unchanged and does not claim to validate this interface.

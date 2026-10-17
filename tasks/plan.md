@@ -1,4 +1,4 @@
-# Implementation Plan: Rust Simulated Transport First
+# Implementation Plan: Rust Transport and Phone Configurator
 
 ## Objective and current scope
 
@@ -7,6 +7,12 @@ repeatable, clearly labeled simulation
 of device discovery, connection, `hello` exchange, and recoverable failures.
 No Jetson is available. The simulation is a development aid; real BLE and
 real Wi-Fi remain required for the final challenge submission.
+
+The final operator is non-technical. The user's demo runs from a phone to a
+headless Ubuntu computer, optionally replaced by a Jetson later. A guided
+graphical interface is mandatory; the CLI is a development/diagnostic tool.
+Support the same workflow on an Ubuntu configurator. Confirm the phone OS and
+offline client installation before fixing its adapter or UI framework.
 
 The shared contract and software transport now run without third-party crates.
 All 23 tests and the labeled demo pass locally; baseline/scale benchmark trials,
@@ -29,16 +35,16 @@ Failure injection + reconnect + simulated restart
         v
 SOFTWARE CHECKPOINT: labeled, repeatable demo
 
-Hardware availability + host access
+Phone client feasibility + Linux host/radio access (Ubuntu PC is sufficient)
         |
         v
-Hardware audit -> bluer peripheral -> bluer configurator
+Hardware audit -> bluer peripheral -> selected phone client
         |
         v
 RADIO CHECKPOINT: actual hello + reconnect + service restart/reboot
         |
         v
-Secure-channel decision -> real Wi-Fi -> technician UX -> submission evidence
+Secure-channel decision -> real Wi-Fi -> required graphical UX -> submission evidence
 ```
 
 ## Implementation slices
@@ -52,12 +58,17 @@ Secure-channel decision -> real Wi-Fi -> technician UX -> submission evidence
    device replacement. Check behavior with assertions, then benchmark the same
    transport and run a bounded soak. Capture actual durations/results without
    treating software timings as radio or fleet throughput.
-4. **Real endpoint:** inspect actual hardware, pin compatible dependencies, expose
-   the same handler through BlueZ using `bluer` on both ends.
+4. **Phone feasibility and real endpoint:** confirm phone OS, client preparation,
+   offline startup and permissions. Inspect the Ubuntu device, pin compatible
+   dependencies, and expose the same handler through BlueZ using `bluer`.
+   Optional Linux diagnostics may also use `bluer`; the phone needs its platform
+   adapter. The primary demo requires only the phone and the Ubuntu device.
 5. **Host lifecycle:** install the service and verify normal reconnect, restart,
-   reboot, and offline operation without resetting Bluetooth manually.
+   reboot, and offline operation from the selected phone. No device screen or
+   terminal should be needed after technical setup.
 
-Stop after the software checkpoint until hardware is available. Docker is optional
+The software checkpoint is complete. Real radio work requires usable host access
+and an available phone, but does not require a Jetson. Docker is optional
 and does not block any software task. Add a container runner only for a demonstrated
 reproducibility need; do not build a privileged Bluetooth lab by default.
 
@@ -108,6 +119,8 @@ vendored dependencies and native libraries before they can build offline.
 | Docker/socket restrictions persist | Socket-free simulation; optional container packaging only |
 | Simulation becomes a second product | Reuse handler; keep only fault injection and wiring in the fake adapter |
 | Security is bolted onto plaintext provisioning | Credential endpoint blocked until authenticated-channel review and tests |
+| A desktop-only client misses the phone demo | Confirm phone OS, install/start client offline, prove harmless exchange before full UI |
+| A web page on the target is unreachable before Wi-Fi | Prepare the phone client beforehand; never assume a shared LAN or phone access to desktop localhost |
 | No Wi-Fi hardware by submission | Explicitly report incomplete challenge; simulated success cannot replace real evidence |
 
 The follow-up verification uses the installed `code-review`, `tdd`, and
@@ -120,6 +133,9 @@ three independent processes, and seven measured batches per case. Report
 queue-inclusive completion separately from service time; keep concurrency bounded
 and retain raw data. See `docs/REVIEW.md` and `docs/BENCHMARKS.md` for results.
 
-The future device model, adapter capability, host permissions, and authenticated
-channel remain open. These do not block the harmless simulation. Confirm them
-before claiming radio reliability or enabling credentials.
+The phone OS/client, actual device adapter capability, host permissions, and
+authenticated channel remain open. Confirm them before claiming radio reliability
+or enabling credentials. The final interface must cover label-based selection,
+SSID/password entry, progress, verified network success, and actionable retry
+without commands or on-device screen interaction; see decision 15 and the
+technician-interface section of `docs/ARCHITECTURE.md`.

@@ -5,6 +5,8 @@ The 23 tests pass in debug and release;
 demo, three benchmark trials, and a 300-second recovery soak have captured
 evidence in `demo/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
 their commands are planned acceptance commands, not currently available targets.
+The real demo uses a phone configurator and a headless Ubuntu computer; no
+Jetson is required. Graphical technician UX is required for final acceptance.
 
 The installed `stable` compiler is Rust 1.88.0. The override below avoids rustup
 trying to download the separately named toolchain in this offline environment.
@@ -79,8 +81,9 @@ Stop prevents discovery/new requests; an already pending wait keeps its deadline
 
 ## 4. Audit available hardware and lock BLE dependencies
 
-**Description:** Inspect the eventual device and configurator using the README
-commands; confirm adapter capabilities and Rust/libdbus/BlueZ compatibility.
+**Description:** Inspect the Ubuntu device and any Linux diagnostic configurator
+using the README commands; confirm adapter capabilities and Rust/libdbus/BlueZ
+compatibility. Audit the actual phone's OS and client preparation separately.
 
 **Acceptance criteria:**
 
@@ -88,12 +91,15 @@ commands; confirm adapter capabilities and Rust/libdbus/BlueZ compatibility.
 - [ ] Resolve/build `bluer` with `bluetoothd` behind the optional `ble` feature;
   lock tested crates and document native build prerequisites and ARM64 differences.
 - [ ] Required host access is available; otherwise record the exact unpassed gate.
+- [ ] Confirm phone OS, Bluetooth permissions, and a client that starts offline;
+  choose native or browser access based on verified platform/build constraints.
 
 **Verification:** README hardware audit; `cargo check --features ble --locked`
-on both supported build environments after dependency resolution. Record versions/results.
+on the Ubuntu device after dependency resolution. Test a Jetson or additional
+Linux configurator only if selected; record versions/results separately.
 **Dependencies:** Hardware availability and host access; follows checkpoint S.
-**Files:** `docs/DECISIONS.md`, `README.md`, `Cargo.toml`, `Cargo.lock`.
-**Scope:** Medium, four files. No shared LAN is required for the later BLE exchange.
+**Files:** `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`, `README.md`, `Cargo.toml`, `Cargo.lock`.
+**Scope:** Medium, five files. No shared LAN is required for the later BLE exchange.
 
 ## 5. Real device BLE hello endpoint
 
@@ -112,10 +118,12 @@ advertisement discovery from the configurator, with sanitized evidence recorded.
 **Files:** `device/main.rs`, `device/ble.rs`, `src/protocol.rs`, `Cargo.toml`.
 **Scope:** Medium, four files. No pairing/security or Wi-Fi implementation yet.
 
-## 6. Real configurator BLE round trip
+## 6. Optional Linux diagnostic BLE round trip
 
 **Description:** Discover by service UUID using `bluer`, select the demo endpoint,
 connect, write `hello` with acknowledgement, and read `world`.
+Use this task when a separate Linux configurator is available; it does not block
+the phone demo or require a third machine.
 
 **Acceptance criteria:**
 
@@ -130,6 +138,27 @@ Capture repeated exchanges/failures without nearby-device inventories.
 **Files:** `configurator/main.rs`, `configurator/ble.rs`, `Cargo.toml`, `README.md`.
 **Scope:** Medium, four files.
 
+## 6a. Phone hello round trip
+
+**Description:** Use the selected phone client to discover the headless Ubuntu
+device, connect, send only `hello`, and read `world`. This is a transport probe,
+not the final provisioning UI.
+
+**Acceptance criteria:**
+
+- [ ] Prepared client starts with Internet disabled and no shared LAN.
+- [ ] Actual phone discovers/connects/exchanges hello with the Ubuntu device.
+- [ ] Disconnect/reconnect succeeds; no device screen, SSH, credentials, or
+  technical operator commands are required to complete the exchange.
+
+**Verification:** Record phone OS/client versions, offline startup, repeated
+successful GATT exchanges, and retry after disconnect. A generic BLE diagnostic
+app may help feasibility testing but does not replace submitted configurator code.
+**Dependencies:** 4, 5.
+**Files:** Phone adapter under `configurator/` once selected, `README.md`,
+`demo/phone-hello.txt`, `docs/DECISIONS.md`; do not create empty directories now.
+**Scope:** Medium; choose exact platform files after task 4.
+
 ## 7. Host service lifecycle and radio evidence
 
 **Description:** Install the real device service with appropriate host permissions;
@@ -143,14 +172,15 @@ validate restart/reboot and collect honest hardware evidence.
 
 **Verification:** `systemctl status teton-provisioning --no-pager`;
 `journalctl -u teton-provisioning`; repeat the documented real round trip.
-**Dependencies:** 6; reboot access must be available without losing the only recovery path.
+**Dependencies:** 5, 6a; reboot access must be available without losing the only recovery path.
 **Files:** `device/systemd/teton-provisioning.service`, `README.md`,
 `demo/ble-hello.txt`, `docs/DECISIONS.md`.
 **Scope:** Medium, four files. Verify service permissions rather than assuming root is necessary.
 
 ## Checkpoint H: real transport milestone
 
-- [ ] Tasks 4-7 pass on actual machines; hardware and simulation evidence remain distinct.
+- [ ] Tasks 4, 5, 6a, and 7 pass on phone + device; simulation evidence remains distinct.
+- [ ] Record optional task 6 separately if a Linux configurator is tested; do not claim desktop support from phone-only evidence.
 - [ ] Dependency/setup instructions reproduce the radio flow on supported Ubuntu.
 - [ ] Rustfmt, tests, release build, and Clippy pass with `--features ble --locked` where applicable.
 - [ ] Stop here before adding credentials, security implementation, or technician UI.
@@ -174,3 +204,8 @@ After checkpoint H, write a focused plan for authenticated credential transfer,
 real NetworkManager activation/IP verification, and failure-safe retries.
 Then deliver technician UX, scaling/security documentation, and final evidence.
 Preserve the original challenge's real-network requirement throughout.
+The final phone and Ubuntu graphical flow must guide device identification,
+SSID/password entry, progress, verified success, and actionable failures/retry.
+Test it without operator commands or a screen on the device. This is a required
+acceptance criterion; implement it after transport/security/network gates, rather
+than treating the CLI or a generic Bluetooth diagnostic app as the final interface.
