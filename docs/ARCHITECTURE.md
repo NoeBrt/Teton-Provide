@@ -6,6 +6,10 @@ acceptance are distinct; the original challenge requires the latter.
 The final demo uses the user's phone as configurator and a headless Ubuntu PC
 as the device. A Jetson is an optional later device target.
 
+The [standalone visual guide](architecture-demo.html) illustrates this topology
+and the proposed phone/desktop technician interface. All actions in that HTML
+are simulated; it is not the runtime configurator.
+
 ## Stack
 
 | Responsibility | Choice | Rationale / validation status |
