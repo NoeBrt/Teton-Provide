@@ -1,5 +1,7 @@
 //! Software transport only: no Bluetooth, Wi-Fi, or credential exchange.
 
+pub mod batch;
+
 use crate::protocol::{self, DEVICE_ID};
 use std::fmt;
 use std::sync::Arc;

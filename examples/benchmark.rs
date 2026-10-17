@@ -2,16 +2,18 @@
 
 use std::time::{Duration, Instant};
 use iot_provisioning::protocol::{DEVICE_ID, REQUEST, RESPONSE};
+use iot_provisioning::simulation::batch::run_batch;
 use iot_provisioning::simulation::{Connection, Device, Error, Fault};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const SAMPLES: usize = 7;
 const WARMUP: usize = 200;
-const USAGE: &str = "Usage: cargo run --release --offline --example benchmark -- [--soak SECONDS]\nSECONDS must be an integer from 1 to 3600.";
+const USAGE: &str = "Usage: cargo run --release --offline --example benchmark -- [--scale | --soak SECONDS]\nSECONDS must be an integer from 1 to 3600.";
 
 #[derive(Debug, PartialEq, Eq)]
 enum Mode {
     Benchmark,
+    Scale,
     Soak(Duration),
     Help,
 }
@@ -20,6 +22,7 @@ fn parse_args(args: &[String]) -> Result<Mode, &'static str> {
     match args {
         [] => Ok(Mode::Benchmark),
         [flag] if flag == "--help" => Ok(Mode::Help),
+        [flag] if flag == "--scale" => Ok(Mode::Scale),
         [flag, seconds] if flag == "--soak" => seconds
             .parse::<u64>()
             .ok()
@@ -177,6 +180,60 @@ fn soak(duration: Duration) -> Result<(), Error> {
     Ok(())
 }
 
+fn scaled_benchmark() -> Result<(), Box<dyn std::error::Error>> {
+    println!(
+        "Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections."
+    );
+    println!(
+        "Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; {SAMPLES} measured batches."
+    );
+    println!(
+        "Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities."
+    );
+    println!(
+        "devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s"
+    );
+    for devices in [1, 20, 50, 200, 1_000] {
+        for concurrency in [1, 4, 8] {
+            run_batch(devices, concurrency)?;
+            let mut batch_times = Vec::with_capacity(SAMPLES);
+            let mut service_times = Vec::with_capacity(SAMPLES * devices);
+            let mut completion_times = Vec::with_capacity(SAMPLES * devices);
+            let mut peak = 0;
+            for _ in 0..SAMPLES {
+                let batch = run_batch(devices, concurrency)?;
+                assert_eq!(batch.jobs.len(), devices);
+                assert!((1..=concurrency.min(devices)).contains(&batch.peak_concurrency));
+                peak = peak.max(batch.peak_concurrency);
+                batch_times.push(batch.elapsed);
+                let mut indices = Vec::with_capacity(devices);
+                for job in batch.jobs {
+                    indices.push(job.device_index);
+                    service_times.push(job.service_time);
+                    completion_times.push(job.completion_time);
+                }
+                indices.sort_unstable();
+                assert!(indices.iter().copied().eq(0..devices));
+            }
+            batch_times.sort_unstable();
+            service_times.sort_unstable();
+            completion_times.sort_unstable();
+            println!(
+                "{devices},{concurrency},{SAMPLES},{},{peak},{:.3},{:.3},{:.3},{:.3},{:.1},{:.1},{:.1}",
+                service_times.len(),
+                percentile(&batch_times, 50).as_secs_f64() * 1e3,
+                percentile(&service_times, 50).as_secs_f64() * 1e6,
+                percentile(&service_times, 95).as_secs_f64() * 1e6,
+                percentile(&completion_times, 95).as_secs_f64() * 1e3,
+                devices as f64 / percentile(&batch_times, 50).as_secs_f64(),
+                devices as f64 / batch_times[SAMPLES - 1].as_secs_f64(),
+                devices as f64 / batch_times[0].as_secs_f64(),
+            );
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = parse_args(&std::env::args().skip(1).collect::<Vec<_>>())?;
     if mode == Mode::Help {
@@ -207,6 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?;
         }
         Mode::Soak(duration) => soak(duration)?,
+        Mode::Scale => scaled_benchmark()?,
         Mode::Help => unreachable!(),
     }
     Ok(())
