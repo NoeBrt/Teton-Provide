@@ -169,3 +169,20 @@ behavior. It provides no BLE, mobile-client, credential, or real-Wi-Fi evidence.
 Three independent release `--scale` processes also pass 45 scenario summaries
 and 80,073 measured jobs; [raw results](../demo/benchmark-scaled-continuation.txt)
 verify valid dispatch without a before/after throughput claim.
+
+## Dual-platform requirements review
+
+An independent requirements agent updated Android/iPhone feasibility and physical
+acceptance, requested-target success, and interrupted-result recovery. A separate
+fresh-context Spec review found one P2: current acceptance required authentication
+but did not explicitly require confidentiality. Architecture, plan, checklist,
+and decision 19 now require an established authenticated, encrypted channel before
+credential bytes and validation of confidentiality/integrity/peer authentication.
+The follow-up review closes P2 with no remaining concrete issue.
+
+The reviewer also checked current counts, evidence labels, source hashes, and
+the retained CLI startup evidence without claiming physical acceptance. The
+[final verification summary](../demo/continuation-verification.txt) and
+[per-step handoff](../tasks/HANDOFF.md) keep the software PASS, actual-host BLOCKED,
+and radio/mobile/security/Wi-Fi NOT_RUN gates distinct. This documentation step
+adds no runtime behavior; static review and whitespace checks apply.

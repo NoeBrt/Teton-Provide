@@ -51,6 +51,7 @@ review, and a measurement of the affected path. Document measurement limits.
 
 ## Step 2 — Redact invalid benchmark argv
 
+- Revision: `4eff13c`.
 - Changed: `examples/benchmark.rs` reads OS arguments with fallible UTF-8
   conversion; `tests/benchmark_cli.py` checks the actual release executable.
 - Evidence class: `COMMAND_FIXTURE` **PASS**. The [public red/green trace](../demo/tdd-benchmark-cli.txt)
@@ -70,3 +71,37 @@ review, and a measurement of the affected path. Document measurement limits.
 - Next owner: implementation agent. Finish dual-platform acceptance review,
   update current setup instructions, and record
   remaining host/dependency prerequisites before any real BLE implementation.
+
+## Step 3 — Dual-platform acceptance and final handoff
+
+- Runtime revision: `4eff13c`; this step changes documentation only. Android and
+  iPhone are both required, with prepared offline clients and separate physical
+  evidence; the Ubuntu configurator alternative remains. No framework is selected.
+- Updated artifacts: README, architecture, decisions 19-20, plan, and checklist.
+  Review authenticated bootstrap/library feasibility before framework selection.
+  Before credential bytes leave a client, require an established authenticated
+  and encrypted channel and validate confidentiality, integrity, and peer identity.
+- Final success must use fresh authenticated status tied to the requested target
+  connection/current attempt and its assigned IP. Recover interrupted results
+  before success/resubmission; old/fallback connections never establish success.
+- Review: independent requirements review found a P2 ambiguity (authentication
+  alone did not explicitly require encryption). The current architecture, plan,
+  checklist, and decision now close it; follow-up found no remaining concrete issue.
+- Verification: [final checks](../demo/continuation-verification.txt) record
+  40 Rust tests in debug/release, four real-executable CLI cases, Rustfmt, Clippy,
+  and the full release build. Final binary hashes match the measured binaries.
+  Documentation-only changes use static review and `git diff --check`; they add
+  no runtime TDD or benchmark claim. Steps 1-2 retain their separate red/green,
+  mutation, review, and measurement evidence.
+- Gates: software/fixtures **PASS**; actual host access and BLE dependency
+  resolution **BLOCKED**; Android/iPhone runtime, `ACTUAL_BLE`, authenticated
+  credential transfer, and `ACTUAL_WIFI` **NOT_RUN**. No new endurance run occurred.
+- Next owner: a developer with actual Ubuntu host access. From this repository,
+  run `./target/release/audit-host` outside the restricted session and retain its
+  constructed result. Resolve/cache the full pinned BLE graph and pass default
+  plus BLE-enabled locked offline builds before adding the real endpoint.
+- Then hand back to implementation: expose only harmless `hello`/`world` using
+  the actual BlueZ callbacks and existing handler, with explicit GATT read/write
+  semantics and recovery tests. Prove discovery/reconnect/restart/reboot from the
+  prepared phones. A generic diagnostic app may prove feasibility but cannot
+  replace submitted configurator source. Runtime security/credentials remain gated.

@@ -3,8 +3,8 @@
 Status: the shared hello contract and dependency-free simulation are implemented
 and tested. No Jetson is currently available. Simulated acceptance and hardware
 acceptance are distinct; the original challenge requires the latter.
-The final demo uses the user's phone as configurator and a headless Ubuntu PC
-as the device. A Jetson is an optional later device target.
+The final demo requires both Android and iPhone configurators and a headless
+Ubuntu PC as the device. A Jetson is an optional later device target.
 
 The [standalone visual guide](architecture-demo.html) illustrates this topology
 and the proposed phone/desktop technician interface. All actions in that HTML
@@ -18,11 +18,11 @@ are simulated; it is not the runtime configurator.
 | Current runtime | Standard-library threads | No third-party dependencies; builds offline |
 | Simulation | Two bounded `std::sync::mpsc` channels per session, synthetic discovery | Capacity one each; no radio, sockets, root, or Bluetooth dependency |
 | Tests | `cargo test`, `#[test]` | Handler unit tests and simulation integration tests; finite real-time receive deadlines |
-| Developer host preflight | Rust std + busctl/nmcli/GNU timeout | Read-only prerequisites; no radio success claim |
+| Developer host preflight | Rust std + busctl/nmcli/GNU timeout, Bash/cat | Read-only prerequisites; no radio success claim |
 | Planned real BLE runtime | Tokio | Needed by `bluer`; not installed or declared yet |
 | Planned device BLE | BlueZ GATT/advertising via `bluer` | Supported local GATT role; hardware validation pending |
 | Planned Linux diagnostic configurator BLE | `bluer` remote GATT/discovery | Linux role only; not a phone client |
-| Required technician interface | Guided graphical flow, phone first; Ubuntu alternative | Phone OS/client feasibility pending; not implemented |
+| Required technician interface | Guided graphical flow on Android and iPhone; Ubuntu alternative | Models/OS versions, clients, build/distribution, and physical tests pending; not implemented |
 | Later Wi-Fi control | NetworkManager D-Bus via `dbus`/`dbus-tokio` | Match `bluer`'s library family; no password subprocess arguments |
 | Planned device lifecycle | systemd + compiled Rust binary | Host BlueZ/NetworkManager access; permissions/recovery checks pending |
 | Packaging and checks | Cargo.lock, rust-toolchain.toml, Rustfmt, Clippy | Manifest, dependency-free lockfile, and exact toolchain pin exist |
@@ -48,41 +48,58 @@ build/link checks and device distribution compatibility are still pending.
 
 The original three-page challenge PDF was reread on 2026-10-17. Pages 1-2 allow
 a phone or second laptop as configurator and require use by a non-developer.
-The user specifies a phone demo and a device without a screen. A graphical
-interface is therefore part of acceptance, rather than optional polish.
+The user requires both Android and iPhone support and a device without a screen.
+A graphical interface on each mobile platform is part of acceptance.
 
 ```text
-Technician's phone                       Headless Ubuntu PC / later Jetson
-Prepared graphical configurator -- BLE --> Rust service -- Wi-Fi --> Target network
+Android phone or iPhone                         Headless Ubuntu PC / later Jetson
+Prepared graphical configurator -- secure BLE --> Rust service -- Wi-Fi --> Target network
 ```
 
 The technician opens the prepared configurator, identifies the device using its
 physical label, enters an SSID/password, and taps **Connect**. The interface
 guides Bluetooth permission/disabled-radio problems, then shows device checking,
-transfer, and network-connection progress. A label/name is a selection hint;
-cryptographic authentication must succeed before credentials leave the client.
+transfer, and network-connection progress. A label/name is a selection hint.
+An established authenticated and encrypted channel is required before any
+credential bytes leave the client; validate confidentiality, integrity, and
+peer authentication explicitly.
 Its mechanism remains a security decision, not an implemented guarantee.
 
 Use labeled fields, a masked password with an explicit reveal control, readable
 touch targets, and text statuses that do not rely on color. Report success only
-after NetworkManager activates the target network and assigns an IP address.
+after freshly observed NetworkManager state confirms the requested target
+connection is active and has an assigned IP address. Bind that status to the
+current provisioning attempt; an old connection, fallback network, or cached
+address must not count as success. A fresh observation may report the same IP.
 Wrong credentials or an unavailable network need an explanation and retry
-action. If the result is unknown after disconnection, recover status before
-reporting success or repeating a request. No command, SSH, or device-side
-screen interaction belongs in this operator flow. Technical installation and
+action. If the result is unknown after disconnection, reconnect, authenticate,
+and recover fresh status for that attempt before reporting success or repeating
+a request. An unrecoverable result stays explicitly unknown. No command, SSH,
+or device-side screen interaction belongs in this operator flow. Technical installation and
 identity-label preparation happen beforehand; systemd starts the device service.
 
 An Ubuntu configurator should provide the same guided steps through its local
 Bluetooth adapter. Do not require the phone to reach a server on that computer:
 there is no shared LAN initially, and `localhost` on the phone is the phone.
-The BLE design must prepare the client before provisioning starts, including all
-assets needed for offline startup. Serving a web page from the unprovisioned
-device would need a separate, validated bootstrap channel.
+The BLE design must prepare and install a working client on each mobile platform
+before provisioning starts, including all assets needed for offline startup.
+Serving a web page from the unprovisioned device would need a separate,
+validated bootstrap channel.
 
-Select the mobile adapter after confirming the actual phone:
+Both mobile platforms are fixed requirements. Before selecting a mobile framework,
+review an authenticated bootstrap that works offline with a headless device on
+both platforms: how a trusted physical label binds device identity, how the
+technician is authorized, and how impersonation/replay and interrupted-result
+recovery are handled. Check the proposed channel's platform APIs and maintained
+library support; a QR, BLE name, or successful hello is not proof of security.
+This is an early design/feasibility review only. Security implementation and
+credential transfer remain blocked until the real harmless BLE milestone passes.
+Then select adapters against the actual supported models and OS versions:
 
 - Android exposes native BLE central APIs for discovery and GATT exchange
   ([Android documentation](https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview)).
+  Verify the actual build's scan/connect runtime permissions and denial/retry
+  behavior ([Android permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)).
 - iOS exposes native central operations through Core Bluetooth
   ([Apple documentation](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/PerformingCommonCentralRoleTasks/PerformingCommonCentralRoleTasks.html)).
   Verify build, signing, and preinstallation feasibility before choosing an iOS app.
@@ -90,12 +107,15 @@ Select the mobile adapter after confirming the actual phone:
   offline asset delivery, and user-initiated device selection. Chrome documents
   Web Bluetooth on Android and requires a secure context and user gesture
   ([Chrome documentation](https://developer.chrome.com/docs/capabilities/bluetooth)).
-  This does not establish support on every phone or encrypt the GATT payload.
+  This does not establish an iPhone solution or encrypt the GATT payload;
+  Android browser success cannot satisfy iPhone acceptance.
 
 Rust remains the device stack. `bluer` is a Linux adapter, not a cross-platform
-mobile UI library. Choose the smallest verified phone client; do not commit to
-multiple mobile frameworks now. Client preparation and offline startup are part
-of the feasibility gate. The MVP excludes SoftAP and captive portals to avoid
+mobile UI library. No mobile framework is selected: shared UI or separate native
+clients must first satisfy the same bootstrap and BLE requirements on both
+platforms. Record model/OS versions, build/signing/distribution, preinstallation,
+offline startup, and physical BLE results separately for Android and iPhone.
+The MVP excludes SoftAP and captive portals to avoid
 depending on an interpretation of the challenge's shared-network constraint;
 see [decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp). A physical QR label
 may bootstrap device identity without creating a Wi-Fi setup network.
@@ -172,17 +192,20 @@ The secure provisioning protocol may need a different framing scheme later.
 | Timeout, disconnect, retry | Injected dropped reply/disconnect; bounded real-time waits | Driver/radio disconnect behavior |
 | Restart | Replace simulated device instance | systemd restart and machine reboot |
 | Offline operation | No external services by construction | Radio demo without Internet or shared LAN |
-| Wi-Fi success | Not simulated in milestone one | NetworkManager activation plus assigned IP |
+| Wi-Fi success | Not simulated in milestone one | Fresh authenticated status for requested target connection and its assigned IP; no old/fallback success |
 
 Do not label software logs as successful BLE provisioning. Future fake network
 results must also be labeled simulations; they cannot satisfy the real-Wi-Fi requirement.
 
-The 38 tests (15 handler/simulation, four scaled batches, four benchmark harness,
-15 host-preflight CLI tests)
+The 40 Rust tests (15 handler/simulation, four scaled batches, four benchmark harness,
+17 host-preflight CLI tests)
 pass in debug and release on the installed Rust 1.88.0 compiler. The software checkpoint includes
 three benchmark trials and a completed 300-second recovery soak; see
 [the measured results and raw evidence](BENCHMARKS.md).
 The follow-up scale matrix also has three independent process trials.
+The public release-executable regression adds four CLI cases through
+`python3 tests/benchmark_cli.py target/release/examples/benchmark` after building
+the examples; it checks help and redacted rejection of invalid OS arguments.
 Run the full suite with
 `RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline`; use this
 override only after confirming `stable` is 1.88.0. Standard Ubuntu setup must
@@ -234,15 +257,18 @@ QR provisioning remains a documented alternative, not another implementation.
 
 ## Boundaries for later phases
 
-Before any wireless credential transfer, select an established authenticated
-channel and physical device-identity bootstrap. Evaluate BLE authenticated
-pairing against a library-based application channel; decide based on actual
+Review authenticated-channel and physical device-identity bootstrap feasibility
+on both mobile platforms before framework selection. Before any wireless
+credential transfer, select and validate that authenticated, encrypted channel. Evaluate BLE
+authenticated pairing against a library-based application channel; decide based on actual
 I/O capabilities and platform support. A BLE name, RSSI, or raw Diffie-Hellman
 exchange is insufficient. Record sender authorization, replay policy, and
 post-success exposure in `docs/SECURITY.md` before enabling secrets.
 
-Then implement NetworkManager activation with an IP-based success criterion,
-technician-friendly errors, and the required guided graphical interface. The demo targets
+Then implement NetworkManager activation with fresh, authenticated confirmation
+of the requested target connection and its IP, recovery after an interrupted
+result, technician-friendly errors, and the required Android/iPhone graphical
+interfaces. Keep the Ubuntu alternative. The demo targets
 personal WPA Wi-Fi; hospital EAP/certificate requirements are a separate scope.
 Discuss site profiles, authenticated manifests, bounded queues, multiple operators,
 and staging versus corridor setup for 200 devices; do not implement orchestration now.

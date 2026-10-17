@@ -2,24 +2,29 @@
 
 ## Objective and current scope
 
-Use Rust to align with the fleet language reported by the user, then deliver a
-repeatable, clearly labeled simulation
-of device discovery, connection, `hello` exchange, and recoverable failures.
-No Jetson is available. The simulation is a development aid; real BLE and
-real Wi-Fi remain required for the final challenge submission.
+Deliver offline Android/iPhone configurators that securely provision a headless
+Ubuntu device over authenticated, encrypted BLE, then verify it joins the
+requested real Wi-Fi network.
+Use Rust on the device to align with the fleet language reported by the user.
+No Jetson is required. The completed, labeled discovery/hello/recovery simulation
+is a development aid; real BLE and Wi-Fi remain final acceptance requirements.
 
 The final operator is non-technical. The user's demo runs from a phone to a
 headless Ubuntu computer, optionally replaced by a Jetson later. A guided
 graphical interface is mandatory; the CLI is a development/diagnostic tool.
-Support the same workflow on an Ubuntu configurator. Confirm the phone OS and
-offline client installation before fixing its adapter or UI framework.
+Both Android and iPhone are required; keep the same workflow on an Ubuntu
+configurator. Review authenticated bootstrap feasibility on both mobile platforms
+before choosing a framework. Actual models/OS versions, build/distribution,
+prepared offline clients, and physical tests remain open.
 
 The shared contract and software transport now run without third-party crates.
-All 38 tests (including 15 host-preflight CLI tests) and the labeled demo pass locally; baseline/scale benchmark trials,
+All 40 Rust tests (including 17 host-preflight CLI tests), four additional public
+benchmark CLI cases, and the labeled demo pass locally; baseline/scale benchmark trials,
 a 300-second recovery soak, and skill-based review/TDD verification are complete. Tasks are tracked
 in [todo.md](todo.md); architecture choices live in
 [ARCHITECTURE.md](../docs/ARCHITECTURE.md) and their history in
-[DECISIONS.md](../docs/DECISIONS.md).
+[DECISIONS.md](../docs/DECISIONS.md). Each reviewed increment records its checks,
+measurements, evidence class, and next action in [HANDOFF.md](HANDOFF.md).
 
 ## Dependency order
 
@@ -35,16 +40,17 @@ Failure injection + reconnect + simulated restart
         v
 SOFTWARE CHECKPOINT: labeled, repeatable demo
 
-Phone client feasibility + Linux host/radio access (Ubuntu PC is sufficient)
+Android + iPhone bootstrap/client feasibility review (before framework selection)
+        + Linux host/radio access (Ubuntu PC is sufficient)
         |
         v
-Hardware audit -> bluer peripheral -> selected phone client
+Hardware audit -> bluer peripheral -> prepared hello client on each mobile platform
         |
         v
-RADIO CHECKPOINT: actual hello + reconnect + service restart/reboot
+RADIO CHECKPOINT: actual hello + reconnect + service restart/reboot on both platforms
         |
         v
-Secure-channel decision -> real Wi-Fi -> required graphical UX -> submission evidence
+Validate authenticated encrypted channel -> real Wi-Fi -> Android/iPhone UX -> evidence
 ```
 
 ## Implementation slices
@@ -58,18 +64,23 @@ Secure-channel decision -> real Wi-Fi -> required graphical UX -> submission evi
    device replacement. Check behavior with assertions, then benchmark the same
    transport and run a bounded soak. Capture actual durations/results without
    treating software timings as radio or fleet throughput.
-4. **Phone feasibility and real endpoint:** confirm phone OS, client preparation,
-   offline startup and permissions. Inspect the Ubuntu device, pin compatible
+4. **Phone feasibility and real endpoint:** review offline authenticated bootstrap
+   for both Android and iPhone before selecting a framework; check trusted device
+   identity, technician authorization, and channel/library compatibility without
+   implementing security. Record actual models/OS versions, build/signing and
+   distribution, client preparation, offline startup, and permissions separately.
+   Inspect the Ubuntu device, pin compatible
    dependencies, and expose the same handler through BlueZ using `bluer`.
-   Optional Linux diagnostics may also use `bluer`; the phone needs its platform
-   adapter. The primary demo requires only the phone and the Ubuntu device.
+   Optional Linux diagnostics may also use `bluer`; each mobile platform needs
+   a verified adapter. Test one phone and the Ubuntu device per run; acceptance
+   requires physical results from both Android and iPhone.
 5. **Host lifecycle:** install the service and verify normal reconnect, restart,
-   reboot, and offline operation from the selected phone. No device screen or
+   reboot, and offline operation from both Android and iPhone. No device screen or
    terminal should be needed after technical setup.
 
 The software checkpoint is complete. Real radio work requires usable host access
-and an available phone, but does not require a Jetson. Docker is optional
-and does not block any software task. Add a container runner only for a demonstrated
+and available Android and iPhone hardware, but does not require a Jetson. Docker
+is optional and does not block any software task. Add a container runner only for a demonstrated
 reproducibility need; do not build a privileged Bluetooth lab by default.
 
 ### Current independent slice: host preflight
@@ -79,8 +90,10 @@ Ubuntu commands with finite deadlines. Check adapter power and the local GATT /
 advertising APIs on the same adapter, plus a Wi-Fi device managed by NetworkManager.
 Emit only constructed statuses, never command output, SSIDs, MACs, or secrets.
 Resolve the current BlueZ unique owner to avoid autoactivation. Use GNU timeout
-with a direct KILL to bound read-only process groups at four seconds; limit
-stdout to 8 KiB and discard stderr. Non-UTF-8 arguments must fail without echo.
+with a direct KILL and a draining Bash/cat pipeline to keep supervision active
+after a parent exits with stdout-holding descendants. Bound each command at four
+seconds; limit stdout to 8 KiB and discard stderr. Ignore inherited shell startup
+code/functions. Non-UTF-8 arguments must fail without echo.
 An affirmative result means prerequisites observed, not a successful radio test.
 Tests exercise the executable's exit status and output, substituting commands
 only at the operating-system boundary. Capture the actual restricted-host result.
@@ -124,6 +137,9 @@ exist. Standard Ubuntu reproduction must preinstall that compiler with Rustfmt
 and Clippy: Cargo's `--offline` does not disable rustup downloads. The current
 simulator needs no crate downloads. Future BLE builds need resolved, cached or
 vendored dependencies and native libraries before they can build offline.
+Even disabled optional dependencies require Cargo resolution: adding uncached
+`bluer` currently breaks the default offline build. Preserve the manifest/lock
+until the complete graph is available and both default/BLE builds are tested.
 
 ## Risks and unresolved gates
 
@@ -134,8 +150,9 @@ vendored dependencies and native libraries before they can build offline.
 | Future crate graph exceeds installed compiler or is unavailable offline | Resolve BLE dependencies against Rust 1.88; cache/vendor and commit a tested Cargo.lock |
 | Docker/socket restrictions persist | Socket-free simulation; optional container packaging only |
 | Simulation becomes a second product | Reuse handler; keep only fault injection and wiring in the fake adapter |
-| Security is bolted onto plaintext provisioning | Credential endpoint blocked until authenticated-channel review and tests |
-| A desktop-only client misses the phone demo | Confirm phone OS, install/start client offline, prove harmless exchange before full UI |
+| Security is bolted onto plaintext provisioning | Review both-platform bootstrap feasibility before framework choice; security implementation stays after the harmless radio checkpoint |
+| One mobile platform works and the other fails | Prepare/start clients offline and prove harmless exchange/lifecycle separately on Android and iPhone before full UI |
+| Existing Wi-Fi or a lost result is mistaken for success | Require fresh authenticated status tied to the attempt, requested target connection, and assigned IP; recover status before retry |
 | A web page on the target is unreachable before Wi-Fi | Prepare the phone client beforehand; never assume a shared LAN or phone access to desktop localhost |
 | No Wi-Fi hardware by submission | Explicitly report incomplete challenge; simulated success cannot replace real evidence |
 
@@ -149,9 +166,15 @@ three independent processes, and seven measured batches per case. Report
 queue-inclusive completion separately from service time; keep concurrency bounded
 and retain raw data. See `docs/REVIEW.md` and `docs/BENCHMARKS.md` for results.
 
-The phone OS/client, actual device adapter capability, host permissions, and
-authenticated channel remain open. Confirm them before claiming radio reliability
-or enabling credentials. The final interface must cover label-based selection,
-SSID/password entry, progress, verified network success, and actionable retry
+Android and iPhone support are fixed requirements. Their actual models/OS versions,
+clients/build/distribution, device adapter capability, host permissions, and
+authenticated channel remain unverified. Confirm them before claiming radio
+reliability or enabling credentials. After the radio checkpoint, validate the
+authenticated, encrypted channel before real credential transfer; demonstrate
+confidentiality and integrity alongside peer authentication. On each platform,
+final acceptance requires label-based selection, SSID/password entry, progress,
+fresh authenticated confirmation of the requested connection and its assigned IP,
+authenticated recovery of an interrupted result, and actionable retry. Existing
+or fallback connections and cached status cannot establish success. Test the flow
 without commands or on-device screen interaction; see decision 15 and the
 technician-interface section of `docs/ARCHITECTURE.md`.
