@@ -1,0 +1,165 @@
+SIMULATION ONLY — TDD execution evidence
+Public seam: simulation::batch::run_batch(device_count, concurrency)
+RED 1 — a queued batch must complete each device once within its concurrency cap
+Command: RUSTUP_TOOLCHAIN=stable cargo test --test scaled --locked --offline
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+error[E0432]: unresolved import `teton_provisioning::simulation::batch`
+ --> tests/scaled.rs:1:37
+  |
+1 | use teton_provisioning::simulation::batch::run_batch;
+  |                                     ^^^^^ could not find `batch` in `simulation`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `teton-provisioning` (test "scaled") due to 1 previous error
+Exit code: 101 (nonzero expected before implementation)
+
+GREEN 1 — minimal bounded batch implementation
+Command: RUSTUP_TOOLCHAIN=stable cargo test --test scaled --locked --offline
+
+running 1 test
+test each_queued_device_finishes_once_with_bounded_concurrency ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.41s
+     Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
+Exit code: 0
+
+RED 2 — invalid input must not silently yield an empty or unbounded batch
+Command: RUSTUP_TOOLCHAIN=stable cargo test --test scaled invalid_batch_sizes --locked --offline
+
+running 1 test
+test invalid_batch_sizes_and_unbounded_concurrency_are_rejected ... FAILED
+
+failures:
+
+---- invalid_batch_sizes_and_unbounded_concurrency_are_rejected stdout ----
+
+thread 'invalid_batch_sizes_and_unbounded_concurrency_are_rejected' panicked at tests/scaled.rs:19:9:
+assertion failed: run_batch(devices, concurrency).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    invalid_batch_sizes_and_unbounded_concurrency_are_rejected
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
+error: test failed, to rerun pass `--test scaled`
+Exit code: 101 (nonzero expected before validation)
+
+GREEN 2 — validate workload and worker limits before allocation/spawn
+Command: RUSTUP_TOOLCHAIN=stable cargo test --test scaled --locked --offline
+
+running 2 tests
+test invalid_batch_sizes_and_unbounded_concurrency_are_rejected ... ok
+test each_queued_device_finishes_once_with_bounded_concurrency ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
+Exit code: 0
+
+MUTATION CHECK BEFORE TEST HARDENING — isolated copy only
+Changed the implementation RESPONSE from world to wrong. The existing protocol tests should detect this specification violation but currently pass.
+Command: RUSTUP_TOOLCHAIN=stable cargo test --lib protocol --locked --offline
+
+running 4 tests
+test protocol::tests::errors_contain_no_request_data ... ok
+test protocol::tests::hello_returns_world ... ok
+test protocol::tests::rejects_other_inputs ... ok
+test protocol::tests::rejects_every_single_byte_mutation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/tmp/teton-contract-mutation-t5h1fwo7)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/teton_provisioning-4f606155ec9216ed)
+Exit code: 0 (zero exposes the test gap)
+
+RED 3 — hardened public protocol test kills the same isolated mutation
+Command: RUSTUP_TOOLCHAIN=stable cargo test --lib protocol --locked --offline
+
+running 4 tests
+test protocol::tests::errors_contain_no_request_data ... ok
+test protocol::tests::rejects_other_inputs ... ok
+test protocol::tests::hello_returns_world ... FAILED
+test protocol::tests::rejects_every_single_byte_mutation ... ok
+
+failures:
+
+---- protocol::tests::hello_returns_world stdout ----
+
+thread 'protocol::tests::hello_returns_world' panicked at src/protocol.rs:32:9:
+assertion `left == right` failed
+  left: Ok([119, 114, 111, 110, 103])
+ right: Ok([119, 111, 114, 108, 100])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    protocol::tests::hello_returns_world
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/tmp/teton-contract-mutation-ieo0g7z3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/teton_provisioning-4f606155ec9216ed)
+error: test failed, to rerun pass `--lib`
+Exit code: 101 (nonzero expected)
+
+GREEN 3 — unchanged correct production response, independent literal expectation
+Command: RUSTUP_TOOLCHAIN=stable cargo test --lib protocol --locked --offline
+
+running 4 tests
+test protocol::tests::errors_contain_no_request_data ... ok
+test protocol::tests::rejects_other_inputs ... ok
+test protocol::tests::hello_returns_world ... ok
+test protocol::tests::rejects_every_single_byte_mutation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running unittests src/lib.rs (target/debug/deps/teton_provisioning-4f606155ec9216ed)
+Exit code: 0
+
+RED 4 — public benchmark CLI does not yet accept --scale
+Command: RUSTUP_TOOLCHAIN=stable cargo run --release --example benchmark --locked --offline -- --scale
+   Compiling teton-provisioning v0.1.0 (/home/noe/noe-ws/teton-provisioning)
+    Finished `release` profile [optimized] target(s) in 0.46s
+     Running `target/release/examples/benchmark --scale`
+Error: "Usage: cargo run --release --offline --example benchmark -- [--soak SECONDS]\nSECONDS must be an integer from 1 to 3600."
+Exit code: 1 (nonzero expected)
+
+GREEN 4 — public --scale CLI runs the checked bounded workload matrix
+Command: RUSTUP_TOOLCHAIN=stable cargo run --release --example benchmark --locked --offline -- --scale
+SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
+Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
+Each job creates a device/session, checks hello/world, closes and joins. One full warmup batch per case; 7 measured batches.
+Batch time includes client-pool creation/join. Service time excludes queue wait; completion time includes it. IDs are task indices, not authenticated device identities.
+devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_service_us,p95_service_us,p95_completion_ms,median_jobs_per_s,min_jobs_per_s,max_jobs_per_s
+1,1,7,7,1,0.101,56.566,63.929,0.088,9948.4,9341.3,14210.2
+1,4,7,7,1,0.104,59.242,75.321,0.100,9649.3,9016.5,10130.2
+1,8,7,7,1,0.064,32.632,44.023,0.061,15556.7,13708.6,17725.8
+20,1,7,140,1,0.686,30.137,37.139,0.639,29166.6,27982.9,31869.1
+20,4,7,140,4,0.354,54.072,80.942,0.363,56477.4,44970.7,62070.4
+20,8,7,140,8,0.418,101.100,205.906,0.393,47851.0,10769.1,50575.0
+50,1,7,350,1,1.747,29.666,48.842,1.672,28626.6,26535.6,30413.4
+50,4,7,350,4,0.682,48.601,70.843,0.696,73282.6,45198.8,79209.9
+50,8,7,350,8,0.912,100.939,241.943,0.968,54837.2,28664.1,58402.0
+200,1,7,1400,1,6.682,27.422,48.711,6.347,29933.0,29060.6,34209.9
+200,4,7,1400,4,2.355,44.163,68.779,2.335,84916.7,71601.7,88449.3
+200,8,7,1400,8,2.354,80.380,150.412,2.215,84948.6,81387.5,87573.2
+1000,1,7,7000,1,35.624,28.133,52.469,33.649,28071.0,27027.1,30097.7
+1000,4,7,7000,4,11.909,44.073,63.919,11.491,83969.4,78523.5,91518.2
+1000,8,7,7000,8,11.391,81.413,157.696,10.810,87789.7,86436.3,91409.8
+    Finished `release` profile [optimized] target(s) in 0.00s
+     Running `target/release/examples/benchmark --scale`
+Exit code: 0
