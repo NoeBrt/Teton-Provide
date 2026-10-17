@@ -16,6 +16,13 @@ The computer still needs a verified BLE peripheral and Wi-Fi adapter.
 - [Counter-review and decision history](docs/DECISIONS.md)
 - [Benchmark methodology and results](docs/BENCHMARKS.md)
 - [Skill-based review and TDD verification](docs/REVIEW.md)
+- [Interactive architecture and technician mockup](docs/architecture-demo.html)
+
+Open `docs/architecture-demo.html` directly in a browser for the French visual
+walkthrough. One self-contained file includes the architecture, phone/desktop
+previews, and five simulated outcomes. No server, installation, or Internet is
+needed. This is an illustration of the planned interface; it does not access
+Bluetooth or configure Wi-Fi. Use fictitious form values only.
 
 The real milestone still requires actual advertisements, GATT exchanges,
 reconnect, service restart, and reboot on two machines. The simulator accepts

@@ -438,3 +438,37 @@ that were reproduced and fixed. Rustfmt, Clippy, and release builds pass.
 The actual prepared-binary run returns exit 1 because host service access is
 blocked; see `demo/host-preflight.txt`, `demo/tdd-host-audit.txt`, and
 `demo/host-audit-verification.txt`. This does not close checkpoint H.
+
+## 17. Standalone architecture document and technician mockup
+
+**Decision:** Provide a single offline HTML file combining the architecture and
+an interactive illustration of the non-technical operator flow.
+
+**Original proposal:** Defer the actual technician interface until transport,
+credential protection, and real Wi-Fi activation have passed their gates.
+
+**Final choice:** The user explicitly requests an HTML architecture/mockup now.
+Add `docs/architecture-demo.html` with inline CSS/JavaScript, phone/desktop
+previews, and simulated success, password, network, disconnect, and identity
+outcomes. Keep the actual runtime implementation gated. Use French, a neutral
+paper/green palette, one diagram, and a focused device/network/result workflow.
+
+**Reason:** A shareable visual document makes the planned operator experience
+reviewable without selecting a mobile framework or requiring access to radios.
+The page opens directly from disk and has no external assets or dependencies.
+
+**Trade-off:** This is not a Bluetooth configurator or evidence of successful
+provisioning. It sends/stores no credentials, clears the password on submit,
+and blocks outbound connections with CSP. Browser/client compatibility for
+actual provisioning and the authenticated channel remain open.
+
+**Evidence / test:** JavaScript syntax, HTML labels/IDs, self-contained resources,
+and main text-color contrast pairs are checked. Fifteen dependency-free Rust
+audit tests and the rest of the Rust suite are unchanged and not rerun here.
+A separate review found retained SSID validation after reset; the reproduced
+regression is fixed. All 12 DOM scenario groups pass under jsdom with controlled
+timers, no DOM errors, no outbound requests, and no pending timers. See
+`demo/mockup-dom-verification.md` for method, tested file hash, and limitations.
+Chrome headless fails on a prohibited socket operation in this session; Firefox
+is also blocked by its snap runtime path. DOM checks do not validate visual
+layout, native browser accessibility, CSP enforcement, or physical provisioning.
