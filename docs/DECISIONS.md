@@ -5,7 +5,8 @@ stack and plan a software simulation first**. Earlier decisions below preserve
 the original audit. Sections 7-10 record the simulation-first plan; section 11
 supersedes their Python choices with Rust. Section 12 records the executable
 offline simulation. Section 15 corrects the demo roles and makes graphical
-technician UX mandatory. Radio acceptance remains pending.
+technician UX mandatory. Section 18 excludes SoftAP from the MVP and supersedes
+earlier fallback guidance. Radio acceptance remains pending.
 
 ## Evidence collected
 
@@ -472,3 +473,35 @@ timers, no DOM errors, no outbound requests, and no pending timers. See
 Chrome headless fails on a prohibited socket operation in this session; Firefox
 is also blocked by its snap runtime path. DOM checks do not validate visual
 layout, native browser accessibility, CSP enforcement, or physical provisioning.
+
+## 18. Exclude SoftAP from the MVP
+
+**Decision:** Keep BLE as the planned provisioning channel and exclude a
+temporary Wi-Fi setup network from the demo.
+
+**Original proposal:** Retain SoftAP as a fallback; a later comparison recommended
+it for a local web interface without app installation.
+
+**Final choice:** Supersede the SoftAP fallback guidance in decision 1 and the
+interface discussion. Use direct BLE communication between the prepared
+configurator and the headless Ubuntu device, subject to the real transport gate.
+Prepare the client and its offline assets beforehand. A physical QR may carry
+the device ID and authentication bootstrap data; it will not join a setup Wi-Fi
+network.
+
+**Reason:** The supplied challenge PDF, page 1, says "no shared local network at
+the start of the process". Creating an AP afterward is a defensible interpretation,
+but the user explicitly rejects that assessment risk. Avoid making the submission
+depend on the jury accepting a temporary LAN. This does not assert that the PDF
+explicitly bans SoftAP.
+
+**Trade-off:** Giving up the device-hosted web interface requires a separately
+prepared client. Browser BLE support or native installation must be verified on
+the chosen phone. Client selection, authenticated credential protection, and
+actual BLE reliability remain open. If BLE fails its gate, document the failure
+and reassess hardware/client options; do not silently substitute SoftAP.
+
+**Evidence / test:** PDF wording rechecked with `pdftotext` and the user's explicit
+objection recorded on 2026-10-17. README and architecture fallback guidance are
+aligned with this decision. This is a scope decision, not evidence of a passed
+radio or real Wi-Fi test; existing simulation results remain unchanged.

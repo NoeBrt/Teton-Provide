@@ -94,10 +94,12 @@ Select the mobile adapter after confirming the actual phone:
 
 Rust remains the device stack. `bluer` is a Linux adapter, not a cross-platform
 mobile UI library. Choose the smallest verified phone client; do not commit to
-multiple mobile frameworks now. If phone-client installation is impractical,
-reassess SoftAP with actual adapter capability and security evidence. An AP
-created during provisioning differs from a pre-existing shared LAN, but remains
-an untested fallback. No phone interface or real transport is implemented yet.
+multiple mobile frameworks now. Client preparation and offline startup are part
+of the feasibility gate. The MVP excludes SoftAP and captive portals to avoid
+depending on an interpretation of the challenge's shared-network constraint;
+see [decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp). A physical QR label
+may bootstrap device identity without creating a Wi-Fi setup network.
+No phone interface or real transport is implemented yet.
 
 ## Responsibility boundaries
 
@@ -225,7 +227,9 @@ exercise host hardware and require host access.
 A BlueZ `btvirt`/VHCI integration lab could later test actual GATT registration
 without physical radios, but requires host kernel/device access. It is outside
 the first simulation; see the [BlueZ emulator source](https://kernel.googlesource.com/pub/scm/bluetooth/bluez.git/+/master/emulator/vhci.c).
-If real BLE proves unsuitable, audit SoftAP support and adapt the transport.
+SoftAP was considered for a zero-install local web interface, but is excluded
+from the MVP under decision 18. If BLE proves unsuitable, record the failed gate
+and reassess hardware/client options without silently adding a setup Wi-Fi network.
 QR provisioning remains a documented alternative, not another implementation.
 
 ## Boundaries for later phases

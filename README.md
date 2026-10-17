@@ -9,6 +9,8 @@ and closes its worker. It supports fault injection and recoverable failures.
 The final demo will use the technician's phone as configurator and a headless
 Ubuntu computer as the device; a Jetson can replace that computer later.
 The computer still needs a verified BLE peripheral and Wi-Fi adapter.
+BLE is the planned provisioning channel; the demo will not create a temporary
+Wi-Fi network. See [decision 18](docs/DECISIONS.md#18-exclude-softap-from-the-mvp).
 
 - [Selected stack and architecture](docs/ARCHITECTURE.md)
 - [Implementation plan](tasks/plan.md)
