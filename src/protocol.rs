@@ -3,6 +3,9 @@ use std::fmt;
 pub const DEVICE_ID: &str = "IOT-DEMO-001";
 pub const REQUEST: &[u8] = b"hello";
 pub const RESPONSE: &[u8] = b"world";
+/// BLE GATT identifiers of the hello probe, generated once for this project.
+pub const SERVICE_UUID: u128 = 0x3b0a90ce_9564_40d1_b96b_14cf8858aba3;
+pub const CHARACTERISTIC_UUID: u128 = 0x29b3765c_de49_4114_889e_89b05852c968;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidRequest;

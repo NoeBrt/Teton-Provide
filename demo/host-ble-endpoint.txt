@@ -1,0 +1,66 @@
+# ACTUAL_HOST evidence, 2026-10-17T16:20:00+02:00, revision a9551fa + uncommitted BLE endpoint
+# Host: Ubuntu 22.04.5 LTS, 6.8.0-138-generic, BlueZ 5.64, nmcli 1.36.6
+
+$ ./target/release/audit-host
+HOST PREFLIGHT (read-only, adapter hci0)
+FAIL BLUETOOTH_POWERED NOT_CONFIRMED
+PASS GATT_REGISTRATION_API
+PASS ADVERTISING_REGISTRATION_API
+PASS NETWORKMANAGER_MANAGED_WIFI
+Host preflight blocked; run from the Ubuntu host terminal and check the failed prerequisites.
+Phone client, secure provisioning, and real Wi-Fi joining remain unverified.
+exit=1
+
+$ rfkill list bluetooth
+0: hci0: Bluetooth
+	Soft blocked: yes
+	Hard blocked: no
+
+$ ./target/release/device   # bounded by timeout 10
+Error: "cannot power hci0 (internal error: D-Bus error org.bluez.Error.Busy); check `rfkill list bluetooth`"
+exit=1
+
+Result: ACTUAL_HOST BLOCKED by an rfkill soft block (unblocking needs root).
+GATT/advertising APIs and NetworkManager-managed Wi-Fi PASS. No advertisement was emitted.
+ACTUAL_BLE (phone discovery/exchange) NOT_RUN.
+
+# ---------------------------------------------------------------------------
+# Second run, 2026-10-18T04:32:00+02:00, after the user ran `sudo rfkill unblock bluetooth`
+# in a separate terminal. Same binary (device/main.rs), no payloads or addresses logged.
+
+$ rfkill list bluetooth
+0: hci0: Bluetooth
+	Soft blocked: no
+	Hard blocked: no
+
+$ ./target/release/audit-host
+HOST PREFLIGHT (read-only, adapter hci0)
+PASS BLUETOOTH_POWERED
+PASS GATT_REGISTRATION_API
+PASS ADVERTISING_REGISTRATION_API
+PASS NETWORKMANAGER_MANAGED_WIFI
+Prerequisites observed; registration permissions and radio exchange remain unverified.
+Phone client, secure provisioning, and real Wi-Fi joining remain unverified.
+exit=0
+
+$ timeout -s INT 30 ./target/release/device   # BlueZ queried before, during, after
+IOT-DEMO-001 advertising on hci0; accepts only hello
+stopping
+exit=124
+# exit=124 is timeout's status after delivering SIGINT; the binary printed "stopping".
+
+BlueZ observations (busctl get-property on /org/bluez/hci0):
+--- before
+y 0
+--- during run
+IOT-DEMO-001 advertising on hci0; accepts only hello
+b true
+y 1
+service UUID in adapter UUIDs: 1
+--- after stop
+y 0
+service UUID in adapter UUIDs: 0
+
+Result: ACTUAL_HOST PASS. The adapter powers on, BlueZ registers the GATT application
+and one LE advertisement carrying service 3b0a90ce-9564-40d1-b96b-14cf8858aba3, and both
+are released on SIGINT. ACTUAL_BLE (discovery and exchange from a phone) still NOT_RUN.

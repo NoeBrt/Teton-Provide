@@ -563,3 +563,94 @@ the offline baseline or pretending another simulation is radio evidence.
 `cargo check --locked --offline` fails with package `bluer` unavailable.
 Actual BlueZ/NetworkManager access remains prohibited; see the separate
 `demo/host-preflight-continuation.txt` and `tasks/HANDOFF.md`.
+
+## 21. Real BlueZ hello endpoint behind the `ble` feature
+
+**Decision:** Add `bluer` 0.17.4 (`bluetoothd`) and Tokio as optional dependencies,
+and a `device` binary that serves the shared handler over one GATT characteristic.
+
+**Final choice:** One service, one characteristic with acknowledged write and read.
+A single pending slot holds `(client address, response)`: every write clears it,
+`hello` fills it, and a read returns `world` once and only to that client. Nonzero
+offsets fail with `InvalidOffset`, other payloads with `NotSupported`. The binary
+powers the default adapter, advertises `IOT-DEMO-001` plus the service UUID, and
+unregisters on SIGINT/SIGTERM. The systemd unit uses `DynamicUser`, because
+Ubuntu's BlueZ D-Bus policy allows the default context, and `Requires=bluetooth.service`,
+because registrations do not survive a `bluetoothd` restart.
+
+**Reason:** This session can reach crates.io, BlueZ, and NetworkManager, which lifts
+decision 20's blockers. The full graph (79 packages) resolves on Rust 1.88. Default
+builds still compile no third-party crate. Locked offline builds work once the
+graph is fetched.
+
+**Trade-off:** The single slot serializes concurrent clients, matching the contract.
+Per-connection state and notifications are deferred to the secure protocol.
+The default adapter is used; no adapter argument yet.
+
+**Evidence / test:** Six unit tests in `device/main.rs`, four mutations caught
+(`demo/tdd-ble-device.txt`); all suites, Rustfmt, and
+Clippy with and without `ble`. Actual run: `demo/host-ble-endpoint.txt` (rfkill soft
+block, BlueZ returns `Busy`). Over-the-air exchange remains `NOT_RUN`.
+
+## 22. Enter the site network once; provision room by room
+
+**Decision:** The technician enters (or receives) the site Wi-Fi profile once per
+intervention, then provisions the sensors of each room as a batch by scanning
+their labels. No credential is typed per device.
+
+**Original proposal:** One device per flow: select a device, type SSID and
+password, connect, repeat (the first mockup).
+
+**Final choice:** Two kinds of secrets stay separate. The *site profile* (SSID and
+WPA2 password, or per-device credentials) lives in the phone's secure storage
+(Keychain or Keystore) for the intervention only. The *label secret* is unique
+per device and only protects the BLE channel. Per room: enter the room number,
+scan each sensor label, tap one button; the app provisions the sensors one at a
+time and shows one status per sensor, with targeted retries. The app records
+sensor ↔ room for Smith.
+
+**Reason:** The challenge PDF targets "thousands of IoT devices", "200 devices
+simultaneously in a hospital wing" and a non-technical facilities team; rooms hold
+several sensors. Typing a password per device is slow and error-prone, and the
+QR label already disambiguates sensors that advertise side by side.
+
+**Trade-off:** With WPA2-Personal every device holds the same site password: one
+compromised sensor exposes the network, and revoking one device means changing the
+password everywhere. Production should prefer per-device credentials: EAP-TLS
+certificates or per-device PSKs (PPSK/iPSK) issued through Smith. Storing the site
+password on the phone during the intervention is an accepted, bounded exposure.
+
+**Evidence / test:** Design and mockup only. The Playwright run must show a second
+room provisioned without re-entering credentials and one status per sensor.
+
+## 23. Expo React Native configurator, tested on iPhone
+
+**Decision:** Build the phone configurator with Expo and React Native in
+TypeScript, using `react-native-ble-manager` for Bluetooth.
+
+**Original proposal:** No framework selected (decision 19); options were native
+Swift/Kotlin, Flutter, React Native, Kotlin Multiplatform, or a web page.
+
+**Final choice:** Expo SDK 57, React Native 0.86, development builds through EAS
+(SDK 58 was dropped: the App Store Expo Go still runs SDK 57).
+`react-native-ble-manager` 12.5 is a New Architecture TurboModule with an Expo
+config plugin; upstream `react-native-ble-plx` only claims support up to Expo 51,
+while SDK 55+ runs only on the New Architecture. The first version is the hello
+probe in `configurator/`. The user will test physically on an iPhone only; the
+code stays cross-platform, but Android has no physical evidence.
+
+**Reason:** the own mobile stack is Expo + React Native + TypeScript (their
+mobile job post and their `street-food-safari` challenge). EAS builds iOS in the
+cloud, so no Mac is needed, and development builds reload from a QR code. A web
+page cannot work on iPhone: Safari has no Web Bluetooth.
+
+**Trade-off:** iPhone installs need a paid Apple Developer account. The Noise
+channel will run in TypeScript on the phone and in Rust (`snow`) on the device;
+interoperability must be proven with the official Noise test vectors. Later, the
+device's Wi-Fi apply should reuse Smith's connectivity guard and error names
+(`WrongPSK`, `NotInRange`, `NmcliError`) so technician messages match Smith.
+
+**Evidence / test:** `npm test` (6 probe tests, 6 mutations caught,
+`demo/tdd-configurator.txt`), an independent review with its fixes applied, `tsc`, `expo lint`, `expo-doctor` 20/20, an iOS
+prebuild with the Bluetooth usage string, and an iOS JavaScript export. No phone
+has run the app yet.

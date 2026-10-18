@@ -1,0 +1,102 @@
+# Technician mockup UI test (Playwright), 2026-10-18T13:41:44+02:00
+# Evidence class: SIMULATION (static HTML mockup; no Bluetooth or network access)
+# File: docs/architecture-demo.html sha256 66a3b26ed7be366712d5c661a020796a7a94204869884174e039eb00ce4d3545
+# Flow: site network entered once, then room by room (scan several sensor labels, one button, one status per sensor).
+# Playwright 1.48.2 bundled Chromium, axe-core 4.10.2; PC 1440x900, iPhone 13 and Pixel 7 emulation (no real Safari/WebKit)
+# axe sanity: a page with planted defects reports button-name color-contrast document-title image-alt
+# Reproduce (in a scratch dir): npm i playwright@1.48.2 axe-core@4.10.2 && npx playwright install chromium
+#   then from the repo: PLAYWRIGHT=<dir>/node_modules/playwright/index.mjs AXE=<dir>/node_modules/axe-core/axe.min.js \
+#   node demo/ui-playwright.mjs - docs/architecture-demo.html <outdir>
+
+PASS mockup pc: no horizontal page scroll (overflow 0px)
+PASS mockup pc: h1 rendered with Onest (embedded, offline)
+PASS mockup pc phone success: "Chambre 214 prête" [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pc phone range: "2 sur 3 capteurs connectés" [IOT-DEMO-001:ok IOT-DEMO-002:error IOT-DEMO-003:ok], password not left in the form
+PASS mockup pc phone range: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc phone identity: "2 sur 3 capteurs connectés" [IOT-DEMO-001:error IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pc phone identity: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc phone password: "Mot de passe du site à vérifier" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pc phone password: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc phone network: "Réseau du site introuvable" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pc phone network: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc phone room with 3 sensors: no horizontal page scroll (overflow 0px)
+PASS mockup pc phone: touch targets >= 44px []
+PASS mockup pc phone: next room 215 provisioned without re-entering credentials [IOT-DEMO-004:ok IOT-DEMO-005:ok]
+PASS mockup pc desktop success: "Chambre 214 prête" [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pc desktop range: "2 sur 3 capteurs connectés" [IOT-DEMO-001:ok IOT-DEMO-002:error IOT-DEMO-003:ok], password not left in the form
+PASS mockup pc desktop range: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc desktop identity: "2 sur 3 capteurs connectés" [IOT-DEMO-001:error IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pc desktop identity: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc desktop password: "Mot de passe du site à vérifier" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pc desktop password: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc desktop network: "Réseau du site introuvable" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pc desktop network: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pc desktop room with 3 sensors: no horizontal page scroll (overflow 0px)
+PASS mockup pc desktop: touch targets >= 44px []
+PASS mockup pc desktop: next room 215 provisioned without re-entering credentials [IOT-DEMO-004:ok IOT-DEMO-005:ok]
+PASS mockup pc: no console/CSP errors 
+PASS mockup iphone13: no horizontal page scroll (overflow 0px)
+PASS mockup iphone13: h1 rendered with Onest (embedded, offline)
+PASS mockup iphone13 phone success: "Chambre 214 prête" [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup iphone13 phone range: "2 sur 3 capteurs connectés" [IOT-DEMO-001:ok IOT-DEMO-002:error IOT-DEMO-003:ok], password not left in the form
+PASS mockup iphone13 phone range: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 phone identity: "2 sur 3 capteurs connectés" [IOT-DEMO-001:error IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup iphone13 phone identity: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 phone password: "Mot de passe du site à vérifier" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup iphone13 phone password: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 phone network: "Réseau du site introuvable" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup iphone13 phone network: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 phone room with 3 sensors: no horizontal page scroll (overflow 0px)
+PASS mockup iphone13 phone: touch targets >= 44px []
+PASS mockup iphone13 phone: next room 215 provisioned without re-entering credentials [IOT-DEMO-004:ok IOT-DEMO-005:ok]
+PASS mockup iphone13 desktop success: "Chambre 214 prête" [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup iphone13 desktop range: "2 sur 3 capteurs connectés" [IOT-DEMO-001:ok IOT-DEMO-002:error IOT-DEMO-003:ok], password not left in the form
+PASS mockup iphone13 desktop range: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 desktop identity: "2 sur 3 capteurs connectés" [IOT-DEMO-001:error IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup iphone13 desktop identity: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 desktop password: "Mot de passe du site à vérifier" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup iphone13 desktop password: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 desktop network: "Réseau du site introuvable" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup iphone13 desktop network: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup iphone13 desktop room with 3 sensors: no horizontal page scroll (overflow 0px)
+PASS mockup iphone13 desktop: touch targets >= 44px []
+PASS mockup iphone13 desktop: next room 215 provisioned without re-entering credentials [IOT-DEMO-004:ok IOT-DEMO-005:ok]
+PASS mockup iphone13: no console/CSP errors 
+PASS mockup pixel7: no horizontal page scroll (overflow 0px)
+PASS mockup pixel7: h1 rendered with Onest (embedded, offline)
+PASS mockup pixel7 phone success: "Chambre 214 prête" [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pixel7 phone range: "2 sur 3 capteurs connectés" [IOT-DEMO-001:ok IOT-DEMO-002:error IOT-DEMO-003:ok], password not left in the form
+PASS mockup pixel7 phone range: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 phone identity: "2 sur 3 capteurs connectés" [IOT-DEMO-001:error IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pixel7 phone identity: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 phone password: "Mot de passe du site à vérifier" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pixel7 phone password: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 phone network: "Réseau du site introuvable" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pixel7 phone network: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 phone room with 3 sensors: no horizontal page scroll (overflow 0px)
+PASS mockup pixel7 phone: touch targets >= 44px []
+PASS mockup pixel7 phone: next room 215 provisioned without re-entering credentials [IOT-DEMO-004:ok IOT-DEMO-005:ok]
+PASS mockup pixel7 desktop success: "Chambre 214 prête" [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pixel7 desktop range: "2 sur 3 capteurs connectés" [IOT-DEMO-001:ok IOT-DEMO-002:error IOT-DEMO-003:ok], password not left in the form
+PASS mockup pixel7 desktop range: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 desktop identity: "2 sur 3 capteurs connectés" [IOT-DEMO-001:error IOT-DEMO-002:ok IOT-DEMO-003:ok], password not left in the form
+PASS mockup pixel7 desktop identity: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 desktop password: "Mot de passe du site à vérifier" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pixel7 desktop password: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 desktop network: "Réseau du site introuvable" [IOT-DEMO-001:error IOT-DEMO-002:error IOT-DEMO-003:error], password not left in the form
+PASS mockup pixel7 desktop network: correction succeeds [IOT-DEMO-001:ok IOT-DEMO-002:ok IOT-DEMO-003:ok]
+PASS mockup pixel7 desktop room with 3 sensors: no horizontal page scroll (overflow 0px)
+PASS mockup pixel7 desktop: touch targets >= 44px []
+PASS mockup pixel7 desktop: next room 215 provisioned without re-entering credentials [IOT-DEMO-004:ok IOT-DEMO-005:ok]
+PASS mockup pixel7: no console/CSP errors 
+PASS a11y pc site network: axe WCAG 2.1 AA, 0 violations 
+PASS a11y pc room with sensors: axe WCAG 2.1 AA, 0 violations 
+PASS a11y pc partial result: axe WCAG 2.1 AA, 0 violations 
+PASS a11y iphone13 site network: axe WCAG 2.1 AA, 0 violations 
+PASS a11y iphone13 room with sensors: axe WCAG 2.1 AA, 0 violations 
+PASS a11y iphone13 partial result: axe WCAG 2.1 AA, 0 violations 
+PASS a11y pixel7 site network: axe WCAG 2.1 AA, 0 violations 
+PASS a11y pixel7 room with sensors: axe WCAG 2.1 AA, 0 violations 
+PASS a11y pixel7 partial result: axe WCAG 2.1 AA, 0 violations 
+PASS keyboard only: Tab/Enter reach every step, focus moves to each screen title (room-title, result-title)
+ALL PASS
