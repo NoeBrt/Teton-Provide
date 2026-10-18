@@ -1,7 +1,14 @@
 # Teton Provisioning Challenge
 
-Current phase: a working, tested Rust software simulation of the harmless
-transport milestone. **Real BLE and Wi-Fi provisioning are not implemented.**
+Current phase: the harmless `hello` probe runs on real hardware on the device
+side: the Rust BlueZ peripheral (`device/main.rs`) advertises and registers its
+GATT service on the Ubuntu host. The iPhone configurator (`configurator/`, Expo +
+React Native) is built and tested in software; no phone has completed the BLE
+exchange yet. **Credentials, security, and Wi-Fi provisioning are not implemented.**
+
+To continue on a Mac (installing the configurator on an iPhone), follow
+[configurator/README.md](configurator/README.md#install-on-an-iphone-from-a-mac-free-apple-id)
+and the latest step of [the handoff](tasks/HANDOFF.md).
 
 No Jetson is currently available. The local simulator discovers a synthetic
 device, connects through bounded memory channels, exchanges `hello`/`world`,
@@ -19,6 +26,8 @@ Wi-Fi network. See [decision 18](docs/DECISIONS.md#18-exclude-softap-from-the-mv
 - [Step-by-step engineering handoff](tasks/HANDOFF.md)
 - [Counter-review and decision history](docs/DECISIONS.md)
 - [Benchmark methodology and results](docs/BENCHMARKS.md)
+- [Credential protection review](docs/SECURITY.md)
+- [Solution report (PDF, French)](docs/rapport-solution.pdf)
 - [Skill-based review and TDD verification](docs/REVIEW.md)
 - [Interactive architecture and technician mockup](docs/architecture-demo.html)
 
@@ -26,7 +35,13 @@ Open `docs/architecture-demo.html` directly in a browser for the French visual
 walkthrough. One self-contained file includes the architecture, phone/desktop
 previews, and five simulated outcomes. No server, installation, or Internet is
 needed. This is an illustration of the planned interface; it does not access
-Bluetooth or configure Wi-Fi. Use fictitious form values only.
+Bluetooth or configure Wi-Fi. Use fictitious form values only. Its palette follows
+teton.ai; the free Onest face (OFL, embedded) stands in for Teton's licensed Wallop.
+The flow enters the site network once, then provisions a room of several sensors
+per batch. A Playwright run covers PC, iPhone 13, and Pixel 7 layouts, all five outcomes,
+a second room without re-entering credentials, WCAG 2.1 AA (axe-core), and keyboard-only use: [results](demo/mockup-playwright.txt),
+script `demo/ui-playwright.mjs`. The PDF report and its screenshots are rebuilt with
+`PLAYWRIGHT=<dir>/node_modules/playwright/index.mjs node docs/report/build.mjs`.
 
 The real milestone still requires actual advertisements, GATT exchanges,
 reconnect, service restart, and reboot on two machines. The simulator accepts
@@ -100,7 +115,7 @@ Jetson model, software versions, radio capabilities, and connectivity remain
 unverified. Docker CLI 27.0.3 is present, but its daemon is inaccessible in this
 session. `pkg-config` detects libdbus 1.12.20. Only the x86-64 Rust target is
 installed. The simulation and host preflight build with no third-party crates;
-BLE library dependencies have not been resolved or built.
+the optional `ble` feature resolves `bluer` 0.17.4 and Tokio 1.53 (see `Cargo.lock`).
 
 ## Prepare the Ubuntu device
 
@@ -133,15 +148,45 @@ means a check failed or was inconclusive; exit 2 means invalid arguments.
 `COMMAND_FAILED` can indicate missing service access, including this restricted
 session. Run from the actual Ubuntu host terminal when qualifying hardware.
 The [captured host result](demo/host-preflight.txt) remains blocked; fixture tests
-are separate from real evidence.
+are separate from real evidence. The first unrestricted run passes 3 of 4 checks;
+Bluetooth is soft-blocked by rfkill ([evidence](demo/host-ble-endpoint.txt)).
+
+## Run the real BLE hello endpoint
+
+Build prerequisites (once, with Internet): `sudo apt install libdbus-1-dev pkg-config`,
+then `cargo fetch --locked` so later builds work with `--offline`.
+
+```sh
+cargo build --release --features ble --bin device --locked --offline
+rfkill list bluetooth          # if "Soft blocked: yes": sudo rfkill unblock bluetooth
+./target/release/device        # Ctrl-C stops it; BlueZ then drops its registrations
+```
+
+It powers the default adapter, advertises `TETON-DEMO-001` with service
+`3b0a90ce-9564-40d1-b96b-14cf8858aba3`, and exposes characteristic
+`29b3765c-de49-4114-889e-89b05852c968` (write with response, read). Probe it
+from a phone with a generic BLE app such as nRF Connect: connect, write the text
+`hello`, then read `world`. The response is returned once, only to the client
+that wrote it; any other value is rejected. The log prints `hello exchanged` or
+`rejected request`, never payloads or client addresses. A generic app proves
+feasibility only; it is not the submitted configurator.
+
+Run it as a service that starts at boot and restarts with BlueZ:
+
+```sh
+sudo install -m 755 target/release/device /usr/local/bin/teton-device
+sudo install -m 644 device/systemd/teton-device.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now teton-device
+journalctl -u teton-device -f
+```
 
 ## Development approach
 
 Use Rust with Cargo's built-in tests, following the user's report that Teton's
 fleet uses Rust. The simulator uses `std::sync::mpsc` and one worker thread per
 connection because Tokio is not cached and crate downloads are unavailable here.
-The planned hardware adapters use Tokio and
-`bluer` for both BlueZ GATT roles, and later `dbus`/`dbus-tokio` for
+The real device endpoint uses Tokio and
+`bluer` for the BlueZ GATT role, and later `dbus`/`dbus-tokio` for
 NetworkManager. systemd will manage the real device binary. `Cargo.lock` and
 the Rust 1.88.0 pin are committed. See decision 12 for the simulation runtime change.
 
@@ -149,9 +194,10 @@ One Cargo package contains `src/protocol.rs` (shared byte handler),
 `src/simulation.rs` (fake discovery and connection lifecycle),
 `examples/simulation.rs` (demo), and tests in `tests/simulation.rs` and beside
 library code. `src/simulation/batch.rs` adds bounded batches, tested through its
-public API in `tests/scaled.rs`. Future Linux `device/` and diagnostic
-`configurator/` binaries and `bluer` will be gated behind a `ble` feature; that
-feature is not present yet. The phone client requires its own platform adapter.
+public API in `tests/scaled.rs`. `device/main.rs` is the real BLE peripheral
+behind the optional `ble` feature; default builds never compile `bluer` or
+libdbus. The phone client lives in `configurator/` (Expo + React Native, BLE hello
+probe; see its README and decision 23).
 
 Both channel queues hold at most one message; requests are capped at 20 bytes
 before allocation. A session accepts one request at a time. Invalid input is

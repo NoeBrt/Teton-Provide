@@ -1,7 +1,8 @@
 # Architecture and Selected Stack
 
-Status: the shared hello contract and dependency-free simulation are implemented
-and tested. No Jetson is currently available. Simulated acceptance and hardware
+Status: the shared hello contract, the dependency-free simulation, the real BlueZ
+hello peripheral (`ble` feature), and the Expo iPhone configurator probe are
+implemented and tested; the phone-to-device radio exchange is not yet evidenced. No Jetson is currently available. Simulated acceptance and hardware
 acceptance are distinct; the original challenge requires the latter.
 The final demo requires both Android and iPhone configurators and a headless
 Ubuntu PC as the device. A Jetson is an optional later device target.
@@ -19,10 +20,10 @@ are simulated; it is not the runtime configurator.
 | Simulation | Two bounded `std::sync::mpsc` channels per session, synthetic discovery | Capacity one each; no radio, sockets, root, or Bluetooth dependency |
 | Tests | `cargo test`, `#[test]` | Handler unit tests and simulation integration tests; finite real-time receive deadlines |
 | Developer host preflight | Rust std + busctl/nmcli/GNU timeout, Bash/cat | Read-only prerequisites; no radio success claim |
-| Planned real BLE runtime | Tokio | Needed by `bluer`; not installed or declared yet |
-| Planned device BLE | BlueZ GATT/advertising via `bluer` | Supported local GATT role; hardware validation pending |
+| Real BLE runtime | Tokio 1.53 | Optional `ble` feature, locked in `Cargo.lock` |
+| Device BLE | BlueZ GATT/advertising via `bluer` 0.17.4 | Registers and advertises on the real host (`demo/host-ble-endpoint.txt`); no phone exchange yet |
 | Planned Linux diagnostic configurator BLE | `bluer` remote GATT/discovery | Linux role only; not a phone client |
-| Required technician interface | Guided graphical flow on Android and iPhone; Ubuntu alternative | Models/OS versions, clients, build/distribution, and physical tests pending; not implemented |
+| Technician interface | Expo SDK 57 + React Native + TypeScript, `react-native-ble-manager` (decision 23) | Hello probe in `configurator/`; iPhone install via a Mac (free Apple ID) or EAS (paid); full flow mocked in `architecture-demo.html` |
 | Later Wi-Fi control | NetworkManager D-Bus via `dbus`/`dbus-tokio` | Match `bluer`'s library family; no password subprocess arguments |
 | Planned device lifecycle | systemd + compiled Rust binary | Host BlueZ/NetworkManager access; permissions/recovery checks pending |
 | Packaging and checks | Cargo.lock, rust-toolchain.toml, Rustfmt, Clippy | Manifest, dependency-free lockfile, and exact toolchain pin exist |
@@ -56,10 +57,13 @@ Android phone or iPhone                         Headless Ubuntu PC / later Jetso
 Prepared graphical configurator -- secure BLE --> Rust service -- Wi-Fi --> Target network
 ```
 
-The technician opens the prepared configurator, identifies the device using its
-physical label, enters an SSID/password, and taps **Connect**. The interface
+The technician opens the prepared configurator and enters the site SSID/password
+once per intervention ([decision 22](DECISIONS.md#22-enter-the-site-network-once-provision-room-by-room)).
+Then, room by room, they enter the room number, scan the label of each sensor
+(rooms hold several), and tap **Connect**. The interface
 guides Bluetooth permission/disabled-radio problems, then shows device checking,
-transfer, and network-connection progress. A label/name is a selection hint.
+transfer, and network-connection progress per sensor, with targeted retries.
+The scanned label, not the BLE name or signal strength, selects each sensor.
 An established authenticated and encrypted channel is required before any
 credential bytes leave the client; validate confidentiality, integrity, and
 peer authentication explicitly.
@@ -119,7 +123,7 @@ The MVP excludes SoftAP and captive portals to avoid
 depending on an interpretation of the challenge's shared-network constraint;
 see [decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp). A physical QR label
 may bootstrap device identity without creating a Wi-Fi setup network.
-No phone interface or real transport is implemented yet.
+The phone configurator exists as a hello probe (`configurator/`); the guided provisioning flow is still a mockup.
 
 ## Responsibility boundaries
 
@@ -153,11 +157,10 @@ device/audit.rs               read-only Ubuntu host preflight binary
 tests/host_audit.rs           public CLI tests with external-command fixtures
 ```
 
-Add `device/main.rs` / `device/ble.rs` and `configurator/main.rs` /
-`configurator/ble.rs` when real adapter work starts. Declare their binary paths
-with `required-features = ["ble"]` and an optional `bluer` dependency then;
-the feature does not exist yet. Default software tests must not build libdbus or
-connect to BlueZ. The demo, integration tests, and benchmark reuse the same
+`device/main.rs` is the real BLE peripheral, declared with
+`required-features = ["ble"]` and optional `bluer`/`tokio` dependencies.
+`configurator/` is a separate Expo project, not a Cargo target. Default software
+tests must not build libdbus or connect to BlueZ. The demo, integration tests, and benchmark reuse the same
 simulation module and handler. Add no unused modules, generic transport
 framework, or multi-crate workspace.
 

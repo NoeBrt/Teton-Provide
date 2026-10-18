@@ -11,3 +11,15 @@ path = "device/audit.rs"
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[[bin]]
+name = "device"
+path = "device/main.rs"
+required-features = ["ble"]
+
+[features]
+ble = ["dep:bluer", "dep:tokio"]
+
+[dependencies]
+bluer = { version = "0.17.4", features = ["bluetoothd"], optional = true }
+tokio = { version = "1", features = ["rt", "macros", "signal"], optional = true }

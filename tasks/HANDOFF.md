@@ -105,3 +105,155 @@ review, and a measurement of the affected path. Document measurement limits.
   semantics and recovery tests. Prove discovery/reconnect/restart/reboot from the
   prepared phones. A generic diagnostic app may prove feasibility but cannot
   replace submitted configurator source. Runtime security/credentials remain gated.
+
+## Step 4 — Real BlueZ hello endpoint, first unrestricted host run
+
+- Revision: uncommitted on `a9551fa`. This session reaches crates.io, BlueZ, and
+  NetworkManager, which lifts the Step 0-3 access and dependency blockers.
+- Changed: optional `ble` feature (`bluer` 0.17.4 `bluetoothd`, Tokio 1.53; 79
+  locked packages), `device/main.rs`, shared GATT UUIDs in `src/protocol.rs`,
+  `device/systemd/teton-device.service`, README run/install steps, decision 21.
+- Evidence class: `ACTUAL_HOST` **PARTIAL**. `audit-host` passes GATT, advertising,
+  and NetworkManager Wi-Fi; Bluetooth is soft-blocked by rfkill and BlueZ 5.64
+  answers `Busy` to power-on. See [host run](../demo/host-ble-endpoint.txt).
+  Unblocking needs root; no advertisement was emitted.
+- `COMMAND_FIXTURE` **PASS**: six slot-logic unit tests; four mutations are each
+  caught ([trace](../demo/tdd-ble-device.txt)). 46 Rust tests pass in debug and
+  release; Rustfmt, Clippy with and without `ble`, and the four CLI cases pass.
+  Default builds compile no third-party crate.
+- Review: independent fresh-context review approved after one fix (three slot
+  mutations escaped the first tests; fixed). Accepted limits: an `hci0` removal
+  without a `bluetoothd` restart leaves the process unregistered (code `shortcut`
+  note); a Bluetooth address is not authentication; bluer's internal logs could
+  print device paths if a logger is ever installed. Restart propagation through
+  `Requires=` is unverified on the host.
+- Measurement: none. The change adds no hot path; radio latency needs hardware.
+- Gates: `ACTUAL_BLE`, Android/iPhone, service restart/reboot, secure transfer,
+  and `ACTUAL_WIFI` remain **NOT_RUN**. ARM64 is not built.
+- Next owner: someone at the machine with sudo and a phone. Run
+  `sudo rfkill unblock bluetooth`, rerun `audit-host`, start `target/release/device`,
+  and use nRF Connect on Android and on iPhone to discover `TETON-DEMO-001`,
+  write `hello`, read `world`, disconnect, and reconnect. Record sanitized results
+  in `demo/phone-hello.txt`. Then install the unit and test restart/reboot (task 7).
+
+## Step 5 — Teton styling, UI test, host inventory, credential bootstrap review
+
+- Revision: uncommitted on `a9551fa`, together with Step 4.
+- Changed: `docs/architecture-demo.html` restyled after teton.ai (palette from its
+  CSS; free Onest embedded, OFL, as a stand-in for the licensed Wallop face; CSP
+  gains `font-src data:`). New `demo/ui-playwright.mjs`, `docs/SECURITY.md`.
+- Evidence class: `SIMULATION` **PASS** for the mockup: Playwright 1.48.2 Chromium,
+  PC 1440 px, iPhone 13 and Pixel 7 emulation, both previews, all five outcomes and
+  retries, password cleared, targets ≥ 44 px, no overflow or CSP errors
+  ([results](../demo/mockup-playwright.txt)). Real Safari/WebKit not tested.
+- `ACTUAL_HOST`: sanitized inventory in [host-inventory](../demo/host-inventory.txt):
+  HP Victus, MediaTek MT7921 (BLE and Wi-Fi on one chip), peripheral role,
+  20 advertising instances. Bluetooth still soft-blocked by rfkill.
+- Security review: `docs/SECURITY.md` rejects OS pairing options on sourced
+  platform facts and recommends `Noise_NKpsk2` with key and secret on the label.
+  An independent security review raised two High findings (label as a permanent
+  bearer token across reboots; label substitution) and four Medium ones; all are
+  folded in as single-use provisioning, a signed manifest for fleet rollout,
+  per-connection state, payload-bound attempt IDs, and staging-only key creation.
+- Gates unchanged: `ACTUAL_BLE`, Android/iPhone, systemd lifecycle, secure transfer,
+  and `ACTUAL_WIFI` remain **NOT_RUN**; nothing in `docs/SECURITY.md` is built.
+- Next owner: unchanged from Step 4 (rfkill unblock in a real terminal, phone probes).
+
+## Step 6 — Solution report (PDF) and extended interface tests
+
+- Revision: uncommitted on `a9551fa`, together with Steps 4-5.
+- Changed: `demo/ui-playwright.mjs` adds axe-core WCAG 2.1 AA scans (three screens,
+  three formats) and a keyboard-only run; Playwright and axe paths come from
+  `PLAYWRIGHT`/`AXE`. New `docs/report/` (HTML source, build script, screenshots,
+  embedded Onest) producing `docs/rapport-solution.pdf` (9 A4 pages, French).
+- Evidence class: `SIMULATION` **PASS**, 79 mockup checks, 0 failures, 0 axe
+  violations ([results](../demo/mockup-playwright.txt)). An axe sanity page with
+  planted defects reports four violations, so the scan is live. Real Safari and
+  physical phones are not tested.
+- The report states the challenge is incomplete: no credential transfer and no
+  real Wi-Fi connection are evidenced. Gates are unchanged from Step 5.
+
+## Step 7 — Real BlueZ registration on the unblocked host
+
+- Revision: uncommitted on `a9551fa`; no code change since Step 4.
+- The user unblocked Bluetooth with `sudo rfkill unblock bluetooth` in a separate
+  terminal (`!` commands cannot answer a sudo password prompt).
+- Evidence class: `ACTUAL_HOST` **PASS**. `audit-host` passes 4/4. While
+  `target/release/device` runs, BlueZ reports the adapter powered, one active LE
+  advertisement, and the service UUID on the adapter; after SIGINT both are released
+  ([run](../demo/host-ble-endpoint.txt)). The adapter stays powered after exit.
+- Still `NOT_RUN`: discovery and `hello` exchange from Android and iPhone,
+  reconnect, systemd restart/reboot, secure transfer, `ACTUAL_WIFI`.
+- Next owner: someone with a phone next to the machine. Start
+  `./target/release/device`, then in nRF Connect connect to `TETON-DEMO-001`,
+  write the text `hello`, read `world`; disconnect and repeat. Record model, OS,
+  app version, and outcomes in `demo/phone-hello.txt`.
+
+## Step 8 — Site network once, room-by-room provisioning
+
+- Revision: uncommitted on `a9551fa`. Trigger: user review against the challenge PDF
+  (thousands of devices, 200 per wing, several sensors per room).
+- Decision 22 and `docs/SECURITY.md`: the site profile is entered once per
+  intervention and kept in phone secure storage; the label secret stays per device.
+  WPA2-Personal shares one password across sensors (accepted for the demo);
+  production should use per-device EAP-TLS or PPSK issued by Smith.
+- `docs/architecture-demo.html` now models: site network → room (scan up to four
+  labels, one button) → one status per sensor, targeted retry, next room without
+  credentials, sensor ↔ room recorded. `docs/ARCHITECTURE.md` updated.
+- Evidence class: `SIMULATION` **PASS**, 91 Playwright checks, 0 failures, 0 axe
+  violations; six checks provision room 215 without re-entering credentials
+  ([results](../demo/mockup-playwright.txt)). PDF report rebuilt (9 pages) with the
+  new screens and the Step 7 host result.
+
+## Step 9 — Expo configurator: BLE hello probe for iPhone
+
+- Revision: uncommitted on `a9551fa`. Trigger: user asked for a native Android and
+  iPhone app and will test from an iPhone only; Teton's stack review (GitHub
+  `teton-ai`, job posts) shows Expo + React Native + TypeScript for mobile and Rust
+  Smith for the fleet. Decision 23.
+- Changed: `configurator/` (Expo SDK 58, RN 0.88, `react-native-ble-manager` 12.5,
+  Onest font, Teton palette). `src/probe.ts` holds the transport-agnostic probe with
+  per-step deadlines (iOS connects never time out by themselves); `App.tsx` scans by
+  service UUID, tests a sensor, and keeps a 10-line journal for evidence.
+- Evidence class: `COMMAND_FIXTURE` **PASS**: 6 probe tests with a fake link, 6
+  mutations caught ([trace](../demo/tdd-configurator.txt)); `tsc`, `expo lint`,
+  `expo-doctor` 20/20; iOS prebuild shows the French Bluetooth usage string and
+  bundle ID; the iOS JavaScript export compiles. Node 22.23 installed with nvm.
+- Review: independent review asked for two fixes (success text contrast on mint;
+  tests need Node 22.18+ type stripping) and suggested others: iOS error objects,
+  single `start()`, double-tap guard, VoiceOver announcement, font fallback. All
+  applied. Unverified until a phone runs: whether iOS shows the scan-response name.
+- Not run: any iPhone build or install (needs the user's Expo login and a paid
+  Apple Developer account), `ACTUAL_BLE` from the app.
+- Next owner: the user. Follow `configurator/README.md`: `eas login`,
+  `eas device:create`, `eas build -p ios --profile development`, install from the
+  QR code, `npx expo start`. Meanwhile nRF Connect on the iPhone can already probe
+  `./target/release/device`.
+
+## Step 10 — Expo Go preview, EAS link, and Mac handover
+
+- Revision: branch `feat/ble-device-and-configurator` (first push of Steps 4-10).
+- The configurator moved from Expo SDK 58 to **SDK 57**: the App Store Expo Go
+  rejected SDK 58. `tsc`, `expo lint`, 6 tests, and `expo-doctor` 21/21 pass.
+- The BLE library now loads only when its native module exists (`src/ble.ts`), so
+  Expo Go shows the UI with « Bluetooth indisponible dans Expo Go » instead of
+  crashing. Verified by the user on an iPhone through `npx expo start --go --tunnel`
+  (tunnel mode: the workstation's ufw firewall blocks LAN port 8081).
+- EAS: logged in as `noeeebt`; project linked (`app.json` › `extra.eas.projectId`).
+  No EAS iOS build: the user has no paid Apple Developer Program membership.
+- Path forward without the paid program: build and sign on the user's Mac with a
+  free Apple ID (`npx expo run:ios --device`, 7-day signature). See
+  `configurator/README.md`.
+- Gates: `ACTUAL_HOST` **PASS** (Step 7); `ACTUAL_BLE` still **NOT_RUN** (neither
+  nRF Connect nor the app has completed hello/world from a phone yet).
+- Next owner (on the Mac):
+  1. Clone, check out `feat/ble-device-and-configurator`, install the configurator
+     on the iPhone as described in `configurator/README.md`.
+  2. On the Ubuntu workstation: `cargo build --release --features ble --bin device`
+     then `./target/release/device` (Bluetooth must be unblocked: `rfkill list`).
+  3. In the app: Rechercher les capteurs → Tester `TETON-DEMO-001`; expect
+     « world » reçu. Repeat, disconnect, reconnect. Record iPhone model, iOS version,
+     app commit, and the journal lines in `demo/phone-hello.txt` (`ACTUAL_BLE`).
+  4. Then: install the systemd unit and test restart/reboot (task 7); after that,
+     the Noise channel per `docs/SECURITY.md`, then NetworkManager activation
+     reusing Smith's connectivity guard (decision 23).

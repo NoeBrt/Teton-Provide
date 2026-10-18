@@ -104,16 +104,19 @@ preparation separately; platform selection itself is settled.
 
 **Acceptance criteria:**
 
-- [ ] Identify device, OS, BlueZ, radios, NetworkManager ownership, and usable D-Bus APIs.
-- [ ] Resolve/build `bluer` with `bluetoothd` behind the optional `ble` feature;
+- [x] Identify device, OS, BlueZ, radios, NetworkManager ownership, and usable D-Bus APIs.
+  (`demo/host-inventory.txt`.)
+- [x] Resolve/build `bluer` with `bluetoothd` behind the optional `ble` feature;
   lock/cache the complete tested graph and document native prerequisites and ARM64
   differences. Verify both default and BLE-enabled locked offline builds; a disabled
-  optional dependency still requires resolution.
-- [ ] Required host access is available; otherwise record the exact unpassed gate.
-- [ ] Before mobile framework selection, review an offline authenticated bootstrap
+  optional dependency still requires resolution. (x86-64 only; ARM64 not built.)
+- [x] Required host access is available; otherwise record the exact unpassed gate.
+  (Access available; gate: rfkill soft block, see `demo/host-ble-endpoint.txt`.)
+- [x] Before mobile framework selection, review an offline authenticated bootstrap
   for both Android and iPhone: trusted physical device identity, technician
   authorization, channel/library support, replay protection, and status recovery.
   This is feasibility/design review; no security implementation before checkpoint H.
+  (Done: `docs/SECURITY.md` recommends Noise NKpsk2 with key and secret in the QR label.)
 - [ ] Record model/OS versions, Bluetooth permission denial/retry, build/signing,
   distribution, and prepared client installation/startup offline for each platform.
   Select native/shared/browser access only against those verified constraints;
@@ -134,8 +137,10 @@ handler through a read/write GATT characteristic.
 **Acceptance criteria:**
 
 - [ ] `TETON-DEMO-001` advertises a fixed service UUID discoverable by another machine.
-- [ ] The endpoint accepts only `hello`; malformed writes fail without raw payload logging.
-- [ ] Startup failure and normal shutdown cleanly report/release registrations.
+- [x] The endpoint accepts only `hello`; malformed writes fail without raw payload logging.
+  (Unit-tested in `device/main.rs`; not yet exercised over the air.)
+- [x] Startup failure and normal shutdown cleanly report/release registrations.
+  (rfkill failure reported; SIGINT releases the advertisement and service UUID: `demo/host-ble-endpoint.txt`.)
 
 **Verification:** `cargo test --features ble --bin device --locked`; live
 advertisement discovery from the configurator, with sanitized evidence recorded.
@@ -172,7 +177,9 @@ a transport probe, not the final provisioning UI.
 **Acceptance criteria:**
 
 - [ ] Android client starts offline, discovers/connects/exchanges hello, and reconnects.
+  (Not physically tested by the user's decision on 2026-10-18; same code as iPhone.)
 - [ ] iPhone client starts offline, discovers/connects/exchanges hello, and reconnects.
+  (Client built: `configurator/`, Expo hello probe, decision 23. Needs an EAS iOS build.)
 - [ ] Both runs use Internet disabled and no shared LAN; no device screen, SSH,
   credentials, or technical operator commands are required to complete the exchange.
 

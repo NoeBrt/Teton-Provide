@@ -1,0 +1,15 @@
+[Unit]
+Description=Teton provisioning BLE endpoint (hello probe)
+After=bluetooth.service
+# Stop/restart with BlueZ: registrations do not survive a bluetoothd restart.
+Requires=bluetooth.service
+
+[Service]
+ExecStart=/usr/local/bin/teton-device
+Restart=on-failure
+RestartSec=2
+DynamicUser=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
