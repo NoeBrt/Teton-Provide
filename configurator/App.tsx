@@ -450,7 +450,8 @@ export default function App() {
     })
     .sort((a, b) => (ORDER[groupOf(a.id) ?? ''] ?? 4) - (ORDER[groupOf(b.id) ?? ''] ?? 4));
   const counts = Object.values(batch).reduce((n, entry) => ({ ...n, [entry.state]: (n[entry.state] ?? 0) + 1 }), {} as Record<string, number>);
-  const readyIds = Object.values(sensors).filter(sensor => sensorState(sensor.advertising) === 'ready' && !running[sensor.id]).map(sensor => sensor.id);
+  // Sensors this batch already tried are offered again through Retry failed, not here.
+  const readyIds = Object.values(sensors).filter(sensor => sensorState(sensor.advertising) === 'ready' && !running[sensor.id] && !batch[sensor.id]).map(sensor => sensor.id);
   const failedIds = Object.entries(batch).filter(([, entry]) => entry.state === 'failed' || entry.state === 'stopped').map(([id]) => id);
   const batching = batchActive.current;
 

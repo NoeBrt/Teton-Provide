@@ -1,15 +1,17 @@
-# Credential Protection: Bootstrap Review
+# Credential Protection
 
-Status: **implemented** (commits `f2f6363`, `12b6e19`), with the deviations marked below. The design came
-from an independent security review (2026-10-18); `docs/ARCHITECTURE.md` explains it for readers, and
+Status: **implemented** (commit `52644b3`), with the deviations marked below. It replaces the QR-label protocol of
+the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sensors; decision 27 of
+`docs/DECISIONS.md` records why and what was chosen. `docs/ARCHITECTURE.md` explains it for readers, and
 `tasks/compliance.md` tracks which of the tests at the end of this file have run.
 
 ## Constraints
 
 - The device is headless: no screen, keyboard, or button for a pairing PIN.
 - Android and iPhone must both work with the same technician flow, offline.
-- The only trusted out-of-band channel is the physical label on the device.
-  Labels sit in patient rooms: assume anyone can photograph or cover one.
+- 200 sensors per wing: no per-sensor label, scan or secret for the technician to handle.
+- Threat: a rogue device in radio range that advertises like a Teton sensor, to collect the site password or to
+  make the technician believe a sensor is set up. Also: someone with the app but no right to use it.
 - The technician is not a developer; no PIN typing, no OS pairing dialogs.
 
 ## Options reviewed
@@ -19,95 +21,92 @@ from an independent security review (2026-10-18); `docs/ARCHITECTURE.md` explain
 | BLE "Just Works" pairing | Rejected | Encrypts the link but authenticates nobody; an active man-in-the-middle wins. |
 | Static passkey printed on the label | Rejected | A reused passkey leaks to an active attacker in at most ~19 reconnects ([Insinuator](https://insinuator.net/2021/10/change-your-ble-passkey-like-you-change-your-underwear/), [CVE-2020-26558](https://nvd.nist.gov/vuln/detail/CVE-2020-26558)). |
 | LE Secure Connections OOB (key from QR) | Rejected | Not available to iOS apps ([Apple DTS](https://developer.apple.com/forums/thread/758122)); on Android `createBondOutOfBand` is a `@SystemApi`, absent from the public SDK ([AOSP](https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/BluetoothDevice.java)). |
-| Application channel, Noise `NKpsk2`, key and secret in QR | **Recommended** | Works over plain GATT on both platforms; the device proves its key, the phone proves it read the label; no OS pairing UI. |
-| SRP6a with a label secret (ESP-IDF Security 2 model) | Alternative | Proven BLE provisioning precedent ([ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/api-reference/provisioning/provisioning.html)); needs a long label secret and a less common SRP stack on the device. |
+| Noise `NKpsk2`, key and secret in a QR label (first milestone) | Replaced | Sound, but one label scan per sensor and a secret printed in every patient room. |
+| **Noise `XX`, device certificate from a Teton authority, technician token** | **Implemented** | Matter's model (device attestation) without a secure element: the sensor proves a key that Teton certified; the phone proves a code that Teton issued. Plain GATT on both platforms, no OS pairing UI, nothing to scan per sensor. |
+| Sensor list from Smith before the visit | Later | Adds room mapping and revocation; needs the phone to sync before the visit. Out of scope for the demo. |
 
-Further alternatives (short code with a PAKE, a Smith manifest, Teton device attestation) and their conclusions are
-recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
+## Design
 
-## Recommended design
-
-1. **Staging, not BLE.** A local staging command generates the device's static
-   X25519 key and a 256-bit label secret atomically in the service's
-   `StateDirectory` (mode 0600; the unit gains `StateDirectory=` then), and prints
-   the label: device ID, public key, secret. Staging rejects duplicate keys, so a
-   golden image booted once cannot clone a key across the fleet, and checks each
-   printed label with a real handshake. At runtime the key is never regenerated:
-   no key means no advertising.
-2. **Discovery.** The phone scans the QR, then connects to the advertisement
-   whose name matches the ID. The name is a hint only; the keys decide.
-   A QR without key and secret, or a typed ID, never leads to sending.
-3. **Handshake.** `Noise_NKpsk2_25519_ChaChaPoly_SHA256`. NK authenticates the
-   device to the phone; the `psk2` label secret authenticates the phone, so the
-   public key can leak through inventories without granting access. The prologue
-   binds the protocol version and device ID. Device side: `snow` 0.10 (Rust ≥ 1.85,
-   [not formally audited](https://github.com/mcginty/snow)). Phone side: pure-JavaScript `@noble` curves,
-   ciphers and hashes (`configurator/src/noise.ts`), checked byte for byte against a `snow` transcript.
-4. **Credentials.** Sent only as Noise transport messages after the handshake.
-   The payload carries SSID, password, and a random 128-bit attempt ID. AEAD gives
-   confidentiality and integrity; per-message nonces reject reordering and replay.
-5. **Activation.** The device records the attempt as *pending* with
-   hash(SSID‖password), then calls NetworkManager over D-Bus. The password never
-   appears in argv, logs, or BLE plaintext.
-6. **Result.** Inside the channel, the device reports the attempt ID, the state of
-   that exact connection profile, and the IP observed after activation. Only that
-   answer may show **Device connected**.
+1. **Two authorities, at Teton.** `authority init` creates two Ed25519 keys (0600, kept offline): the **device
+   authority** certifies sensors, the **technician authority** issues technician codes. The app embeds the device
+   authority's public key; each sensor stores the technician authority's.
+2. **Staging, not BLE.** On the sensor, `stage init` creates its static X25519 key (0600, never regenerated) and
+   prints the public key. At the workshop, `authority certify` signs `[version][public key][customer]` with the
+   domain `teton-device-cert/1`; `stage install` stores that certificate and the technician authority's key. A
+   sensor without a certificate advertises **not staged** and offers no provisioning.
+3. **Identity.** The sensor advertises `TETON-` and 10 hex digits of SHA-256 of its public key (40 bits), and one
+   state byte (not staged, ready, online, offline). The name is a hint only; the handshake decides.
+4. **Handshake.** `Noise_XX_25519_ChaChaPoly_SHA256`, prologue `teton-provision/2`. Message 2 carries the sensor's
+   static key and its certificate, encrypted. The phone checks, before message 3: the device authority's signature
+   (`verify_strict` semantics, `zip215: false`), that the certified key is the key the sensor just proved, that the
+   certified ID is the advertised name, and that the token covers the certified customer. Any failure ends the
+   session with **not a genuine Teton sensor** or **another customer's sensor**; the phone has sent nothing but an
+   ephemeral key.
+5. **Technician code.** Message 3 carries the phone's token: `[version][expiry][name][customers]` signed with the
+   domain `teton-technician-token/1`. The sensor checks the signature, that its own customer is listed, and that
+   `max(clock, firmware build date)` is before the expiry, then answers inside the channel: accepted, or refused
+   with a reason (invalid, other customer, expired). A refused session closes.
+6. **Credentials.** Sent only as Noise transport messages after the token is accepted: SSID, password, and a random
+   128-bit attempt ID. AEAD gives confidentiality and integrity; per-message nonces reject reordering and replay.
+7. **Activation.** The device records the attempt as *pending* with hash(SSID‖password), then calls NetworkManager
+   over D-Bus with the profile it is not using (two fixed UUIDs alternate). The password never appears in argv,
+   logs, or BLE plaintext.
+8. **Result.** Inside the channel, the device reports the attempt ID, the state of that exact profile, and the IP
+   observed after activation. Only that answer may show **Device connected**.
 
 ## Site credentials versus device secrets
 
-- **Label secret and key:** unique per device; they only open the BLE channel.
-- **Site profile:** SSID and password, entered once per intervention (or loaded as a
-  profile signed by Smith) and kept in the phone's Keychain or Keystore until the
-  technician taps *Finish*. Each device receives it inside its own Noise session.
-- **Shared password risk:** with WPA2-Personal all sensors hold the same password,
-  so one extracted sensor exposes the network and revocation means rotating it
-  everywhere. Prefer per-device credentials in production: EAP-TLS certificates or
-  per-device PSKs (PPSK/iPSK), issued by Smith and bound to the scanned device ID.
-  The demo uses WPA2-Personal.
+- **Device key:** unique per sensor, never leaves its state directory. The certificate is public.
+- **Technician code:** a bearer credential. The app keeps it in its own Keychain entry behind Face ID
+  (`requireAuthentication`, this device only); its name, customers and expiry sit beside it, unprotected, so the app
+  can show them.
+- **Site profile:** SSID and password, saved per facility in the Keychain behind Face ID, unlocked once per session.
+  Each sensor receives it inside its own Noise session.
+- **Shared password risk:** with WPA2-Personal all sensors hold the same password, so one extracted sensor exposes
+  the network and revocation means rotating it everywhere. Prefer per-device credentials in production: EAP-TLS
+  certificates or per-device PSKs (PPSK/iPSK), issued by Smith. The demo uses WPA2-Personal.
 
 ## Policies
 
-- **Authorization.** Holding the label secret authorizes the *first* provisioning.
-  For a 200-device rollout the phone also checks the scanned key against a fleet
-  manifest signed by Smith and preloaded, which defeats a QR stuck over the label.
-- **Single use.** Success is terminal: the device unregisters the provisioning
-  GATT service 2 min after success, which leaves time to read the result or recover it with a retry. DEVIATION: it does not actively
-  disconnect peers; they lose the service. A provisioned device never reopens
-  provisioning after a restart, crash, or power cut; software cannot tell those
-  apart. Re-provisioning needs a re-provision token signed by Smith, or a
-  workshop reset that issues a new label secret.
-- **Concurrency.** Noise state is kept per connection; one attempt is in flight at
-  a time and a second client is refused, not queued. (Decision 21's single
-  response slot is for the hello probe only.)
-- **Replay and retries.** Fresh device ephemerals give a replayed session new keys.
-  A repeated attempt ID with the same payload hash returns its stored result; the
-  same ID with a different hash is rejected, so a corrected password needs a new ID.
-- **Interrupted result.** The phone reconnects, runs a new handshake, and asks for
-  the attempt ID. Results live in memory; after a reboot the app shows *unknown*.
-- **Timeouts.** Handshake and idle timeouts drop peers that hold the link open.
-- **No downgrade.** The hello characteristic stays hello-only; there is no plaintext
-  credential path and no build flag that enables one.
-- **Logs.** Outcomes and attempt IDs only; never SSID, password, keys, or addresses.
-- **Framing.** DEVIATION: no chunk layer. Each Noise message travels in one acknowledged GATT write of at most
-  512 bytes (the longest is 131), and the phone forbids the BLE library from splitting it. A longer message
-  is rejected, not reassembled.
+- **Authorization.** A valid technician code for the sensor's customer authorizes setup and reconfiguration.
+  Without one, a phone gets no further than the handshake.
+- **Reconfiguration.** A provisioned sensor keeps its provisioning service and accepts a new network from a phone with
+  a valid code. If the new network fails, the device reactivates the previous profile; the new one is recorded only
+  after it is active with an address. This replaces the first milestone's single-use rule.
+- **Concurrency.** Noise state is kept per connection. The one-phone claim starts only when a token is accepted, so
+  a replayed or unauthenticated session cannot lock the sensor; a second authorized phone gets "busy".
+- **Replay and retries.** Fresh ephemerals on both sides give a replayed session new keys. A repeated attempt ID with
+  the same payload hash returns its stored result; the same ID with a different hash is rejected.
+- **Interrupted result.** The phone reconnects, runs a new handshake, and asks for the attempt ID. Results live in
+  memory; after a reboot the app shows *unknown*.
+- **Clock.** Sensors may boot offline with a wrong clock. The firmware build date is the floor, so a code that expired
+  before the firmware was built is always refused. DEVIATION: a sensor whose clock runs late accepts a code past its
+  expiry, by up to that lag.
+- **Timeouts.** Idle sessions are dropped after 60 s.
+- **No downgrade.** The hello characteristic stays hello-only; there is no plaintext credential path and no build flag
+  that enables one.
+- **Logs.** Outcomes and attempt IDs only; never SSID, password, tokens, keys, or addresses.
+- **Framing.** DEVIATION: no chunk layer. Each Noise message travels in one acknowledged GATT write of at most 512
+  bytes (the largest token, 8 customers and a 64-byte name, fits), and the phone forbids the BLE library from
+  splitting it. A longer message is rejected, not reassembled.
 
 ## Accepted risks for the demo
 
-- No signed fleet manifest: a substituted QR label is not detected. Mitigate with
-  tamper-evident labels; the manifest is part of the 200-device design.
+- Device keys sit in a file, not a secure element. A key extracted from one sensor impersonates that sensor; there
+  is no revocation list yet.
+- A leaked technician code works for its customers until it expires (30 days). It is not bound to one phone.
+- The demo authorities live on noe-lab (0600, outside the repository), not on an offline machine.
 - NetworkManager stores the PSK in a root-only system connection file.
-- Polkit rules letting a `DynamicUser` service create NetworkManager profiles are
-  not yet verified.
 
 ## Tests required before enabling secrets
 
-- A handshake against a wrong device key or without the label secret fails before
-  any credential is sent.
-- Tampered, truncated, reordered, and replayed frames are rejected.
-- A BLE capture (`btmon` on the device) contains no SSID or password bytes.
-- After success, a second phone holding the label can neither connect to the
-  provisioning service nor reopen it by restarting the service or the machine.
-- Wrong password, unreachable network, and existing or fallback connections never
-  report success; interrupted results recover by attempt ID or stay unknown.
+- A sensor that copies a genuine certificate, presents another authority's certificate, or advertises another ID never
+  receives the token or the credentials. (`src/provision.rs`, `configurator/src/setup.test.ts`)
+- Tokens for another customer, expired or forged are refused and close the session. (`src/provision.rs`,
+  `src/authority.rs`)
+- Tampered, truncated, reordered, and replayed frames are rejected. (`configurator/src/noise.test.ts`,
+  `src/provision.rs`)
+- A BLE capture (`btmon` on the device) contains no SSID or password bytes. (`demo/real-join.txt`, first protocol)
+- Wrong password, unreachable network, and existing or fallback connections never report success; a failed
+  reconfiguration returns to the previous network. (NOT_RUN on hardware)
 - Oversized and malformed frames are rejected without panic (unit tests; no fuzzing yet).
