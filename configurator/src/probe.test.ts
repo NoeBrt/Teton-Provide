@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { probe, type BleLink } from './probe.ts';
+import { changed, probe, sensorState, type BleLink } from './probe.ts';
 
 const text = (data: number[]) => String.fromCharCode(...data);
 
@@ -64,4 +64,25 @@ test('a connection that never answers times out instead of hanging', { timeout: 
   assert.deepEqual(result.ok ? null : [result.step, result.reason], ['connect', 'timeout']);
   assert.deepEqual(steps, ['connect']);
   assert.deepEqual(calls, ['disconnect']);
+});
+
+test('the advertised state byte (manufacturer data 0xFFFF) tells what a sensor is ready for', () => {
+  const adv = (bytes: number[]) => ({ manufacturerData: { ffff: { bytes } } });
+  assert.equal(sensorState(adv([0])), 'not-staged');
+  assert.equal(sensorState(adv([1])), 'ready');
+  assert.equal(sensorState(adv([2])), 'online');
+  assert.equal(sensorState(adv([3])), 'offline');
+  assert.equal(sensorState(adv([9])), null, 'unknown value');
+  assert.equal(sensorState({ manufacturerData: { '004c': { bytes: [2] } } }), null, 'another company');
+  assert.equal(sensorState(undefined), null, 'older firmware advertises nothing');
+});
+
+test('a rediscovered sensor is redrawn only when its state, name or signal (5 dB or more) changed', () => {
+  const seen = (rssi: number, state?: number, localName?: string) =>
+    ({ rssi, advertising: { localName, manufacturerData: state === undefined ? undefined : { ffff: { bytes: [state] } } } });
+  assert.equal(changed(undefined, seen(-50, 1)), true, 'first sighting');
+  assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-52, 1, 'TETON-DEMO-001')), false, 'same state, small signal change');
+  assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-56, 1, 'TETON-DEMO-001')), true, 'signal moved 6 dB');
+  assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-50, 2, 'TETON-DEMO-001')), true, 'set up');
+  assert.equal(changed(seen(-50, 1), seen(-50, 1, 'TETON-DEMO-001')), true, 'name from the scan response');
 });

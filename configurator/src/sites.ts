@@ -1,4 +1,5 @@
 import { credentialError } from './provision.ts';
+import type { SensorState } from './probe.ts';
 
 // A technician serves several facilities over the year: each saved site is a name they chose and the network
 // to join there. The password is stored apart, behind Face ID (src/SiteSheet.tsx), and never listed.
@@ -10,6 +11,21 @@ export type SiteNetwork = { ssid: string; password: string };
 export const upsertSite = (sites: Site[], site: Site): Site[] => [site, ...sites.filter(s => s.id !== site.id)];
 
 export const removeSite = (sites: Site[], id: string): Site[] => sites.filter(s => s.id !== id);
+
+/** The sensors this phone set up: sensor name → site id, so a card can name the site later. Not secret. */
+// ponytail: a sensor reset in the workshop and set up elsewhere by another phone keeps this phone's old site name.
+export type Setups = Record<string, string>;
+
+/** The line under a sensor's name, from its advertised state and the site this phone set it up on, if any. */
+export function stateText(state: SensorState, site: string | null): string {
+  const where = site ?? 'its Wi‑Fi';
+  switch (state) {
+    case 'ready': return 'Ready to set up';
+    case 'online': return `✓ Set up · connected to ${where}`;
+    case 'offline': return `Set up · not connected to ${where}`;
+    case 'not-staged': return 'Not prepared for setup';
+  }
+}
 
 // `KEY:value;` with `\` escaping `\ ; , : "` inside the value; the last field may omit its `;`.
 const WIFI_FIELD = /([A-Z]+):((?:\\.|[^\\;])*)(?:;|$)/g;

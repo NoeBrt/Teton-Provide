@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { credentialError } from './provision.ts';
-import { parseWifiQr, removeSite, upsertSite, type Site } from './sites.ts';
+import { parseWifiQr, removeSite, upsertSite, type Setups, type Site } from './sites.ts';
 import { QrCamera } from './QrCamera';
 import { C, F } from './theme.ts';
 
@@ -30,6 +30,19 @@ export async function loadSites(): Promise<{ sites: Site[]; activeId: string | n
   const activeId = await SecureStore.getItemAsync(ACTIVE, STORED).catch(() => null);
   return { sites, activeId: sites.some(site => site.id === activeId) ? activeId : null };
 }
+
+const SETUPS = 'setups';
+
+export async function loadSetups(): Promise<Setups> {
+  try {
+    const parsed: unknown = JSON.parse((await SecureStore.getItemAsync(SETUPS, STORED)) ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Setups) : {};
+  } catch {
+    return {};
+  }
+}
+
+export const saveSetups = (setups: Setups) => SecureStore.setItemAsync(SETUPS, JSON.stringify(setups), STORED).catch(() => {});
 
 export const setActiveSite = (id: string | null) =>
   (id ? SecureStore.setItemAsync(ACTIVE, id, STORED) : SecureStore.deleteItemAsync(ACTIVE, STORED)).catch(() => {});
