@@ -7,7 +7,8 @@ const RESPONSE = bytes('world');
 // The subset of react-native-ble-manager the probe needs, so tests can use a fake.
 export interface BleLink {
   connect(id: string): Promise<void>;
-  retrieveServices(id: string, serviceUUIDs: string[]): Promise<unknown>;
+  /** Discovers the services; `characteristics` lists what the peripheral exposes (react-native-ble-manager PeripheralInfo). */
+  retrieveServices(id: string, serviceUUIDs: string[]): Promise<{ characteristics?: { service?: string; characteristic: string }[] }>;
   /** `maxByteSize`: the library splits larger data into separate writes (default 20 bytes). */
   write(id: string, service: string, characteristic: string, data: number[], maxByteSize?: number): Promise<void>;
   read(id: string, service: string, characteristic: string): Promise<number[]>;

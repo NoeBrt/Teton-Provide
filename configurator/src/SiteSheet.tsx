@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { credentialError } from './provision.ts';
-import { removeSite, upsertSite, type Site } from './sites.ts';
+import { parseWifiQr, removeSite, upsertSite, type Site } from './sites.ts';
+import { QrCamera } from './QrCamera';
 import { C, F } from './theme.ts';
 
 // Saved sites live in the Keychain on this phone only. Each password sits in its own entry behind Face ID
@@ -75,6 +76,7 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
   const [password, setPassword] = useState('');
   const [shown, setShown] = useState(false); // a mistyped password is the most likely failure: let the technician check it
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false); // reading the network's Wi-Fi QR code instead of typing it
   const ssidField = useRef<TextInput>(null);
   const passwordField = useRef<TextInput>(null);
 
@@ -84,8 +86,18 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
     setSsid(site === 'new' ? '' : site.ssid);
     setPassword('');
     setError(null);
+    setScanning(false);
   };
   const back = () => (sites.length === 0 ? onClose() : setEditing(null));
+  // The camera keeps reading until a code the sensors can use fills both fields.
+  const scanned = (data: string) => {
+    const result = parseWifiQr(data);
+    if ('error' in result) return setError(result.error);
+    setSsid(result.ssid);
+    setPassword(result.password);
+    setError(null);
+    setScanning(false);
+  };
 
   const save = async () => {
     if (!name.trim()) return setError('Give the site a name, for example the building.');
@@ -137,6 +149,20 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
             <>
               <Text style={s.title} maxFontSizeMultiplier={1.3}>{editing === 'new' ? 'New site' : 'Edit site'}</Text>
               <Text style={s.text}>Every sensor you set up here joins this network.</Text>
+              {scanning ? (
+                <>
+                  <QrCamera hint={`The camera reads the network's ${NB} QR code. Nothing is recorded.`} onData={scanned} style={s.camera} />
+                  <Text style={s.text}>Point the camera at the {NB} QR code: a guest {NB} poster, or {NB} › Share on an Android phone.</Text>
+                  {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
+                  <Pressable style={s.secondary} onPress={() => { setError(null); setScanning(false); }} accessibilityRole="button">
+                    <Text style={s.secondaryText}>Type it instead</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable style={s.secondary} onPress={() => { setError(null); setScanning(true); }} accessibilityRole="button">
+                  <Text style={s.secondaryText}>Scan the {NB} QR code</Text>
+                </Pressable>
+              )}
               <Text style={s.label}>SITE NAME</Text>
               <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Hôpital Nord – Bât. B" returnKeyType="next"
                 onSubmitEditing={() => ssidField.current?.focus()} submitBehavior="submit" accessibilityLabel="Site name" />
@@ -152,10 +178,12 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
                   <Text style={s.secondaryText}>{shown ? 'Hide' : 'Show'}</Text>
                 </Pressable>
               </View>
-              {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
-              <Pressable style={s.primary} onPress={save} accessibilityRole="button">
-                <Text style={s.primaryText}>Save</Text>
-              </Pressable>
+              {!scanning && error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
+              {!scanning && (
+                <Pressable style={s.primary} onPress={save} accessibilityRole="button">
+                  <Text style={s.primaryText}>Save</Text>
+                </Pressable>
+              )}
               <Pressable style={s.secondary} onPress={back} accessibilityRole="button">
                 <Text style={s.secondaryText}>{sites.length === 0 ? 'Cancel' : 'Back'}</Text>
               </Pressable>
@@ -192,5 +220,6 @@ const s = StyleSheet.create({
   secondary: { borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
   secondaryText: { fontFamily: F.medium, fontSize: 16, color: C.ink },
   link: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  camera: { height: 280 }, // inside a scroll view: a fixed height
   linkText: { fontFamily: F.medium, fontSize: 15, color: C.warn },
 });

@@ -58,7 +58,8 @@ acknowledged write, and exists only while the device is staged and not yet provi
 Video, 33 s: [architecture/demo-simulator.mp4](architecture/demo-simulator.mp4).
 
 The technician taps **Set up** on a sensor. The first time, the app asks for the site Wi-Fi (facility name,
-network, password) and keeps it in the Keychain behind Face ID. Then it opens the camera on the sensor's label,
+network, password), typed or scanned from the network's standard Wi-Fi QR code, and keeps it in the Keychain
+behind Face ID. Then it opens the camera on the sensor's label,
 runs the four steps (connecting, securing the channel, sending the network, joining the Wi-Fi) and shows the
 result in that sensor's card. The next sensor in the room needs one tap and one scan. Errors name the fix:
 "The Wi-Fi password was refused. Edit the site password, then try again." The device needs no screen, keyboard or

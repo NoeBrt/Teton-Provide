@@ -71,3 +71,11 @@ test('cancelling the network form forgets the waiting sensor', () => {
   flow.cancelNetwork();
   assert.equal(flow.networkSaved(site), null);
 });
+
+test('a sensor closed to setup is a plain failure: nothing to recover, and its label stays known', () => {
+  const flow = new SetupFlow(site);
+  flow.request('s1');
+  flow.labelScanned('s1', label());
+  flow.finished('s1', { ok: false, step: 'connect', reason: 'closed' });
+  assert.deepEqual(flow.request('s1'), { kind: 'join', sensorId: 's1', label: label(), site, attempt: undefined });
+});

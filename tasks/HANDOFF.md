@@ -326,3 +326,22 @@ review, and a measurement of the affected path. Document measurement limits.
   replays the snow transcript so the app's real Noise code runs; `TETON-DEMO-002` answers with a mismatched key.
   The harness is not in the repo; the real app was rebuilt and reinstalled on that simulator.
 - Still open: README for Ubuntu (GAP), real join and btmon capture (cable), systemd unit, offline run, Android.
+
+## Step 14 — Device service unit, README for reviewers, Wi-Fi QR scan
+
+- systemd: `device/systemd/teton-device.service` runs as system user `teton` with `StateDirectory=teton-device`,
+  hardening, and a polkit grant for its NetworkManager profile (`.pkla` for polkit 0.105 / Ubuntu 22.04, `.rules`
+  for 24.04); `device/systemd/install.sh` installs everything. Verified with `systemd-analyze verify`; not
+  installed yet (needs sudo on noe-lab). Install keeps the staged identity so the printed label stays valid.
+- `README.md` rewritten for the reviewers: hardware table, Ubuntu setup, staging, demo, reset, tests, evidence.
+- Configurator: the site form reads a standard Wi-Fi QR code (`parseWifiQr`, shared `QrCamera` with a Settings
+  path after a camera refusal); Set up on a sensor without the provisioning characteristic (already set up, or
+  not staged) now says so instead of "The Bluetooth link failed". Code review (9 findings) fixed: quoted values
+  ending in an escaped backslash, data after `;;`, a last field without `;`, WPA3 transition codes (`T:SAE`),
+  typed `retrieveServices`, camera permission dead end, Save hidden while scanning, camera component split.
+- Evidence: `npm test` 39/39, typecheck, lint; Rust 40 and 70 tests unchanged. `ACTUAL` (user, iPhone 15 Pro):
+  the real network's Wi-Fi QR fills the site form. The iPhone runs this build; free signature until 2026-10-26.
+- noe-lab: a hello-only device instance runs by hand (`STATE_DIRECTORY=/tmp/teton-hello-only`) so the app has a
+  sensor to show; stop it before installing the service.
+- Next owner: the user runs `sudo device/systemd/install.sh wlo1` and copies `state/identity` (README); then
+  restart/reboot and offline hello evidence; then the cable and the real join with `btmon`.

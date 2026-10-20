@@ -4,7 +4,7 @@ Re-checked after every step against the challenge PDF (`Technical_Interview_Chal
 technician user stories (README, "Technician experience"). **PASS** is backed by evidence, **NOT_RUN** is built
 but unproven on hardware, **GAP** is missing. Evidence classes stay distinct (`tasks/HANDOFF.md`).
 
-Last check: 2026-10-20, after the architecture writeup (diagrams, Simulator screens and video); real Wi-Fi still waits for the Ethernet cable.
+Last check: 2026-10-20, after the Wi-Fi QR scan, the "sensor not open for setup" message and their review; real Wi-Fi still waits for the Ethernet cable.
 
 ## PDF constraints (all four required)
 
@@ -13,14 +13,14 @@ Last check: 2026-10-20, after the architecture writeup (diagrams, Simulator scre
 | 1 | **No internet**: local channel, no cloud relay, no shared local network at the start | PASS (design), NOT_RUN (offline run) | BLE only, no IP between phone and device; the app is a bundled Release build, crypto is pure JS (`@noble`). Missing: a run with Internet off and no shared LAN. |
 | 2 | **Real network connection** with the received credentials | NOT_RUN | `device/wifi.rs` creates and activates a NetworkManager profile over D-Bus and checks that exact profile holds an IPv4. Waiting for the Ethernet cable so `wlo1` can be provisioned without cutting SSH. |
 | 3 | **No plaintext credentials over the air** | PASS (code, `COMMAND_FIXTURE`), NOT_RUN (capture) | Noise `NKpsk2`, keys from the label; credentials only after the handshake (`demo/tdd-provision.txt`, `setup.test.ts`: a device failing the handshake never receives them). Missing: `btmon` capture with no SSID/password bytes. |
-| 4 | **Usable by a non-developer** | PASS (app flow, `SIMULATION`), GAP (device start) | Site Wi-Fi once, **Set up**, scan the label, plain-language progress and errors, retry. GAP: the device service is still started over SSH; the systemd unit must start it at boot. |
+| 4 | **Usable by a non-developer** | PASS (app flow, `SIMULATION`), NOT_RUN (device start) | Site Wi-Fi once, **Set up**, scan the label, plain-language progress and errors, retry. Device start: systemd unit with its own user, state directory and polkit rule, plus `device/systemd/install.sh`; written and verified with `systemd-analyze`, not yet installed (needs sudo on noe-lab). |
 
 ## Submission list
 
 | Item | Status | Notes |
 |---|---|---|
 | Working code, configurator and device | PASS | `configurator/` (Expo, iPhone), `device/` + `src/` (Rust, BlueZ, NetworkManager). |
-| README reproducible on a standard Ubuntu machine, hardware assumptions | GAP | Must add: `stage`, `--features ble,stage`, `libdbus-1-dev`, NetworkManager permission (polkit or root), BLE + Wi-Fi adapter, Ethernet for management. |
+| README reproducible on a standard Ubuntu machine, hardware assumptions | PARTIAL | Rewritten: hardware table, Ubuntu packages, build, install script, staging, demo, reset, tests (40 / 70 / 29 pass), evidence. NOT_RUN: the install script, and any run on a clean machine or on Ubuntu 24.04. |
 | Architecture: channel choice and trade-offs | PASS | `docs/ARCHITECTURE.md` "Why Bluetooth Low Energy": decision tree, alternatives table (SoftAP, DPP, Web Bluetooth, camera QR, USB), costs of BLE, Teton hardware assumption. |
 | Architecture: credentials in transit | PASS | `docs/ARCHITECTURE.md` "How credentials are protected"; `docs/SECURITY.md` now states the implemented protocol and its deviations (no chunk layer, peers not disconnected). |
 | Architecture: 200 devices, non-technical team | PASS (design) | `docs/ARCHITECTURE.md` "200 devices in a hospital wing": Smith work order, per-device credentials, room batches, stop on first wrong password, staggered joins, result sync. Not implemented. |
@@ -31,10 +31,10 @@ Last check: 2026-10-20, after the architecture writeup (diagrams, Simulator scre
 | Story | Status | Notes |
 |---|---|---|
 | Open the prepared app and identify the device by its physical label | PASS (code) | QR label scan; a label for another sensor is refused. Camera not testable in the Simulator. |
-| Enter the Wi-Fi name and password in a simple form | PASS (code) | Saved **sites** (a technician serves several facilities): name, network, password; pick one per visit. Shown as a one-line requirement above the sensors. |
+| Enter the Wi-Fi name and password in a simple form | PASS (code, iPhone) | Saved **sites** (a technician serves several facilities): name, network, password; pick one per visit. Network and password can also come from the standard Wi-Fi QR code (`WIFI:T:WPA;…`): scanned from the user's real network on the iPhone 15 Pro (2026-10-20). |
 | Tap one button and follow plain-language progress | PASS (`SIMULATION`) | **Set up**: Connecting → Securing the channel → Sending the network → Joining the Wi-Fi. |
 | See **Device connected** with the IP, or an actionable error with retry | PASS (code), NOT_RUN (real) | Success only from the device's report for this attempt. A retry after a lost result reuses the attempt, so the device answers with its stored result. |
-| Device needs no screen, keyboard or SSH during provisioning | GAP | systemd unit not yet updated (`StateDirectory`, NetworkManager permission). |
+| Device needs no screen, keyboard or SSH during provisioning | NOT_RUN | Unit written (`User=teton`, `StateDirectory=`, polkit for NetworkManager); install, restart and reboot tests pending. |
 | Several sensors per room without re-entering credentials | PASS (code) | Site Wi-Fi reused for every sensor; labels kept in memory for retries. |
 | Readable on small screens and with large text (non-developer, hospital hallway) | PASS (`SIMULATION`) | iPhone SE: the large radar shrinks so the first sensor stays visible; accessibility-large: header, title and captions capped at ×1.2–1.3, body text and buttons scale; network name on 2 lines; no hyphen breaks in Wi‑Fi or sensor IDs; password Show/Hide; keyboard never hides Save. |
 | Android | NOT_RUN | Same code; no Android device available (user decision, 2026-10-18). |

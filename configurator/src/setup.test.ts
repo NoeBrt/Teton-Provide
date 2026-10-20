@@ -97,3 +97,18 @@ test('a write refused during the handshake (device busy with another phone) is a
   assert.equal(isUnsettled(result), false, 'nothing reached the device: a retry draws a new attempt');
   assert.equal(writes.length, 0);
 });
+
+test('a sensor without the provisioning characteristic (already set up, or no key yet) is reported before any write', async () => {
+  const { link, writes } = device([m2]);
+  link.retrieveServices = async () => ({ characteristics: [{ service: '3B0A90CE-9564-40D1-B96B-14CF8858ABA3', characteristic: '29B3765C-DE49-4114-889E-89B05852C968' }] });
+  const result = await setup(link, 'id', label, 'Ward-3', 'correct horse', scripted(), () => {}, fast);
+  assert.deepEqual(result, { ok: false, step: 'connect', reason: 'closed' });
+  assert.equal(writes.length, 0);
+});
+
+test('a listed provisioning characteristic matches whatever the case of its UUID', async () => {
+  const { link } = device([m2, response1, response2]);
+  link.retrieveServices = async () => ({ characteristics: [{ service: '3B0A90CE-9564-40D1-B96B-14CF8858ABA3', characteristic: '3C2C02FA-847E-480C-9F22-B239DFA524C9' }] });
+  const result = await setup(link, 'id', label, 'Ward-3', 'correct horse', scripted(), () => {}, fast);
+  assert.equal(result.ok, true);
+});
