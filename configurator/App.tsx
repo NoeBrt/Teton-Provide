@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, AppState, Image, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -10,10 +10,11 @@ import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
 import { changed, probe, SERVICE_UUID, sensorState, type ProbeResult, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
 import * as Crypto from 'expo-crypto';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setup, type SetupFailure, type SetupResult, type SetupStep } from './src/setup';
-import { SetupFlow, type Action } from './src/flow';
+import { expired, SetupFlow, type Action } from './src/flow';
 import { runBatch, type BatchEntry, type BatchSummary } from './src/batch';
-import { TOKEN_LINK, type Token } from './src/authority';
+import type { Token } from './src/authority';
 import { expiryText, loadTokenInfo, TechnicianSheet, tokenProblem, unlockToken, type TokenInfo } from './src/TechnicianSheet';
 import { loadSetups, loadSites, saveSetups, setActiveSite, SitesSheet, unlockPassword } from './src/SiteSheet';
 import { stateText, type Setups, type Site, type SiteNetwork } from './src/sites';
@@ -48,6 +49,22 @@ const SUCCESS_SHOWN_MS = 8000; // then the card folds back; its state line and t
 // The radar's resize, its move into the row and the list's arrival share one curve, on the UI thread.
 const layout = LinearTransition.duration(RESIZE.duration).easing(RESIZE.easing);
 const appear = FadeIn.duration(RESIZE.duration).delay(RESIZE.duration / 2);
+// During and after a batch, the list puts failures first and can show one group at a time.
+const ORDER: Record<string, number> = { failed: 0, stopped: 1, running: 2, queued: 3, ok: 5 };
+let logKey = 0; // log lines finished in the same millisecond still get distinct keys
+const SHEET_GONE_MS = 600; // an iOS sheet's dismissal, with a margin
+
+/** True once `shown` has been false for SHEET_GONE_MS. RN's Modal on iOS drops, and never retries, a sheet presented
+ *  while another one is still sliding away. ponytail: a fixed delay; open from Modal onDismiss if it proves short. */
+function useGone(shown: boolean) {
+  const [gone, setGone] = useState(true);
+  useEffect(() => {
+    if (shown) { setGone(false); return; }
+    const timer = setTimeout(() => setGone(true), SHEET_GONE_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
+  return gone && !shown;
+}
 
 const BLE_HELP: Partial<Record<BleState, string>> = {
   [BleState.Off]: 'Bluetooth is off. Turn it on in Control Center.',
@@ -64,10 +81,6 @@ function failureText(result: Extract<ProbeResult, { ok: false }>): string {
   return 'The Bluetooth link failed. Try again.';
 }
 
-function setupFailureText(result: Extract<SetupResult, { ok: false }>): string {
-  return reasonText(result.reason, result.step);
-}
-
 function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect'): string {
   switch (reason) {
     case 'WrongPsk': return 'The Wi‑Fi password was refused. Edit the site password, then try again.';
@@ -81,6 +94,7 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
     case 'token-expired': return 'Your technician code has expired. Ask IoT for a new one.';
     case 'closed': return 'This sensor is not prepared for setup yet. Test still checks that it answers.';
     case 'unknown': return 'The sensor restarted and lost the result. Try again.';
+    case 'locked': return 'The technician code or the site Wi‑Fi is no longer unlocked (the app was left, or the site was changed). Tap Retry failed to unlock them.';
     case 'Timeout':
     case 'timeout': return step === 'join' ? 'The sensor did not join in time. Try again.' : 'The sensor is not responding. Move closer, then try again.';
     default: return 'The Bluetooth link failed. Try again.';
@@ -114,12 +128,15 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
                 <Text style={s.sensorName}>{nameOf(sensor)}</Text>
                 {state && <Text style={[s.small, state === 'online' && s.stateOk, state === 'offline' && s.stateWarn]}>{stateText(state, siteName)}</Text>}
                 {entry?.state === 'queued' && <Text style={s.small}>Waiting in the batch</Text>}
-                {entry?.state === 'stopped' && <Text style={s.stateWarnLine}>Not tried: {reasonText(entry.reason, 'join')}</Text>}
+                {/* A sensor the batch stopped on before trying it (code locked or expired) has no result to say why. */}
+                {(entry?.state === 'stopped' || (entry?.state === 'failed' && !outcome && !active)) && (
+                  <Text style={s.stateWarnLine}>{entry.state === 'stopped' && 'Not tried: '}{reasonText(entry.reason, 'join')}</Text>
+                )}
                 {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
               </View>
             </View>
             <View style={s.row}>
-              <Pressable style={[s.secondary, s.grow, active && mine.kind !== 'test' && s.disabled]} disabled={active || batching} onPress={() => actions.test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
+              <Pressable style={[s.secondary, s.grow, (batching || (active && mine.kind !== 'test')) && s.disabled]} disabled={active || batching} onPress={() => actions.test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
                 {mine?.kind === 'test' ? <ActivityIndicator color={C.ink} accessibilityLabel="Testing" /> : <Text style={s.secondaryText}>Test</Text>}
               </Pressable>
               <Pressable style={[s.primary, s.grow, ((active && mine.kind !== 'setup') || !settable || batching) && s.disabled]} disabled={active || !settable || batching} onPress={() => actions.setUp(sensor)} accessibilityRole="button"
@@ -163,7 +180,8 @@ export default function App() {
   const [choosingSite, setChoosingSite] = useState(false);
   const [setups, setSetups] = useState<Setups>({}); // sensor name → site this phone set it up on
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null); // who this phone's technician code is for
-  const [tokenSheet, setTokenSheet] = useState<{ open: boolean; initial: string | null }>({ open: false, initial: null });
+  // `asked`: the flow opened it for a waiting sensor or batch; `n` counts openings, so each one mounts a fresh sheet.
+  const [tokenSheet, setTokenSheet] = useState({ open: false, asked: false, n: 0 });
   const [batch, setBatch] = useState<Record<string, BatchEntry>>({});
   const [summary, setSummary] = useState<BatchSummary | null>(null);
   const [filter, setFilter] = useState<'all' | 'failed' | 'done' | 'left'>('all');
@@ -180,11 +198,6 @@ export default function App() {
     loadSites().then(saved => { setSites(saved.sites); setActiveId(saved.activeId); });
     loadSetups().then(setSetups);
     loadTokenInfo().then(setTokenInfo);
-    // A technician code arrives as a link (provide://technician/…): opening it fills in the code sheet.
-    const open = (url: string | null) => { if (url?.startsWith(TOKEN_LINK)) setTokenSheet({ open: true, initial: url }); };
-    Linking.getInitialURL().then(open).catch(() => {});
-    const subscription = Linking.addEventListener('url', ({ url }) => open(url));
-    return () => subscription.remove();
   }, []);
   // The site password and the technician code are unlocked once per session and kept in memory only: leaving the
   // app locks them again.
@@ -195,6 +208,7 @@ export default function App() {
     return () => subscription.remove();
   }, []);
   const activeSite = sites.find(site => site.id === activeId) ?? null;
+  const liveToken = tokenInfo && !expired(tokenInfo) ? tokenInfo : null; // an expired code counts as missing
   const activeRef = useRef(activeSite); // a setup finishes renders later: read the site in use then, not a stale one
   activeRef.current = activeSite;
   const remember = (sensorName: string) => {
@@ -269,7 +283,8 @@ export default function App() {
           return rest;
         }), SUCCESS_SHOWN_MS);
       }
-      setAttempts(list => [{ key: Date.now(), at: new Date().toLocaleTimeString('en-GB'), name: nameOf(sensor), ok: outcome.ok, detail }, ...list].slice(0, 10));
+      const key = ++logKey;
+      setAttempts(list => [{ key, at: new Date().toLocaleTimeString('en-GB'), name: nameOf(sensor), ok: outcome.ok, detail }, ...list].slice(0, 10));
       if (!batchActive.current) AccessibilityInfo.announceForAccessibility(`${outcome.title}. ${outcome.text}`);
       return result;
     } finally {
@@ -288,6 +303,7 @@ export default function App() {
   const join = async (sensor: Peripheral, site: SiteNetwork, attempt: Uint8Array | undefined): Promise<SetupResult> => {
     let result: SetupResult = { ok: false, step: 'connect', reason: 'rejected' };
     const token = flow.current.token;
+    const single = !batchActive.current; // decided at the start: a batch may begin while this run lasts
     const done = BleManager && token && await run<SetupResult>(sensor, 'setup', async onStep => {
       try {
         result = await setup(BleManager!, sensor.id, nameOf(sensor), token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt });
@@ -295,9 +311,12 @@ export default function App() {
         flow.current.finished(sensor.id, result);
       }
       if (result.ok) remember(nameOf(sensor));
+      // A single run after a batch keeps that batch's counters, order and Retry failed true.
+      const entry: BatchEntry = result.ok ? { state: 'ok', ipv4: result.ipv4 } : { state: 'failed', reason: result.reason };
+      if (single) setBatch(map => (map[sensor.id] ? { ...map, [sensor.id]: entry } : map));
       return result.ok
         ? { outcome: { ok: true, title: 'Device connected', text: `Joined ${site.ssid} · ${result.ipv4}` }, detail: `✓ wi-fi ${result.ipv4}`, result }
-        : { outcome: { ok: false, title: 'Wi‑Fi setup failed', text: setupFailureText(result) }, detail: `! wi-fi ${result.step} · ${result.reason}`, result };
+        : { outcome: { ok: false, title: 'Wi‑Fi setup failed', text: reasonText(result.reason, result.step) }, detail: `! wi-fi ${result.step} · ${result.reason}`, result };
     });
     if (!done) flow.current.finished(sensor.id, result); // never started: free the sensor in the flow
     return result;
@@ -317,27 +336,32 @@ export default function App() {
   // Credentials for a batch: the code, then the site Wi-Fi, each asked once; the batch starts when both are there.
   const withCredentials = (next: () => void) => {
     afterCredentials.current = next;
-    if (!flow.current.token) return askToken();
+    if (!flow.current.token || expired(flow.current.token)) return askToken();
     if (!flow.current.network) return askNetwork();
     afterCredentials.current = null;
     next();
   };
   const resumeCredentials = () => { const next = afterCredentials.current; if (next) withCredentials(next); };
-  // The technician code: Face ID unlocks the saved one; otherwise the code sheet asks for it.
+  // The technician code: Face ID unlocks the saved one, unless it has expired; otherwise the code sheet asks for it.
   const askToken = async () => {
-    if (tokenInfo) {
+    if (liveToken) {
       const token = await unlockToken();
       if (token && !tokenProblem(token)) return tokenReady(token);
     }
-    setTokenSheet({ open: true, initial: null });
+    setTokenSheet(sheet => ({ open: true, asked: true, n: sheet.n + 1 }));
   };
+  const shutTokenSheet = () => setTokenSheet(sheet => ({ ...sheet, open: false }));
   const tokenReady = (token: Token) => {
-    setTokenSheet({ open: false, initial: null });
+    shutTokenSheet();
     act(flow.current.tokenReady(token));
     resumeCredentials();
   };
   const tokenSaved = (token: Token, info: TokenInfo) => { setTokenInfo(info); tokenReady(token); };
-  const closeToken = () => { flow.current.cancelWaiting(); afterCredentials.current = null; setTokenSheet({ open: false, initial: null }); };
+  // Closing cancels the waiting sensor or batch only if the flow asked for this code, not when the technician opened it.
+  const closeToken = () => {
+    if (tokenSheet.asked) { flow.current.cancelWaiting(); afterCredentials.current = null; }
+    shutTokenSheet();
+  };
   const askNetwork = () => { if (activeSite) unlock(activeSite); else setChoosingSite(true); };
   // Sites: Face ID unlocks the active site's password, then any sensor waiting for it carries on.
   const use = (site: Site, password: string) => {
@@ -353,18 +377,25 @@ export default function App() {
     batchActive.current = true;
     setSummary(null);
     setFilter('all');
-    const result = await runBatch(ids, id => {
-      const action = flow.current.request(id);
-      const sensor = sensorsRef.current[id];
-      if (action.kind !== 'join' || !sensor) {
-        if (action.kind === 'join') flow.current.finished(id, { ok: false, step: 'connect', reason: 'rejected' });
-        return Promise.resolve<SetupResult>({ ok: false, step: 'connect', reason: 'rejected' });
-      }
-      return join(sensor, action.site, action.attempt);
-    }, (id, entry) => setBatch(map => ({ ...map, [id]: entry })));
-    batchActive.current = false;
-    setSummary(result);
-    AccessibilityInfo.announceForAccessibility(`${result.ok} set up, ${result.failed} failed${result.stopped ? `, ${result.stopped} not tried` : ''}.`);
+    try {
+      // Auto-lock would leave the app, which locks the code and the site password: the screen stays on until the end.
+      await activateKeepAwakeAsync('batch').catch(() => {});
+      const result = await runBatch(ids, id => {
+        const action = flow.current.batchRequest(id); // never asks: locked or expired credentials stop the batch
+        if (action.kind === 'stop') return Promise.resolve<SetupResult>({ ok: false, step: 'connect', reason: action.reason });
+        const sensor = sensorsRef.current[id];
+        if (action.kind !== 'join' || !sensor) {
+          if (action.kind === 'join') flow.current.finished(id, { ok: false, step: 'connect', reason: 'rejected' });
+          return Promise.resolve<SetupResult>({ ok: false, step: 'connect', reason: 'rejected' });
+        }
+        return join(sensor, action.site, action.attempt);
+      }, (id, entry) => setBatch(map => ({ ...map, [id]: entry })));
+      setSummary(result);
+      AccessibilityInfo.announceForAccessibility(`${result.ok} set up, ${result.failed} failed${result.stopped ? `, ${result.stopped} not tried` : ''}.`);
+    } finally {
+      batchActive.current = false; // whatever happened, the buttons come back
+      deactivateKeepAwake('batch').catch(() => {});
+    }
   });
   const unlock = async (site: Site) => {
     const password = await unlockPassword(site);
@@ -520,8 +551,6 @@ export default function App() {
   }));
   const compactCaption = useAnimatedStyle(() => ({ opacity: interpolate(geometry.value.progress, [0.7, 1], [0, 1], 'clamp') }));
 
-  // During and after a batch, the list puts failures first and can show one group at a time.
-  const ORDER: Record<string, number> = { failed: 0, stopped: 1, running: 2, queued: 3, ok: 5 };
   const groupOf = (id: string) => batch[id]?.state;
   const shown = Object.values(sensors)
     .filter(sensor => {
@@ -533,10 +562,24 @@ export default function App() {
     })
     .sort((a, b) => (ORDER[groupOf(a.id) ?? ''] ?? 4) - (ORDER[groupOf(b.id) ?? ''] ?? 4));
   const counts = Object.values(batch).reduce((n, entry) => ({ ...n, [entry.state]: (n[entry.state] ?? 0) + 1 }), {} as Record<string, number>);
+  const tally = {
+    all: Object.keys(batch).length, done: counts.ok ?? 0,
+    failed: (counts.failed ?? 0) + (counts.stopped ?? 0), left: (counts.queued ?? 0) + (counts.running ?? 0),
+  };
   // Sensors this batch already tried are offered again through Retry failed, not here.
   const readyIds = Object.values(sensors).filter(sensor => sensorState(sensor.advertising) === 'ready' && !running[sensor.id] && !batch[sensor.id]).map(sensor => sensor.id);
-  const failedIds = Object.entries(batch).filter(([, entry]) => entry.state === 'failed' || entry.state === 'stopped').map(([id]) => id);
+  // Not a sensor that failed to prove it is genuine (retrying would only hand an impostor more time), nor one being set
+  // up by hand right now.
+  const failedIds = Object.entries(batch)
+    .filter(([id, entry]) => !running[id] && ((entry.state === 'failed' && entry.reason !== 'not-genuine') || entry.state === 'stopped'))
+    .map(([id]) => id);
   const batching = batchActive.current;
+  // One sheet at a time, the site sheet first: a sheet asked for while the other one is still sliding away waits for
+  // it to leave.
+  const siteGone = useGone(choosingSite);
+  const codeShown = tokenSheet.open && siteGone;
+  const codeGone = useGone(codeShown);
+  const siteShown = choosingSite && codeGone;
 
   if (!fontsLoaded && !fontError) return null;
   const successes = attempts.filter(attempt => attempt.ok).length;
@@ -570,10 +613,13 @@ export default function App() {
           {found > 0 && (
             // Compact requirements, not cards: the room goes to the sensors.
             <View style={s.requirements} onLayout={event => setSiteH(event.nativeEvent.layout.height)}>
-              <Pressable style={[s.requirement, !tokenInfo && s.requirementTodo]} onPress={() => setTokenSheet({ open: true, initial: null })}
-                accessibilityRole="button" accessibilityLabel={tokenInfo ? `Technician code of ${tokenInfo.name}, valid until ${expiryText(tokenInfo.expires)}. Change` : 'Technician code required. Add it'}>
-                <Text style={[s.check, tokenInfo ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{tokenInfo ? '✓' : '!'}</Text>
-                <Text style={[s.requirementText, s.grow]} numberOfLines={1}>{tokenInfo ? `${tokenInfo.name} · until ${expiryText(tokenInfo.expires)}` : 'Technician code required'}</Text>
+              <Pressable style={[s.requirement, !liveToken && s.requirementTodo]} onPress={() => setTokenSheet(sheet => ({ open: true, asked: false, n: sheet.n + 1 }))}
+                accessibilityRole="button" accessibilityLabel={liveToken ? `Technician code of ${liveToken.name}, valid until ${expiryText(liveToken.expires)}. Change`
+                  : tokenInfo ? `Technician code expired on ${expiryText(tokenInfo.expires)}. Change` : 'Technician code required. Add it'}>
+                <Text style={[s.check, liveToken ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{liveToken ? '✓' : '!'}</Text>
+                <Text style={[s.requirementText, s.grow]} numberOfLines={1}>
+                  {liveToken ? `${liveToken.name} · until ${expiryText(liveToken.expires)}` : tokenInfo ? 'Technician code expired' : 'Technician code required'}
+                </Text>
                 <Text style={s.requirementAction}>{tokenInfo ? 'Change' : 'Add'}</Text>
               </Pressable>
               <Pressable style={[s.requirement, !activeSite && s.requirementTodo]} onPress={() => setChoosingSite(true)}
@@ -593,10 +639,10 @@ export default function App() {
               )}
               {Object.keys(batch).length > 0 && (
                 <View style={s.row} accessibilityRole="tablist">
-                  {([['all', `All ${Object.keys(batch).length}`], ['done', `✓ ${counts.ok ?? 0}`], ['failed', `✗ ${(counts.failed ?? 0) + (counts.stopped ?? 0)}`], ['left', `⏳ ${(counts.queued ?? 0) + (counts.running ?? 0)}`]] as const).map(([key, label]) => (
+                  {([['all', 'All', 'All'], ['done', '✓', 'Done'], ['failed', '✗', 'Failed'], ['left', '⏳', 'Left']] as const).map(([key, glyph, spoken]) => (
                     <Pressable key={key} style={[s.filter, filter === key && s.filterOn]} onPress={() => setFilter(filter === key ? 'all' : key)}
-                      accessibilityRole="tab" accessibilityState={{ selected: filter === key }}>
-                      <Text style={[s.filterText, filter === key && s.filterTextOn]}>{label}</Text>
+                      accessibilityRole="tab" accessibilityState={{ selected: filter === key }} accessibilityLabel={`${spoken}, ${tally[key]}`}>
+                      <Text style={[s.filterText, filter === key && s.filterTextOn]}>{glyph} {tally[key]}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -659,9 +705,9 @@ export default function App() {
             </View>
           </Animated.View>
         </View>
-        <SitesSheet key={choosingSite ? 'open' : 'closed'} visible={choosingSite} sites={sites} activeId={activeId} newId={Crypto.randomUUID}
+        <SitesSheet key={choosingSite ? 'open' : 'closed'} visible={siteShown} sites={sites} activeId={activeId} newId={Crypto.randomUUID}
           onClose={closeSites} onPick={pick} onSaved={saved} onForgotten={forgotten} />
-        <TechnicianSheet key={tokenSheet.open ? `open-${tokenSheet.initial ?? ''}` : 'closed'} visible={tokenSheet.open} initial={tokenSheet.initial}
+        <TechnicianSheet key={tokenSheet.open ? `open-${tokenSheet.n}` : 'closed'} visible={codeShown}
           info={tokenInfo} onClose={closeToken} onSaved={tokenSaved} />
       </SafeAreaView>
     </SafeAreaProvider>

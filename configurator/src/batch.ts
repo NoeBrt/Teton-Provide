@@ -6,8 +6,8 @@ export type BatchState = 'queued' | 'running' | 'ok' | 'failed' | 'stopped';
 export type BatchEntry = { state: BatchState; reason?: SetupFailure; ipv4?: string };
 export type BatchSummary = { ok: number; failed: number; stopped: number; stopReason?: SetupFailure };
 
-/** Failures that would repeat on every remaining sensor. */
-export const STOPS_BATCH: readonly SetupFailure[] = ['WrongPsk', 'token-invalid', 'token-expired'];
+/** Failures that would repeat on every remaining sensor (`locked`: leaving the app locked the code and the site password). */
+export const STOPS_BATCH: readonly SetupFailure[] = ['WrongPsk', 'token-invalid', 'token-expired', 'locked'];
 export const BATCH_CONCURRENCY = 3; // three BLE links at once; raise after measuring on real phones and APs
 
 export async function runBatch(
@@ -25,7 +25,12 @@ export async function runBatch(
       const id = queue.shift();
       if (id === undefined) return;
       onChange(id, { state: 'running' });
-      const result = await setupOne(id).catch((): SetupResult => ({ ok: false, step: 'connect', reason: 'rejected' }));
+      let result: SetupResult;
+      try {
+        result = await setupOne(id); // inside the try: a synchronous throw is one failed sensor too
+      } catch {
+        result = { ok: false, step: 'connect', reason: 'rejected' };
+      }
       if (result.ok) {
         summary.ok++;
         onChange(id, { state: 'ok', ipv4: result.ipv4 });

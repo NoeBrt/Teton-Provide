@@ -1,15 +1,16 @@
 //! Interop vectors for the phone's TypeScript side (configurator/src/noise.test.ts, setup.test.ts): a full
 //! Noise XX conversation with the device certificate and the technician token, then one provisioning exchange.
-//! Fixed keys and ephemerals make every byte deterministic. The test fails if the committed file no longer
-//! matches snow; `UPDATE_VECTORS=1 cargo test --features provision --test noise_vectors` rewrites it.
+//! Fixed keys and ephemerals make every byte deterministic. The phone's static key is the holder private key of its
+//! technician code. The test fails if the committed file no longer matches snow;
+//! `UPDATE_VECTORS=1 cargo test --features provision --test noise_vectors` rewrites it.
 
 use curve25519_dalek::MontgomeryPoint;
 use ed25519_dalek::SigningKey;
 use snow::Builder;
-use iot_provisioning::authority::{DeviceCertificate, TechnicianToken, device_id};
+use iot_provisioning::authority::{DeviceCertificate, TechnicianToken, code_text, device_id};
 use iot_provisioning::provision::{
-    NOISE_PARAMS, Outcome, PROLOGUE, REFUSED_EXPIRED, Request, Response, TOKEN_ACCEPTED,
-    TOKEN_REFUSED, hex,
+    NOISE_PARAMS, Outcome, PROLOGUE, REFUSED_EXPIRED, REFUSED_INVALID, Request, Response,
+    TOKEN_ACCEPTED, TOKEN_REFUSED, hex,
 };
 
 const PATH: &str = concat!(
@@ -22,6 +23,10 @@ const EXPIRES: u64 = 4_102_444_800;
 
 fn key(fill: u8) -> [u8; 32] {
     std::array::from_fn(|i| fill.wrapping_add(i as u8))
+}
+
+fn public(private: [u8; 32]) -> [u8; 32] {
+    MontgomeryPoint::mul_base_clamped(private).to_bytes()
 }
 
 /// Runs the three handshake messages with fixed keys; returns both transport states and the messages.
@@ -66,8 +71,8 @@ fn handshake(
 
 fn vectors() -> String {
     let device_private = key(0x10);
-    let device_public = MontgomeryPoint::mul_base_clamped(device_private).to_bytes();
-    let phone_private = key(0x20);
+    let device_public = public(device_private);
+    let phone_private = key(0x20); // the holder private key of the code
     let phone_ephemeral = key(0x30);
     let device_ephemeral = key(0x70);
     let device_authority = SigningKey::from_bytes(&[0x41; 32]);
@@ -75,14 +80,20 @@ fn vectors() -> String {
     let certificate = DeviceCertificate::sign(&device_authority, device_public, CUSTOMER)
         .unwrap()
         .encode();
-    let token = TechnicianToken::issue(
-        &technician_authority,
-        "Noé",
-        &[CUSTOMER.to_string()],
-        EXPIRES,
-    )
-    .unwrap()
-    .encode();
+    let issue = |holder| {
+        TechnicianToken::issue(
+            &technician_authority,
+            "Noé",
+            &[CUSTOMER.to_string()],
+            EXPIRES,
+            holder,
+        )
+        .unwrap()
+        .encode()
+    };
+    let token = issue(public(phone_private));
+    // Valid for this customer, but held by another key: what a sensor that recorded a code would present.
+    let wrong_holder_token = issue(public(key(0x60)));
 
     let mut buf = [0u8; 512];
     let mut scratch = [0u8; 512];
@@ -95,21 +106,33 @@ fn vectors() -> String {
         ));
     };
 
-    // The same deterministic handshake twice: once accepted (the main conversation), once refused (expired).
-    let refused = {
+    // The same deterministic handshake again: accepted (the main conversation), refused as expired, refused for
+    // a token held by another key.
+    let mut refused = |token: &[u8], reason: u8| {
         let (_, mut device, _) = handshake(
             &phone_private,
             &phone_ephemeral,
             &device_private,
             &device_ephemeral,
             &certificate,
-            &token,
+            token,
         );
         let len = device
-            .write_message(&[TOKEN_REFUSED, REFUSED_EXPIRED], &mut buf)
+            .write_message(&[TOKEN_REFUSED, reason], &mut buf)
             .unwrap();
         buf[..len].to_vec()
     };
+    let refused_expired = refused(&token, REFUSED_EXPIRED);
+    let refused_wrong_holder = refused(&wrong_holder_token, REFUSED_INVALID);
+    // Another static key with the genuine certificate: the phone must stop at message 2.
+    let (_, _, impostor) = handshake(
+        &phone_private,
+        &phone_ephemeral,
+        &key(0x50),
+        &device_ephemeral,
+        &certificate,
+        &token,
+    );
     let (mut phone, mut device, messages) = handshake(
         &phone_private,
         &phone_ephemeral,
@@ -160,7 +183,7 @@ fn vectors() -> String {
     }
 
     format!(
-        "{{\n  \"params\": \"{NOISE_PARAMS}\",\n  \"prologue\": \"{}\",\n  \"customer\": \"{CUSTOMER}\",\n  \"deviceId\": \"{}\",\n  \"devicePublic\": \"{}\",\n  \"deviceAuthority\": \"{}\",\n  \"technicianAuthority\": \"{}\",\n  \"certificate\": \"{}\",\n  \"token\": \"{}\",\n  \"refusedExpired\": \"{}\",\n  \"phonePrivate\": \"{}\",\n  \"phoneEphemeral\": \"{}\",\n  \"deviceEphemeral\": \"{}\",\n  \"messages\": [\n{}\n  ]\n}}\n",
+        "{{\n  \"params\": \"{NOISE_PARAMS}\",\n  \"prologue\": \"{}\",\n  \"customer\": \"{CUSTOMER}\",\n  \"deviceId\": \"{}\",\n  \"devicePublic\": \"{}\",\n  \"deviceAuthority\": \"{}\",\n  \"technicianAuthority\": \"{}\",\n  \"certificate\": \"{}\",\n  \"token\": \"{}\",\n  \"holderPrivate\": \"{}\",\n  \"code\": \"{}\",\n  \"refusedExpired\": \"{}\",\n  \"wrongHolderToken\": \"{}\",\n  \"refusedWrongHolder\": \"{}\",\n  \"impostorReply\": \"{}\",\n  \"phonePrivate\": \"{}\",\n  \"phoneEphemeral\": \"{}\",\n  \"deviceEphemeral\": \"{}\",\n  \"messages\": [\n{}\n  ]\n}}\n",
         hex(PROLOGUE),
         device_id(&device_public),
         hex(&device_public),
@@ -168,7 +191,13 @@ fn vectors() -> String {
         hex(&technician_authority.verifying_key().to_bytes()),
         hex(&certificate),
         hex(&token),
-        hex(&refused),
+        hex(&phone_private),
+        // The technician code exactly as the authority prints it and the app imports it.
+        code_text(&token, &phone_private),
+        hex(&refused_expired),
+        hex(&wrong_holder_token),
+        hex(&refused_wrong_holder),
+        hex(&impostor[1]),
         hex(&phone_private),
         hex(&phone_ephemeral),
         hex(&device_ephemeral),

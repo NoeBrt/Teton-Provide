@@ -385,3 +385,59 @@ review, and a measurement of the affected path. Document measurement limits.
   refused sensors again; fixed (Retry failed covers them).
 - Pending: staging noe-lab with a certificate (`~/noe-ws/stage-lab.sh`, needs the user's sudo), a code on the
   iPhone, and the real run; wrong password, absent network and rollback on hardware; reboot; Android.
+
+## Step 17 - Review, ship checks and holder-bound codes
+
+- Review round 1 (commits `52644b3` and `f980486`): a code review and a security review, then 11 fresh agents
+  checked every finding against the code before anything was fixed. 26 held (8 confirmed, 18 partially confirmed,
+  none refuted; after re-rating 2 important, 5 medium, 14 low, 5 nit). The two important ones: a batch that outlived
+  the app's lock (iOS auto-lock during a long batch) failed every remaining sensor as "rejected" instead of stopping,
+  and a result that came back after the app left the foreground read the cleared site and kept the password in
+  memory. Fixed in the working tree: the batch stops with **locked** and keeps the screen awake (`expo-keep-awake`);
+  the flow keeps a hash of the network, never the password; a single setup updates its batch entry; an expired code
+  shows as expired; one sheet at a time; spoken filter labels; the impostor-reply vector. Device: a first-protocol
+  `identity` still loads, the working-profile record and the rollback agree after a failed write, a garbled marker
+  leaves the profiles alone, at most 64 stored results, `stage install` refuses a technician authority that is not
+  one, `authority issue` caps codes at 30 days and refuses a key file open to the group, one hex parser, the
+  `clock-floor` file, and the accepted name and refusal reasons in the log. A5 (every card redrawn) is `d462ef4`.
+  Left as is: A10 (two waiting mechanisms in the app, low) and S7a (extra password copies in device memory, nit).
+- Holder-bound codes (S1, medium): tokens are version 2 (`iot-technician-token/2`) and name a holder X25519 key
+  that `authority issue` generates with each code. The phone uses its private half as its Noise static key; the
+  sensor refuses a token whose holder is not the key the phone proved, so a sensor that records a token cannot
+  present it. Version 1 tokens are refused on both sides. The largest message 3 is 499 B (asserted). The snow vectors
+  add the holder key, a wrong-holder token and its refusal, and an impostor's reply.
+- Review round 2, on the fixes: 11 findings, all low or nit, all confirmed and fixed, among them: an unreadable
+  marker takes the profile NetworkManager has active, a failed directory sync after the rename no longer rolls back,
+  the floor write runs off the GATT runtime, `write_new` removes a partial file, a second sheet waits until the
+  first is gone, the docs follow the version 2 token.
+- Performance (`d462ef4`,
+  [docs/BENCHMARKS.md](../docs/BENCHMARKS.md#configurator-with-200-sensors-in-range-2026-10-20)): memoized sensor
+  cards and scan updates applied every 500 ms. With 200 fake sensors in the iOS Simulator (Release,
+  Hermes): 15.6 to 1.9 renders/s, JS busy 45 % to 3-4 %, JS lag p95 unchanged at 17 ms.
+- Ship review (`d462ef4` and the working tree), three agents: five-axis code review **APPROVE** (0 critical,
+  0 important); security audit 0 critical, 0 high, 1 medium, 2 low, 4 info; test engineer ran 21 TypeScript and
+  18 Rust mutations, 9 survived. Fixed after it: the clock floor rises no faster than the uptime, so a clock spoofed
+  forward cannot lock codes out; the batch guard moved into `SetupFlow.batchRequest`; a scanned code never shows in
+  the text field and a new code's details appear only once checked; the old Keychain info entry is deleted;
+  `stage install` rewrites a first-protocol `identity` without its label secret; the device logs the BLE MTU when a
+  session starts. New tests cover 7 of the 9 surviving mutants: floor at startup (`initial_floor`), 30-day cap and
+  key-file mode (`device/authority.rs`), garbled marker (`startup_profile`), no password after a lost result, the
+  network key includes the SSID, the first stop reason is the one reported (the three app tests fail on their
+  mutants; the Rust ones were not re-mutated).
+- Code import inside the app only (user decision, from the audit's medium finding: whichever app claims `provide://`
+  receives the whole code). `authority issue` prints the bare code `<token hex>.<holder private key hex>` as text and
+  QR (`authority::code_text`); the app registers no `provide` scheme and reads no incoming URL (only Expo's default
+  bundle-ID and dev-client schemes remain; `app.json`, and `ios/provide/Info.plist` in the local native project,
+  gitignored), so no link can carry the code; it reads codes only with its own camera or from a paste; a pasted code
+  with the old prefix still works. The vectors carry the printed `code`, which `authority.test.ts` reads as is.
+- Evidence: Rust 40 default and 88 with `ble,stage` tests, clippy clean (noe-lab, throwaway copy, deleted); app 59
+  tests, typecheck, lint. `ACTUAL`: [demo/real-reconfigure.txt](../demo/real-reconfigure.txt), commit `52644b3` with a
+  version 1 code opened through the old link: the iPhone gave noe-lab a new network, 5.8 s from request to success.
+- NOT_RUN: holder-bound codes and in-app import on hardware; a failed reconfiguration rolling back, wrong password
+  and absent network on hardware; reboot; Android. Not done: clearing the clipboard after a paste (`expo-clipboard`
+  is not a dependency), a Keychain round-trip test, tests for the `write_new` cleanup and the directory sync.
+  `npm audit --omit=dev`: 25 findings (18 high), all in the build toolchain, none at runtime. Screenshot 3 and the
+  video in `docs/architecture/` still show the link.
+- Next owner: rebuild the app (the native project lost the scheme and has the new permission strings) and the
+  device; `stage install` on noe-lab; issue a new code, print the bare QR, scan it in **provide.**, then the real run.
+  Commit `demo/real-reconfigure.txt` with this step (`git add`): it is untracked.

@@ -11,11 +11,11 @@ const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.m
 const hex = (s: string) => Array.from(Buffer.from(s, 'hex'));
 const [m1, m2, m3, accepted, request1, response1, request2, response2] = vectors.messages.map((m: { message: string }) => hex(m.message));
 const refusedExpired = hex(vectors.refusedExpired);
-const token = decodeToken(fromHex(vectors.token))!;
+const token = decodeToken(fromHex(vectors.token), fromHex(vectors.holderPrivate))!;
 const options: SetupOptions = { sleep: async () => {}, pollMs: 0, deviceAuthority: fromHex(vectors.deviceAuthority) };
-// The phone's randomness: its static key, its ephemeral key, then the attempt ID, as in the vectors.
+// The phone's randomness: its ephemeral key, then the attempt ID, as in the vectors (its static key is the code's holder key).
 const scripted = () => {
-  const values = [fromHex(vectors.phonePrivate), fromHex(vectors.phoneEphemeral), new Uint8Array(16).fill(0xa5)];
+  const values = [fromHex(vectors.phoneEphemeral), new Uint8Array(16).fill(0xa5)];
   return (length: number) => { const next = Uint8Array.from(values.shift()!); assert.equal(next.length, length); return next; };
 };
 
@@ -48,13 +48,14 @@ test('full setup against the device transcript: handshake, certificate, token, c
   assert.deepEqual(steps, ['connect', 'secure', 'send', 'join']);
 });
 
-test('an impostor never receives the token: forged reply, another name, another authority', async () => {
+test('an impostor never receives the token: forged reply, another name, another authority, another key', async () => {
   const forged = m2.slice();
   forged[90] ^= 1; // inside the encrypted certificate
   const cases: [number[][], SetupOptions, string][] = [
     [[forged], {}, vectors.deviceId],
     [[m2], {}, 'IOT-0000000000'], // a genuine certificate, but advertised under another sensor's ID
     [[m2], { deviceAuthority: fromHex(vectors.technicianAuthority) }, vectors.deviceId], // not the device authority
+    [[hex(vectors.impostorReply)], {}, vectors.deviceId], // a copied genuine certificate, but the handshake proved another key
   ];
   for (const [replies, extra, sensor] of cases) {
     const { link, writes } = device(replies);
@@ -71,11 +72,22 @@ test('a genuine sensor of another customer is skipped before the token leaves', 
   assert.equal(writes.length, 1);
 });
 
-test('a token the sensor refuses (expired) stops before any credential', async () => {
-  const { link, writes } = device([m2, refusedExpired]);
-  assert.deepEqual(await run(link), { ok: false, step: 'secure', reason: 'token-expired' });
-  assert.equal(writes.length, 2, 'handshake only');
-  assert.equal(sent(writes, password), false);
+test('a token the sensor refuses (expired, held by another key) stops before any credential', async () => {
+  // A recorded token presented without its holder key: the sensor refuses it as invalid.
+  const recorded = { ...token, bytes: fromHex(vectors.wrongHolderToken) };
+  for (const [reply, holder, reason] of [[refusedExpired, token, 'token-expired'], [hex(vectors.refusedWrongHolder), recorded, 'token-invalid']] as const) {
+    const { link, writes } = device([m2, reply]);
+    assert.deepEqual(await run(link, {}, vectors.deviceId, holder), { ok: false, step: 'secure', reason });
+    assert.equal(writes.length, 2, 'handshake only');
+    assert.equal(sent(writes, password), false);
+  }
+});
+
+test('a code whose holder key does not match is refused before anything is sent', async () => {
+  const { link, writes } = device([m2]);
+  const mismatched = { ...token, holderPrivate: fromHex(vectors.phoneEphemeral) };
+  assert.deepEqual(await run(link, {}, vectors.deviceId, mismatched), { ok: false, step: 'connect', reason: 'token-invalid' });
+  assert.equal(writes.length, 0);
 });
 
 test('no answer while joining gives a timeout that keeps the attempt for recovery', async () => {

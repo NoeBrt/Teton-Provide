@@ -71,8 +71,9 @@ test('Wi-Fi QR: a code without a network name is refused', () => {
 });
 
 test('a sensor card names the site this phone set it up on, or says "its Wi-Fi" when unknown', () => {
-  assert.equal(stateText('online', 'St. Olav · Ward 3'), '✓ Set up · connected to St. Olav · Ward 3');
-  assert.equal(stateText('online', null), '✓ Set up · connected to its Wi‑Fi');
+  // The advertised state is the sensor's claim, never checked: no ✓ (any device can copy a name and a state).
+  assert.equal(stateText('online', 'St. Olav · Ward 3'), 'Reports set up · connected to St. Olav · Ward 3');
+  assert.equal(stateText('online', null), 'Reports set up · connected to its Wi‑Fi');
   assert.equal(stateText('offline', 'St. Olav · Ward 3'), 'Set up · not connected to St. Olav · Ward 3');
   assert.equal(stateText('offline', null), 'Set up · not connected to its Wi‑Fi');
   assert.equal(stateText('ready', 'St. Olav · Ward 3'), 'Ready to set up');

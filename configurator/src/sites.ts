@@ -16,12 +16,15 @@ export const removeSite = (sites: Site[], id: string): Site[] => sites.filter(s 
 // ponytail: a sensor reset in the workshop and set up elsewhere by another phone keeps this phone's old site name.
 export type Setups = Record<string, string>;
 
-/** The line under a sensor's name, from its advertised state and the site this phone set it up on, if any. */
+/**
+ * The line under a sensor's name, from its advertised state and the site this phone set it up on, if any. The
+ * advertisement is unauthenticated, so it reads as the sensor's claim: no ✓, which only a verified setup earns.
+ */
 export function stateText(state: SensorState, site: string | null): string {
   const where = site ?? 'its Wi‑Fi';
   switch (state) {
     case 'ready': return 'Ready to set up';
-    case 'online': return `✓ Set up · connected to ${where}`;
+    case 'online': return `Reports set up · connected to ${where}`;
     case 'offline': return `Set up · not connected to ${where}`;
     case 'not-staged': return 'Not prepared for setup';
   }

@@ -748,7 +748,7 @@ a sensor get a unique ID on a channel that no malicious device can use to pass a
 | --- | --- |
 | Threat | A rogue device in radio range that advertises like a sensor (to collect the site password or mislead the technician). Labels are dropped: scanning 200 of them is the bottleneck. |
 | Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
-| Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as a link or QR (`provide://technician/<hex>`), kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. Not bound to one phone. The sensor's clock floor is its firmware build date. |
+| Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as the code `<token hex>.<holder key hex>`, a QR code scanned inside the app or pasted text, kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. The first build delivered it as a `provide://technician/` link; the link was removed after the security review, since another app could claim the scheme and receive the code. Not bound to one phone, but bound to a holder key the code carries (added after review). The sensor's clock floor is the later of its firmware build date and the time it last recorded, and rises no faster than its uptime. |
 | Reconfiguration | Allowed with a valid token. The device keeps two NetworkManager profiles and rolls back to the working one if the new network fails. |
 | Batch | Every ready sensor in range, three BLE links at a time. A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters (failures first) and **Retry failed**. |
 | Rooms | Later, in Smith; not in the app. |
@@ -759,8 +759,12 @@ A rogue device cannot present a valid certificate for a key it can prove, and a 
 copier does not hold that key. The token keeps a stolen or borrowed app from configuring sensors.
 
 **Trade-off:** The device key sits in a 0600 file, not a secure element: whoever extracts it from one sensor can
-impersonate that one sensor until IoT revokes it (revocation lists are not built). A leaked token works for its
-customers until it expires; 30 days bounds that. The authorities' private keys must stay offline at IoT; the
+impersonate that one sensor until IoT revokes it (revocation lists are not built). It cannot replay the tokens it
+collects: each names a holder key whose private half only the code carries. A leaked code works for its customers
+on any phone until it expires; 30 days bounds that. Import inside the app costs the one-tap link; Universal Links
+would bring it back without a scheme another app can claim. The clock floor follows a clock set far ahead only as
+fast as the uptime, so it cannot lock codes out, but after a long power-off it trails real time by the downtime.
+The authorities' private keys must stay offline at IoT; the
 demo keeps them in `~/noe-ws/iot-authority` on noe-lab (0600, outside the repository).
 
 **Evidence / test:** `src/authority.rs` and `src/provision.rs` tests (impostor with a copied certificate, other
