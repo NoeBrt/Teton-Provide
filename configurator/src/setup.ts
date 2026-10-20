@@ -11,7 +11,8 @@ const FRAME_TRANSPORT = 1;
 const MAX_MESSAGE = 512;
 
 export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
-export type SetupFailure = Failure | 'timeout' | 'rejected' | 'not-authenticated' | 'unknown';
+/** `closed`: the sensor has no provisioning service: already set up (it removes it), or never staged. */
+export type SetupFailure = Failure | 'timeout' | 'rejected' | 'not-authenticated' | 'unknown' | 'closed';
 /** The phone cannot tell what happened: retrying must reuse this attempt so the device can answer it. */
 export const isUnsettled = (result: SetupResult) =>
   !result.ok && result.attempt !== undefined && (result.reason === 'timeout' || result.reason === 'rejected');
@@ -65,7 +66,11 @@ export async function setup(
   try {
     at('connect');
     await withTimeout(ble.connect(id), timeoutMs);
-    await withTimeout(ble.retrieveServices(id, [SERVICE_UUID]), timeoutMs);
+    // Sensors are never bonded, so the phone discovers their services afresh at each connection: no stale cache.
+    const { characteristics } = await withTimeout(ble.retrieveServices(id, [SERVICE_UUID]), timeoutMs);
+    if (characteristics && !characteristics.some(c => c.characteristic.toLowerCase() === PROVISION_CHARACTERISTIC_UUID)) {
+      return { ok: false, step, reason: 'closed' }; // nothing was written
+    }
 
     at('secure');
     const phone = initiator(label, random(32));

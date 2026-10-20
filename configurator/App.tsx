@@ -68,6 +68,7 @@ function setupFailureText(result: Extract<SetupResult, { ok: false }>): string {
     case 'AlreadyProvisioned': return 'This sensor is already set up.';
     case 'Busy': return 'The sensor is busy with another phone. Wait a minute, then try again.';
     case 'not-authenticated': return 'This label does not match the sensor. Scan the label on this sensor.';
+    case 'closed': return 'This sensor is already set up, or not prepared for setup yet. Test still checks that it answers.';
     case 'unknown': return 'The sensor restarted and lost the result. Try again.';
     case 'Timeout':
     case 'timeout': return result.step === 'join' ? 'The sensor did not join in time. Try again.' : 'The sensor is not responding. Move closer, then try again.';

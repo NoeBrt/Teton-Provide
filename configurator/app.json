@@ -57,7 +57,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "The camera reads the QR label on each sensor.",
+          "cameraPermission": "The camera reads the QR label on each sensor and the site's Wi-Fi QR code.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

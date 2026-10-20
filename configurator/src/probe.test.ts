@@ -9,7 +9,7 @@ function fake(overrides: Partial<BleLink> = {}) {
   const calls: string[] = [];
   const link: BleLink = {
     connect: async () => { calls.push('connect'); },
-    retrieveServices: async () => { calls.push('services'); },
+    retrieveServices: async () => { calls.push('services'); return {}; },
     write: async (_id, _service, _characteristic, data) => { calls.push(`write:${text(data)}`); },
     read: async () => { calls.push('read'); return [...'world'].map(c => c.charCodeAt(0)); },
     disconnect: async () => { calls.push('disconnect'); },
