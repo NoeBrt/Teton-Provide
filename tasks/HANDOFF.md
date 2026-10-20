@@ -314,3 +314,15 @@ review, and a measurement of the affected path. Document measurement limits.
      `teton-provisioned` profile holds it. Then wrong password, absent network, and the btmon grep for SSID and
      password bytes (constraints 2 and 3).
   3. systemd unit with `StateDirectory=` and NetworkManager permission (constraint 4), README, docs.
+
+## Step 13 — Architecture writeup with diagrams, screens and video
+
+- `docs/ARCHITECTURE.md` rewritten for the reviewers: system diagram, provisioning sequence, device states,
+  channel decision tree and alternatives, credential protection, 200-device changes, the path taken, evidence
+  table. Five Mermaid diagrams rendered without error with mermaid-cli 11.4.2. `docs/SECURITY.md` now states
+  the implemented protocol and its deviations.
+- Screens and video (`docs/architecture/`, `SIMULATION`): iOS Simulator "Teton 16 Pro" (iOS 27.0) running the
+  Release app with a temporary harness, removed afterwards: fake radio and scripted taps; `TETON-DEMO-001`
+  replays the snow transcript so the app's real Noise code runs; `TETON-DEMO-002` answers with a mismatched key.
+  The harness is not in the repo; the real app was rebuilt and reinstalled on that simulator.
+- Still open: README for Ubuntu (GAP), real join and btmon capture (cable), systemd unit, offline run, Android.

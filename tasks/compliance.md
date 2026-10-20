@@ -4,7 +4,7 @@ Re-checked after every step against the challenge PDF (`Technical_Interview_Chal
 technician user stories (README, "Technician experience"). **PASS** is backed by evidence, **NOT_RUN** is built
 but unproven on hardware, **GAP** is missing. Evidence classes stay distinct (`tasks/HANDOFF.md`).
 
-Last check: 2026-10-20, after the device review fixes (findings 5-8, `COMMAND_FIXTURE`); real Wi-Fi still waits for the Ethernet cable.
+Last check: 2026-10-20, after the architecture writeup (diagrams, Simulator screens and video); real Wi-Fi still waits for the Ethernet cable.
 
 ## PDF constraints (all four required)
 
@@ -21,10 +21,10 @@ Last check: 2026-10-20, after the device review fixes (findings 5-8, `COMMAND_FI
 |---|---|---|
 | Working code, configurator and device | PASS | `configurator/` (Expo, iPhone), `device/` + `src/` (Rust, BlueZ, NetworkManager). |
 | README reproducible on a standard Ubuntu machine, hardware assumptions | GAP | Must add: `stage`, `--features ble,stage`, `libdbus-1-dev`, NetworkManager permission (polkit or root), BLE + Wi-Fi adapter, Ethernet for management. |
-| Architecture: channel choice and trade-offs | PARTIAL | `docs/DECISIONS.md` 1, 15, 18 and `docs/ARCHITECTURE.md`. Add: SoftAP creates a local network, DPP needs Android, camera QR fallback, BLE assumption on Teton hardware. |
-| Architecture: credentials in transit | PARTIAL | `docs/SECURITY.md` still says "design review, not implemented"; update to the implemented protocol and its deviations. |
-| Architecture: 200 devices, non-technical team | PARTIAL | Decision 22 (site profile once, room batches) and SECURITY policies; needs a consolidated section. |
-| Evidence: credentials transmitted and connection established | NOT_RUN | `demo/phone-hello.txt` covers the hello probe only. |
+| Architecture: channel choice and trade-offs | PASS | `docs/ARCHITECTURE.md` "Why Bluetooth Low Energy": decision tree, alternatives table (SoftAP, DPP, Web Bluetooth, camera QR, USB), costs of BLE, Teton hardware assumption. |
+| Architecture: credentials in transit | PASS | `docs/ARCHITECTURE.md` "How credentials are protected"; `docs/SECURITY.md` now states the implemented protocol and its deviations (no chunk layer, peers not disconnected). |
+| Architecture: 200 devices, non-technical team | PASS (design) | `docs/ARCHITECTURE.md` "200 devices in a hospital wing": Smith work order, per-device credentials, room batches, stop on first wrong password, staggered joins, result sync. Not implemented. |
+| Evidence: credentials transmitted and connection established | PARTIAL | `SIMULATION`: Simulator screens and video in `docs/ARCHITECTURE.md` (real app code, snow transcript, fake radio). `ACTUAL_BLE`: hello probe only. NOT_RUN: real join and btmon capture. |
 
 ## Technician user stories
 
