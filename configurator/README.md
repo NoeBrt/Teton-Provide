@@ -49,9 +49,9 @@ server and no network.
 ## Test with the device
 
 On the Ubuntu device: `./target/release/device` (see the root README). In the
-app: **Rechercher les capteurs**, then **Tester** on `TETON-DEMO-001`. Expect
-« world » reçu. Repeat, and toggle Bluetooth or walk away to check reconnects.
-Screenshot the journal for `demo/phone-hello.txt`.
+app (“provide.”): the search runs by itself (tap the centre dot to pause/resume), then **Test** on `TETON-DEMO-001`. Expect
+“world” received. Repeat, and toggle Bluetooth or walk away to check reconnects.
+Screenshot the log for `demo/phone-hello.txt`.
 
 The bundle identifier `dev.tetonchallenge.configurator` in `app.json` can be
 changed to one from your Apple account.
@@ -60,26 +60,36 @@ changed to one from your Apple account.
 
 Without a paid Apple account, the UI can still be viewed in Expo Go: `npx expo start
 --go --tunnel` (tunnel mode avoids the firewall and needs no shared Wi-Fi), then scan
-the QR code. Expo Go has no Bluetooth module, so the app shows « Bluetooth
-indisponible dans Expo Go ». Use nRF Connect for the radio test.
+the QR code. Expo Go has no Bluetooth module, so the app shows “Bluetooth
+is unavailable in Expo Go”. Use nRF Connect for the radio test.
 
 ## Install on an iPhone from a Mac (free Apple ID)
 
 No paid Apple account is needed when the build is signed by Xcode on a Mac; the
 app then expires after 7 days (reinstall with the same command).
 
-Once: install Xcode (open it once), `xcode-select --install`, Node 22.18+, and
-CocoaPods (`brew install cocoapods`); add your Apple ID in Xcode › Settings ›
-Accounts. On the iPhone, enable Developer Mode.
+Once: install Xcode and open it, point the tools at it
+(`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`), Node 22.18+, and CocoaPods
+(`brew install cocoapods`); add your Apple ID in Xcode › Settings › Accounts. On the iPhone, trust
+the Mac and enable Developer Mode (Settings › Privacy & Security).
+
+Standalone build (JavaScript bundled, no Metro, works offline). Verified on 2026-10-19 with
+Xcode 27.1 and an iPhone 15 Pro, iOS 27.0 (`demo/phone-hello.txt`):
 
 ```sh
-git clone https://github.com/NoeBrt/teton-provisioning.git
-cd teton-provisioning && git checkout feat/ble-device-and-configurator
 cd configurator && npm ci
-npx expo run:ios --device        # iPhone plugged in over USB
+npx expo prebuild -p ios                       # generates ios/ (gitignored) and installs pods
+open ios/provide.xcworkspace                   # once: Signing & Capabilities › Team › your Personal Team
+xcrun devicectl list devices                   # note the iPhone identifier
+cd ios && xcodebuild -workspace provide.xcworkspace -scheme provide -configuration Release \
+  -destination 'id=<IPHONE_ID>' -derivedDataPath build/dd -allowProvisioningUpdates \
+  DEVELOPMENT_TEAM=<TEAM_ID> CODE_SIGN_STYLE=Automatic build
+xcrun devicectl device install app --device <IPHONE_ID> build/dd/Build/Products/Release-iphoneos/provide.app
 ```
 
-If signing fails, open `ios/*.xcworkspace`, select your Personal Team under
-Signing & Capabilities, and change the bundle identifier if Xcode asks. On the
-iPhone, trust the developer in Réglages › Général › VPN et gestion de l'appareil.
-The app's Bluetooth then works; Metro runs on the Mac.
+`<TEAM_ID>` is shown under Signing in Xcode. If Xcode cannot register the bundle identifier, change
+`ios.bundleIdentifier` in `app.json` (not in `ios/`) and prebuild again. On the iPhone, trust the
+developer in Settings › General › VPN & Device Management, then allow Bluetooth.
+
+For live reload while developing, `npx expo run:ios --device` builds a debug app that loads
+JavaScript from Metro on the Mac instead.
