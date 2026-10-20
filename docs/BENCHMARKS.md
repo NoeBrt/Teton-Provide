@@ -246,3 +246,33 @@ is PATH=/usr/bin:/bin, LC_ALL=C, LANG=C, RUST_BACKTRACE=0 on the same host.
 No compilation overlapped the measurements. No optimization or cross-version
 throughput comparison is claimed: this verifies valid CLI dispatch and the
 unchanged simulation. It adds no real BLE, security, or fleet-capacity evidence.
+
+## Configurator with 200 sensors in range (2026-10-20)
+
+**Question.** Does the phone stay responsive with 200 sensors in range, while the scan reports every advertisement
+(`allowDuplicates`) and three setups run at once?
+
+**Method.** iOS Simulator "IoT 16 Pro" (iOS 27.0, Apple silicon), Release build, Hermes. A temporary harness, not
+in the repository, replaced the radio with 200 fake sensors advertising twice a second each (400 advertisements a
+second) with a drifting signal (±4 dB per advertisement), and measured over 20 s after an 8 s warm-up:
+`App` renders per second, the time from render start to commit (`useLayoutEffect`), JS thread lag (drift of a
+50 ms timer; 17 ms is its floor on this host), and busy time (sum of render times over the window). Two runs per
+variant; the runs agreed within the figures shown. It also timed the phone side of one setup's cryptography.
+
+| Variant | Renders/s | Render mean / p95 | JS lag p95 / max | Busy | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Before: every changed advertisement redraws all cards | 15.5–15.7 | 30.3–30.6 / 33.7–34.3 ms | 17–18 / 30–31 ms | 45–46 % | baseline |
+| Scan updates gathered, applied every 500 ms | 1.9 | 52.6–54.3 / 60.5–63.3 ms | 25–33 / 57–61 ms | 10–11 % | not kept alone: longer tasks, worse tail |
+| Memoized sensor card only | 15.3 | 8.9–9.1 / 13.7–14.5 ms | 17 / 17–20 ms | 13 % | kept |
+| **Memoized card + updates every 500 ms** | **1.9** | **16.7–18.1 / 27.3–30.0 ms** | **17 / 26–30 ms** | **3–4 %** | **kept** |
+
+**Cryptography per sensor on Hermes:** Noise handshake 32 ms, certificate check 11–12 ms. With three setups at once
+over a few seconds each, that is a few percent of the JS thread: not a bottleneck.
+
+**Decision.** Keep both changes. The memoized card (`SensorCard` in `configurator/App.tsx`) makes a redraw touch only
+the cards whose sensor, progress, batch entry or result changed. The 500 ms flush makes the redraw rate independent of
+how many advertisements iOS delivers, which we could not measure on a real phone, and cuts CPU (battery) by 3× more
+for a card state that is at most half a second late. Both variants stay far below 100 ms of input lag on this host.
+
+**Not measured.** A real iPhone (slower JS than this host), real iOS duplicate-advertisement rates, more than one
+real sensor.
