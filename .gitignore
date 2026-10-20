@@ -3,3 +3,6 @@
 .env.*
 *.key
 *.pem
+
+# Device identity and label (secret), created by `stage`
+/state

@@ -8,7 +8,8 @@ const RESPONSE = bytes('world');
 export interface BleLink {
   connect(id: string): Promise<void>;
   retrieveServices(id: string, serviceUUIDs: string[]): Promise<unknown>;
-  write(id: string, service: string, characteristic: string, data: number[]): Promise<void>;
+  /** `maxByteSize`: the library splits larger data into separate writes (default 20 bytes). */
+  write(id: string, service: string, characteristic: string, data: number[], maxByteSize?: number): Promise<void>;
   read(id: string, service: string, characteristic: string): Promise<number[]>;
   disconnect(id: string): Promise<void>;
 }
@@ -24,7 +25,7 @@ function bytes(text: string): number[] {
   return [...text].map(char => char.charCodeAt(0));
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expiry = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new TimeoutError()), ms);

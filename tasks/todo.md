@@ -119,6 +119,8 @@ preparation separately; platform selection itself is settled.
   (Done: `docs/SECURITY.md` recommends Noise NKpsk2 with key and secret in the QR label.)
 - [ ] Record model/OS versions, Bluetooth permission denial/retry, build/signing,
   distribution, and prepared client installation/startup offline for each platform.
+  (iPhone: model/OS and Xcode free-account signing recorded in `demo/phone-hello.txt`; permission denial,
+  offline startup, and Android remain.)
   Select native/shared/browser access only against those verified constraints;
   Android browser support alone cannot satisfy the iPhone requirement.
 
@@ -136,7 +138,8 @@ handler through a read/write GATT characteristic.
 
 **Acceptance criteria:**
 
-- [ ] `IOT-DEMO-001` advertises a fixed service UUID discoverable by another machine.
+- [x] `IOT-DEMO-001` advertises a fixed service UUID discoverable by another machine.
+  (Discovered by service UUID from an iPhone 15 Pro running `configurator/`: `demo/phone-hello.txt`.)
 - [x] The endpoint accepts only `hello`; malformed writes fail without raw payload logging.
   (Unit-tested in `device/main.rs`; not yet exercised over the air.)
 - [x] Startup failure and normal shutdown cleanly report/release registrations.
@@ -179,7 +182,9 @@ a transport probe, not the final provisioning UI.
 - [ ] Android client starts offline, discovers/connects/exchanges hello, and reconnects.
   (Not physically tested by the user's decision on 2026-10-18; same code as iPhone.)
 - [ ] iPhone client starts offline, discovers/connects/exchanges hello, and reconnects.
-  (Client built: `configurator/`, Expo hello probe, decision 23. Needs an EAS iOS build.)
+  (2026-10-19: discovery, 6 hello/world exchanges and reconnect after a device service restart PASS on an
+  iPhone 15 Pro, iOS 27.0, Release build signed with a free Apple ID: `demo/phone-hello.txt`. Still open:
+  offline startup with Internet disabled and no shared LAN.)
 - [ ] Both runs use Internet disabled and no shared LAN; no device screen, SSH,
   credentials, or technical operator commands are required to complete the exchange.
 

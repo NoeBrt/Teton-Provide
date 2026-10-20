@@ -257,3 +257,36 @@ review, and a measurement of the affected path. Document measurement limits.
   4. Then: install the systemd unit and test restart/reboot (task 7); after that,
      the Noise channel per `docs/SECURITY.md`, then NetworkManager activation
      reusing Smith's connectivity guard (decision 23).
+
+## Step 11 — First real BLE exchange from the iPhone app; configurator UI iteration
+
+- Revision: uncommitted `configurator/` changes on top of `85f8b61` (branch
+  `feat/ble-device-and-configurator`). Device binary unchanged (`85f8b61`).
+- Mac setup: Xcode 27.1, CocoaPods 1.17.0, Node 22.22; app built in Release with `xcodebuild`
+  (JavaScript bundled, no Metro) and signed with a free Apple ID (Personal Team, 7-day signature);
+  installed with `xcrun devicectl device install app`. `npx expo prebuild -p ios` regenerates `ios/`.
+- Evidence class: `ACTUAL_BLE` **PASS** for discovery, hello/world, and reconnect after a device service
+  restart: iPhone 15 Pro, iOS 27.0, noe-lab Ubuntu 22.04.5 / BlueZ 5.64; six `hello exchanged` over two
+  service runs, registrations released on stop ([evidence](../demo/phone-hello.txt)).
+  `NOT_RUN`: offline startup (Internet off, no shared LAN), systemd restart/reboot, Android.
+  `NOT_RECORDED`: the on-phone error message while the service was stopped.
+- Configurator changes, made at the user's explicit request before checkpoint H (the repo rule says no
+  full UI before the radio milestone; no credentials, crypto, or Wi-Fi were added):
+  automatic scan with a radar (`src/Radar.tsx`, Reanimated 4.5.1 on the UI thread); app renamed
+  `provide.` with the IoT mark from example.com's header (`assets/iot-mark.png`; ask IoT before any
+  public distribution); English UI; result and progress shown inside the tested sensor's card with a
+  steady-height drawer and a 0.7 s minimum progress (UI only, `result.ms` stays real); scroll-driven
+  radar (large ↔ compact follows the finger, native snapping, compact mode holds until a second gesture,
+  auto-fold only above four sensors). Design history and choices: `docs/configurator/README.md`.
+- Checks: `npm test` 6/6, `npm run typecheck`, `npm run lint`, `expo-doctor` 21/21. UI behaviour checked
+  in the iOS Simulator with fake sensors (`SIMULATION`, recording `docs/configurator/simulator-flow.mp4`);
+  fake data never ships in `App.tsx`.
+- iPhone screen recording through `devicectl` is unsupported on this phone (CoreDevice error 1001);
+  use the phone's own screen recording for the presentation.
+- Open question sent to IoT: do production devices have BLE? If not, the fallback that creates no
+  local network is a QR shown to the device camera (DPP needs Android; SoftAP creates a local network).
+- Next owner: the user, then implementation.
+  1. Repeat the iPhone run with Internet disabled and no shared LAN; record it in `demo/phone-hello.txt`.
+  2. Install the systemd unit and test restart/reboot (task 7).
+  3. Commit the configurator changes after review (nothing committed in this step).
+  4. Then the Noise channel per `docs/SECURITY.md`, then NetworkManager activation.

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Provisioning BLE",
+    "name": "provide.",
     "slug": "iot-provisioning-configurator",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,7 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "dev.iotchallenge.configurator"
+      "bundleIdentifier": "dev.iotchallenge.configurator",
+      "infoPlist": {
+        "CFBundleDisplayName": "Provide."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,11 +35,33 @@
       [
         "react-native-ble-manager",
         {
-          "bluetoothAlwaysPermission": "Le Bluetooth sert à trouver et configurer les capteurs à proximité."
+          "bluetoothAlwaysPermission": "Bluetooth is used to find and set up nearby sensors."
         }
       ],
       "expo-font",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Face ID unlocks the saved Wi-Fi passwords of your sites."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The camera reads the QR label on each sensor.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

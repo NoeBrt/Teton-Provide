@@ -654,3 +654,75 @@ device's Wi-Fi apply should reuse Smith's connectivity guard and error names
 `demo/tdd-configurator.txt`), an independent review with its fixes applied, `tsc`, `expo lint`, `expo-doctor` 20/20, an iOS
 prebuild with the Bluetooth usage string, and an iOS JavaScript export. No phone
 has run the app yet.
+
+## 24. Authenticate the sensor with its QR label for the MVP
+
+**Decision:** The phone trusts a sensor only after a Noise `NKpsk2` handshake with the keys printed on that
+sensor's QR label (`T1:<device id>:<public key>:<label secret>`, written by `stage`). Credentials are encrypted
+only after that handshake succeeds.
+
+**Original proposal:** Question raised on 2026-10-20: is the QR needed at all for a secure channel?
+
+**Final choice:** Keep the QR label for the MVP. The alternatives below were reviewed and recorded for the
+architecture writeup and for production.
+
+| Alternative | Conclusion |
+| --- | --- |
+| **No proof** (anonymous key exchange, BLE "Just Works") | Rejected. It meets "no plaintext over the air" literally but anyone in range can advertise `IOT-DEMO-001`, receive the password, and even relay to the real sensor so the app still shows *Device connected*. It saves the technician one scan. |
+| **Short code on the label** (8 digits, HomeKit style) + PAKE (SRP6a or SPAKE2) | Viable if IoT labels cannot carry a QR. Each wrong guess costs one live attempt. Needs a different protocol: `NKpsk2` requires a 256-bit secret that nobody can type. |
+| **Sensor list sent by Smith** before the visit (IDs, keys, work order) | Production target for 200 devices: no secret on the label, authorization comes with the work order. Needs the phone to sync before the visit. |
+| **IoT device attestation** (per-device key, certificate signed by a IoT CA, CA public key in the app; Matter's model) | Best long-term identity proof: nothing secret printed in patient rooms. Must be per-device (one shared fleet key extracted from one sensor would impersonate all), ideally in a secure element; the app must still match the certificate's device ID to the sensor in front of the technician, and Smith revokes stolen units. Authorization stays separate (single use, work order). |
+
+**Reason:** The QR is built, tested byte for byte against snow, needs one scan from a non-developer, and stops
+both a fake sensor and a real but different one. Changing the protocol now would delay the real Wi-Fi test.
+
+**Trade-off:** A photographed label lets someone provision a sensor that is not yet provisioned (accepted risk,
+`docs/SECURITY.md`); attestation or a Smith manifest removes it.
+
+**Evidence / test:** `demo/tdd-provision.txt`, `configurator/src/setup.test.ts` (a sensor failing the handshake
+never receives the credentials).
+
+## 25. Channel if the own sensors have no BLE
+
+**Decision:** BLE stays the demo channel; its availability on the production hardware is an assumption, asked
+to IoT on 2026-10-20.
+
+**Original proposal:** Decisions 1 and 18 chose BLE from the challenge constraints; nothing checked a real IoT
+sensor. The challenge PDF names "your computer" as the device, which noe-lab satisfies (MT7921, BLE + Wi-Fi).
+
+**Final choice:** Ranked fallbacks that create no shared local network:
+
+| Fallback | Conclusion |
+| --- | --- |
+| **Phone shows a QR to the sensor's camera** (IoT sensors are camera based) | First fallback: optical, short range, works with an iPhone. One way only, so success needs feedback (LED, sound, or Smith once online); the QR must carry credentials encrypted with the label key. |
+| **Wi-Fi Easy Connect (DPP)**, QR on the label as its bootstrap | The standard for this exact problem, no IP network. Android only as configurator: no iPhone, macOS or browser API. Driver support on the device unverified. |
+| **SoftAP** (temporary access point on the sensor) | Works on any Wi-Fi hardware, but it is a shared local network created during the process; excluded by decision 18. |
+| **USB** | No radio at all, but needs a port on a mounted sensor. |
+
+**Reason:** The channel choice and its reasoning are graded (PDF); the hardware assumption must be explicit.
+
+**Trade-off:** A camera channel would reuse the configurator, the label key and the NetworkManager code; only the
+transport changes.
+
+**Evidence / test:** None yet; depends on the answer.
+
+## 26. Saved sites behind Face ID
+
+**Decision:** The configurator keeps several named sites (facility name, network, password). Each password is a
+separate Keychain entry protected by Face ID (`biometryCurrentSet`), unlocked once per session, kept in memory
+only and dropped when the app leaves the foreground.
+
+**Original proposal:** Decision 22: one site profile per intervention, forgotten at the end.
+
+**Final choice:** Supersedes the "one intervention" part of decision 22 at the user's request (a technician serves
+several facilities a year). Saving is refused when Face ID is off; re-enrolling Face ID makes saved passwords
+unreadable, so the site is entered again.
+
+**Reason:** Retyping each facility's password at every visit is slow and error prone; protecting each entry with
+Face ID limits what a lost or unlocked phone exposes.
+
+**Trade-off:** A phone now holds several facilities' passwords. Production should replace them with expiring site
+profiles issued by Smith, or per-device credentials (EAP-TLS, PPSK) so no shared password reaches the phone.
+
+**Evidence / test:** `configurator/src/sites.test.ts`; simulator layout checks. Face ID itself is NOT_RUN (the
+Simulator does not prompt).

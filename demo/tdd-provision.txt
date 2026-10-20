@@ -1,0 +1,33 @@
+# COMMAND_FIXTURE evidence, 2026-10-20: encrypted provisioning protocol, slices 1-2 (no BLE, no network)
+# Device side: src/provision.rs (snow 0.10.0, Noise_NKpsk2_25519_ChaChaPoly_SHA256), run on noe-lab, Rust 1.88.0.
+# Phone side:  configurator/src/noise.ts + provision.ts (@noble/curves, ciphers, hashes 2.4.0), Node 22.22 on macOS.
+
+$ cargo test --features provision --lib provision
+test result: ok. 13 passed; 0 failed (6.63 s; 20,000 random parser inputs, 200 random session inputs)
+
+$ cargo test --features provision --test noise_vectors        # committed interop vectors still match snow
+test result: ok. 1 passed; 0 failed
+
+$ cargo test --all-targets --locked --offline                   # default build, no third-party crate
+40 tests pass, unchanged
+
+$ cargo clippy --all-targets --features ble --locked --offline -- -D warnings   # clean
+$ cargo clippy --all-targets --locked --offline -- -D warnings                  # clean
+$ cargo fmt --all -- --check                                                    # clean
+
+$ npm test            # configurator: 6 probe tests + 6 Noise/provision tests
+# tests 12  # pass 12  # fail 0
+TypeScript initiator reproduces snow's messages byte for byte: handshake message 1, both encrypted
+requests, and decrypts both device replies (configurator/src/noise-vectors.json).
+
+Mutation checks (each applied alone, then reverted):
+Rust  accept a payload in the first handshake message    -> 1 test fails (oversized_and_payload_carrying_handshakes_are_rejected)
+Rust  return the stored outcome on an attempt conflict   -> 1 test fails (attempts_recover_conflict_and_serialize)
+Rust  ignore the provisioned state                       -> 1 test fails (success_is_terminal)
+Rust  build the device session without the label secret  -> 5 tests fail
+TS    skip MixKey(e) required by PSK handshakes          -> 2 tests fail
+TS    big-endian nonce                                    -> 1 test fails
+TS    skip MixKeyAndHash(label secret)                    -> 2 tests fail
+TS    no nonce increment on decrypt                       -> 2 tests fail
+
+Not covered here: BLE transport, NetworkManager activation, btmon capture, real Wi-Fi (slices 3-5).

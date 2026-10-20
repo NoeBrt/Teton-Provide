@@ -23,6 +23,9 @@ An independent security review (2026-10-18) shaped the policies below.
 | Application channel, Noise `NKpsk2`, key and secret in QR | **Recommended** | Works over plain GATT on both platforms; the device proves its key, the phone proves it read the label; no OS pairing UI. |
 | SRP6a with a label secret (ESP-IDF Security 2 model) | Alternative | Proven BLE provisioning precedent ([ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/api-reference/provisioning/provisioning.html)); needs a long label secret and a less common SRP stack on the device. |
 
+Further alternatives (short code with a PAKE, a Smith manifest, IoT device attestation) and their conclusions are
+recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
+
 ## Recommended design
 
 1. **Staging, not BLE.** A local staging command generates the device's static
