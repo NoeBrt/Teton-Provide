@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, AppState, Image, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -28,6 +28,8 @@ import { Radar, RESIZE, SIZES } from './src/Radar';
 const TEST_STEPS: [Step, string][] = [['connect', 'Connecting'], ['services', 'provide service'], ['write', 'Writing “hello”'], ['read', 'Reading the reply']];
 const SETUP_STEPS: [SetupStep, string][] = [['connect', 'Connecting'], ['secure', 'Securing the channel'], ['send', 'Sending the network'], ['join', 'Joining the Wi‑Fi']];
 const SCAN_SECONDS = 5;
+// With 200 sensors the scan reports hundreds of advertisements a second; cards redraw at most this often.
+const SCAN_FLUSH_MS = 500;
 const PAD = 20;
 const COMPACT_H = 72; // panel height once folded: the 48 pt radar plus margins
 const LARGE_GAP = 16; // space around the large radar
@@ -90,6 +92,64 @@ type CardOutcome = { ok: boolean; title: string; text: string };
 type Attempt = { key: number; at: string; name: string; ok: boolean; detail: string };
 const nameOf = (p: Peripheral) => p.advertising?.localName ?? p.name ?? 'Unnamed sensor';
 
+type CardActions = { test: (sensor: Peripheral) => void; setUp: (sensor: Peripheral) => void; placed: (id: string, first: boolean, bottom: number, height: number) => void };
+type CardProps = {
+  sensor: Peripheral; mine?: { kind: Kind; step: string }; entry?: BatchEntry; outcome?: CardOutcome;
+  siteName: string | null; batching: boolean; first: boolean; actions: CardActions;
+};
+
+// One sensor. Memoized: with 200 sensors, a scan update or one sensor's progress redraws only the cards it changed.
+const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, siteName, batching, first, actions }: CardProps) {
+  const active = !!mine;
+  const state = sensorState(sensor.advertising);
+  const settable = state !== 'not-staged'; // a set-up sensor can be reconfigured with a technician code
+  const STEPS: [string, string][] = mine?.kind === 'setup' ? SETUP_STEPS : TEST_STEPS;
+  const step = Math.max(0, STEPS.findIndex(([key]) => key === mine?.step));
+  return (
+    <Animated.View entering={appear} layout={layout} style={[s.card, s.clip]}
+      // Measured once, before any result drawer opens, so a result never resizes the radar.
+      onLayout={event => { const box = event.nativeEvent.layout; actions.placed(sensor.id, first, box.y + box.height, box.height); }}>
+            <View style={s.row}>
+              <View style={s.grow}>
+                <Text style={s.sensorName}>{nameOf(sensor)}</Text>
+                {state && <Text style={[s.small, state === 'online' && s.stateOk, state === 'offline' && s.stateWarn]}>{stateText(state, siteName)}</Text>}
+                {entry?.state === 'queued' && <Text style={s.small}>Waiting in the batch</Text>}
+                {entry?.state === 'stopped' && <Text style={s.stateWarnLine}>Not tried: {reasonText(entry.reason, 'join')}</Text>}
+                {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
+              </View>
+            </View>
+            <View style={s.row}>
+              <Pressable style={[s.secondary, s.grow, active && mine.kind !== 'test' && s.disabled]} disabled={active || batching} onPress={() => actions.test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
+                {mine?.kind === 'test' ? <ActivityIndicator color={C.ink} accessibilityLabel="Testing" /> : <Text style={s.secondaryText}>Test</Text>}
+              </Pressable>
+              <Pressable style={[s.primary, s.grow, ((active && mine.kind !== 'setup') || !settable || batching) && s.disabled]} disabled={active || !settable || batching} onPress={() => actions.setUp(sensor)} accessibilityRole="button"
+                accessibilityLabel={`${state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'} the Wi-Fi of ${nameOf(sensor)}`}>
+                {mine?.kind === 'setup' ? <ActivityIndicator color="#ffffff" accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>{state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'}</Text>}
+              </Pressable>
+            </View>
+            {/* One drawer of steady height: it opens once, shows progress, then the result fades in place.
+                The result shows in the tested card, wherever it sits in a long list; a success folds away after
+                SUCCESS_SHOWN_MS (the state line keeps it), a failure stays until the next action. */}
+            {(active || outcome) && (
+              <Animated.View style={s.drawer} exiting={FadeOut.duration(200)}>
+                {active ? (
+                  <Animated.View key="progress" entering={FadeIn.duration(200)} style={[s.drawerBody, s.progressCard]} accessibilityLiveRegion="polite">
+                    <Text style={s.drawerTitle}>{STEPS[step][1]}…</Text>
+                    <Text style={s.small}>Step {step + 1} of {STEPS.length}</Text>
+                    <View style={s.bar}>{STEPS.map(([key], index) => <View key={key} style={[s.segment, index <= step && s.segmentOn]} />)}</View>
+                  </Animated.View>
+                ) : outcome && (
+                  <Animated.View key="result" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={[s.drawerBody, outcome.ok ? s.okCard : s.warnCard]} accessibilityRole="summary">
+                    <Text style={s.drawerTitle}>{outcome.title}</Text>
+                    <Text style={outcome.ok ? s.okText : s.warnText}>{outcome.text}</Text>
+                  </Animated.View>
+                )}
+              </Animated.View>
+            )}
+    </Animated.View>
+  );
+});
+
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({ Onest_400Regular, Onest_500Medium, Onest_600SemiBold });
   const [ble, setBle] = useState<BleState>(BleState.Unknown);
@@ -150,12 +210,23 @@ export default function App() {
   useEffect(() => {
     const ble = BleManager;
     if (!ble || !bleStarted) return;
+    // The latest advertisement of each sensor waits here; one state update applies them all (docs/BENCHMARKS.md).
+    const latest = new Map<string, Peripheral>();
+    const flush = setInterval(() => {
+      if (latest.size === 0) return;
+      const heard = [...latest.values()];
+      latest.clear();
+      setSensors(found => {
+        const updates = heard.filter(peripheral => changed(found[peripheral.id], peripheral));
+        return updates.length ? { ...found, ...Object.fromEntries(updates.map(peripheral => [peripheral.id, peripheral])) } : found;
+      });
+    }, SCAN_FLUSH_MS);
     const subscriptions = [
       ble.onDidUpdateState(({ state }) => setBle(state)),
-      ble.onDiscoverPeripheral(peripheral => setSensors(found => (changed(found[peripheral.id], peripheral) ? { ...found, [peripheral.id]: peripheral } : found))),
+      ble.onDiscoverPeripheral(peripheral => { latest.set(peripheral.id, peripheral); }),
     ];
     bleStarted.then(() => ble.checkState()).then(setBle).catch(() => setBle(BleState.Unsupported));
-    return () => subscriptions.forEach(subscription => subscription.remove());
+    return () => { clearInterval(flush); subscriptions.forEach(subscription => subscription.remove()); };
   }, []);
 
   const ready = ble === BleState.On;
@@ -312,6 +383,18 @@ export default function App() {
   const closeSites = () => { flow.current.cancelWaiting(); afterCredentials.current = null; setChoosingSite(false); };
 
   const togglePause = () => setPaused(value => !value);
+  // Cards get one unchanging actions object (so memo holds); it calls this render's functions.
+  const placed = (id: string, first: boolean, bottom: number, height: number) => {
+    if (first && !measuredFirst.current) { measuredFirst.current = true; setFirstH(height); }
+    if (id === focused.current) reveal(bottom);
+  };
+  const current = useRef({ test, setUp, placed });
+  current.current = { test, setUp, placed };
+  const [cardActions] = useState<CardActions>(() => ({
+    test: sensor => { current.current.test(sensor); },
+    setUp: sensor => current.current.setUp(sensor),
+    placed: (id, first, bottom, height) => current.current.placed(id, first, bottom, height),
+  }));
 
   // Scroll-driven radar: its size, position, title and captions are pure functions of the scroll offset, computed on
   // the UI thread every frame. It follows the finger (including the iOS bounce) and never triggers an animation itself.
@@ -526,63 +609,11 @@ export default function App() {
               )}
             </View>
           )}
-          {shown.map((sensor, index) => {
-            const mine = running[sensor.id];
-            const active = !!mine;
-            const state = sensorState(sensor.advertising);
-            const settable = state !== 'not-staged'; // a set-up sensor can be reconfigured with a technician code
-            const entry = batch[sensor.id];
-            const outcome = active ? undefined : outcomes[sensor.id];
-            const STEPS: [string, string][] = mine?.kind === 'setup' ? SETUP_STEPS : TEST_STEPS;
-            const step = Math.max(0, STEPS.findIndex(([key]) => key === mine?.step));
-            return (
-              <Animated.View key={sensor.id} entering={appear} layout={layout} style={[s.card, s.clip]}
-                // Measured once, before any result drawer opens, so a result never resizes the radar.
-                onLayout={event => {
-                  const box = event.nativeEvent.layout;
-                  if (index === 0 && !measuredFirst.current) { measuredFirst.current = true; setFirstH(box.height); }
-                  if (sensor.id === focused.current) reveal(box.y + box.height);
-                }}>
-                <View style={s.row}>
-                  <View style={s.grow}>
-                    <Text style={s.sensorName}>{nameOf(sensor)}</Text>
-                    {state && <Text style={[s.small, state === 'online' && s.stateOk, state === 'offline' && s.stateWarn]}>{stateText(state, sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null)}</Text>}
-                    {entry?.state === 'queued' && <Text style={s.small}>Waiting in the batch</Text>}
-                    {entry?.state === 'stopped' && <Text style={s.stateWarnLine}>Not tried: {reasonText(entry.reason, 'join')}</Text>}
-                    {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
-                  </View>
-                </View>
-                <View style={s.row}>
-                  <Pressable style={[s.secondary, s.grow, active && mine.kind !== 'test' && s.disabled]} disabled={active || batching} onPress={() => test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
-                    {mine?.kind === 'test' ? <ActivityIndicator color={C.ink} accessibilityLabel="Testing" /> : <Text style={s.secondaryText}>Test</Text>}
-                  </Pressable>
-                  <Pressable style={[s.primary, s.grow, ((active && mine.kind !== 'setup') || !settable || batching) && s.disabled]} disabled={active || !settable || batching} onPress={() => setUp(sensor)} accessibilityRole="button"
-                    accessibilityLabel={`${state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'} the Wi-Fi of ${nameOf(sensor)}`}>
-                    {mine?.kind === 'setup' ? <ActivityIndicator color="#ffffff" accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>{state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'}</Text>}
-                  </Pressable>
-                </View>
-                {/* One drawer of steady height: it opens once, shows progress, then the result fades in place.
-                    The result shows in the tested card, wherever it sits in a long list; a success folds away after
-                    SUCCESS_SHOWN_MS (the state line keeps it), a failure stays until the next action. */}
-                {(active || outcome) && (
-                  <Animated.View style={s.drawer} exiting={FadeOut.duration(200)}>
-                    {active ? (
-                      <Animated.View key="progress" entering={FadeIn.duration(200)} style={[s.drawerBody, s.progressCard]} accessibilityLiveRegion="polite">
-                        <Text style={s.drawerTitle}>{STEPS[step][1]}…</Text>
-                        <Text style={s.small}>Step {step + 1} of {STEPS.length}</Text>
-                        <View style={s.bar}>{STEPS.map(([key], index) => <View key={key} style={[s.segment, index <= step && s.segmentOn]} />)}</View>
-                      </Animated.View>
-                    ) : outcome && (
-                      <Animated.View key="result" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={[s.drawerBody, outcome.ok ? s.okCard : s.warnCard]} accessibilityRole="summary">
-                        <Text style={s.drawerTitle}>{outcome.title}</Text>
-                        <Text style={outcome.ok ? s.okText : s.warnText}>{outcome.text}</Text>
-                      </Animated.View>
-                    )}
-                  </Animated.View>
-                )}
-              </Animated.View>
-            );
-          })}
+          {shown.map((sensor, index) => (
+            <SensorCard key={sensor.id} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={index === 0}
+              outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
+              siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null} />
+          ))}
 
           {attempts.length > 0 && (
             <View style={s.log}>
