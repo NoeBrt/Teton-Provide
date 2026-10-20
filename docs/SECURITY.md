@@ -1,9 +1,8 @@
 # Credential Protection: Bootstrap Review
 
-Status: **design review, not implemented.** No credential byte may cross BLE
-until checkpoint H passes and the tests at the end of this file pass. This
-closes the task 4 review item; it does not select the mobile framework.
-An independent security review (2026-10-18) shaped the policies below.
+Status: **implemented** (commits `f2f6363`, `12b6e19`), with the deviations marked below. The design came
+from an independent security review (2026-10-18); `docs/ARCHITECTURE.md` explains it for readers, and
+`tasks/compliance.md` tracks which of the tests at the end of this file have run.
 
 ## Constraints
 
@@ -42,8 +41,8 @@ recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
    device to the phone; the `psk2` label secret authenticates the phone, so the
    public key can leak through inventories without granting access. The prologue
    binds the protocol version and device ID. Device side: `snow` 0.10 (Rust ≥ 1.85,
-   [not formally audited](https://github.com/mcginty/snow)). Phone side: the same
-   `snow` core through UniFFI, or a platform library, chosen with the framework.
+   [not formally audited](https://github.com/mcginty/snow)). Phone side: pure-JavaScript `@noble` curves,
+   ciphers and hashes (`configurator/src/noise.ts`), checked byte for byte against a `snow` transcript.
 4. **Credentials.** Sent only as Noise transport messages after the handshake.
    The payload carries SSID, password, and a random 128-bit attempt ID. AEAD gives
    confidentiality and integrity; per-message nonces reject reordering and replay.
@@ -72,7 +71,8 @@ recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
   For a 200-device rollout the phone also checks the scanned key against a fleet
   manifest signed by Smith and preloaded, which defeats a QR stuck over the label.
 - **Single use.** Success is terminal: the device unregisters the provisioning
-  GATT service and disconnects every peer. A provisioned device never reopens
+  GATT service 20 s after success, which leaves the phone time to read the result. DEVIATION: it does not actively
+  disconnect peers; they lose the service. A provisioned device never reopens
   provisioning after a restart, crash, or power cut; software cannot tell those
   apart. Re-provisioning needs a re-provision token signed by Smith, or a
   workshop reset that issues a new label secret.
@@ -88,8 +88,9 @@ recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
 - **No downgrade.** The hello characteristic stays hello-only; there is no plaintext
   credential path and no build flag that enables one.
 - **Logs.** Outcomes and attempt IDs only; never SSID, password, keys, or addresses.
-- **Framing.** Noise messages can exceed the ATT MTU; a length-prefixed chunk layer
-  over acknowledged writes and reads is required and must be fuzzed.
+- **Framing.** DEVIATION: no chunk layer. Each Noise message travels in one acknowledged GATT write of at most
+  512 bytes (the longest is 131), and the phone forbids the BLE library from splitting it. A longer message
+  is rejected, not reassembled.
 
 ## Accepted risks for the demo
 
@@ -109,4 +110,4 @@ recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
   provisioning service nor reopen it by restarting the service or the machine.
 - Wrong password, unreachable network, and existing or fallback connections never
   report success; interrupted results recover by attempt ID or stay unknown.
-- The chunk parser survives fuzzing with no panic and bounded memory.
+- Oversized and malformed frames are rejected without panic (unit tests; no fuzzing yet).

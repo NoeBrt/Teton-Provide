@@ -1,277 +1,262 @@
-# Architecture and Selected Stack
+# Architecture
 
-Status: the shared hello contract, the dependency-free simulation, the real BlueZ
-hello peripheral (`ble` feature), and the Expo iPhone configurator probe are
-implemented and tested; the phone-to-device radio exchange is not yet evidenced. No Jetson is currently available. Simulated acceptance and hardware
-acceptance are distinct; the original challenge requires the latter.
-The final demo requires both Android and iPhone configurators and a headless
-Ubuntu PC as the device. A Jetson is an optional later device target.
+A technician's phone hands Wi-Fi credentials to a headless IoT device over Bluetooth Low Energy. The two sides
+share no network and no Internet. The device proves its identity with the key printed on its QR label, the phone
+proves it read that label, and only then does the password travel, encrypted. The device joins the network through
+NetworkManager and reports the address it received for that exact attempt.
 
-The [standalone visual guide](architecture-demo.html) illustrates this topology
-and the proposed phone/desktop technician interface. All actions in that HTML
-are simulated; it is not the runtime configurator.
-
-## Stack
-
-| Responsibility | Choice | Rationale / validation status |
+| Side | Code | Runs on |
 | --- | --- | --- |
-| Baseline | Ubuntu 22.04 target, Rust 1.88.0, edition 2024 | Installed `stable` reports 1.88.0; ARM64/device checks pending |
-| Current runtime | Standard-library threads | No third-party dependencies; builds offline |
-| Simulation | Two bounded `std::sync::mpsc` channels per session, synthetic discovery | Capacity one each; no radio, sockets, root, or Bluetooth dependency |
-| Tests | `cargo test`, `#[test]` | Handler unit tests and simulation integration tests; finite real-time receive deadlines |
-| Developer host preflight | Rust std + busctl/nmcli/GNU timeout, Bash/cat | Read-only prerequisites; no radio success claim |
-| Real BLE runtime | Tokio 1.53 | Optional `ble` feature, locked in `Cargo.lock` |
-| Device BLE | BlueZ GATT/advertising via `bluer` 0.17.4 | Registers and advertises on the real host (`demo/host-ble-endpoint.txt`); no phone exchange yet |
-| Planned Linux diagnostic configurator BLE | `bluer` remote GATT/discovery | Linux role only; not a phone client |
-| Technician interface | Expo SDK 57 + React Native + TypeScript, `react-native-ble-manager` (decision 23) | Hello probe in `configurator/`; iPhone install via a Mac (free Apple ID) or EAS (paid); full flow mocked in `architecture-demo.html` |
-| Later Wi-Fi control | NetworkManager D-Bus via `dbus`/`dbus-tokio` | Match `bluer`'s library family; no password subprocess arguments |
-| Planned device lifecycle | systemd + compiled Rust binary | Host BlueZ/NetworkManager access; permissions/recovery checks pending |
-| Packaging and checks | Cargo.lock, rust-toolchain.toml, Rustfmt, Clippy | Manifest, dependency-free lockfile, and exact toolchain pin exist |
-| State | Memory for the transport milestone | A fresh instance starts available; no persistent provisioning state yet |
+| Configurator (**provide.**) | `configurator/`: Expo SDK 57, React Native 0.86, TypeScript | iPhone (tested), Android (same code, not run) |
+| Device service | `device/main.rs`, `device/wifi.rs`, `src/provision.rs`: Rust 1.88, BlueZ through `bluer`, Noise through `snow`, NetworkManager over D-Bus | Ubuntu 22.04, any adapter with BLE and Wi-Fi |
+| Staging tool | `device/stage.rs` | The device, once, before deployment |
 
-Rust replaces the earlier Python proposal at the user's request to align with
-the fleet. Exact fleet toolchain/crate versions remain to be confirmed.
-Tokio and bluer are absent from the local Cargo cache and the crate index is
-unreachable. [Decision 12](DECISIONS.md#12-executable-simulation-without-uncached-crates)
-therefore uses the standard library for the executable software milestone.
-[BlueR (`bluer`)](https://docs.rs/bluer/0.17.4/bluer/) supports both local and
-remote GATT roles on Linux and uses Tokio. Its
-[manifest](https://docs.rs/crate/bluer/0.17.4/source/Cargo.toml.orig) declares
-the `bluetoothd` feature and `dbus`/`dbus-tokio` dependencies. Candidate `bluer`
-0.17.4 is documentation-reviewed, not build-tested here. Compile only the needed
-features; verify the selected crate graph against Rust 1.88 before locking it.
+Setup and run steps live in the [README](../README.md); the security design and its tests in
+[SECURITY.md](SECURITY.md); every decision with its alternatives in [DECISIONS.md](DECISIONS.md); the live
+requirement check in [tasks/compliance.md](../tasks/compliance.md).
 
-Future BLE builds need the host D-Bus development libraries, `pkg-config`, and a C
-toolchain for libdbus bindings. `pkg-config` detects libdbus locally; complete
-build/link checks and device distribution compatibility are still pending.
-
-## Technician interface and demo topology
-
-The original three-page challenge PDF was reread on 2026-10-17. Pages 1-2 allow
-a phone or second laptop as configurator and require use by a non-developer.
-The user requires both Android and iPhone support and a device without a screen.
-A graphical interface on each mobile platform is part of acceptance.
-
-```text
-Android phone or iPhone                         Headless Ubuntu PC / later Jetson
-Prepared graphical configurator -- secure BLE --> Rust service -- Wi-Fi --> Target network
-```
-
-The technician opens the prepared configurator and enters the site SSID/password
-once per intervention ([decision 22](DECISIONS.md#22-enter-the-site-network-once-provision-room-by-room)).
-Then, room by room, they enter the room number, scan the label of each sensor
-(rooms hold several), and tap **Connect**. The interface
-guides Bluetooth permission/disabled-radio problems, then shows device checking,
-transfer, and network-connection progress per sensor, with targeted retries.
-The scanned label, not the BLE name or signal strength, selects each sensor.
-An established authenticated and encrypted channel is required before any
-credential bytes leave the client; validate confidentiality, integrity, and
-peer authentication explicitly.
-Its mechanism remains a security decision, not an implemented guarantee.
-
-Use labeled fields, a masked password with an explicit reveal control, readable
-touch targets, and text statuses that do not rely on color. Report success only
-after freshly observed NetworkManager state confirms the requested target
-connection is active and has an assigned IP address. Bind that status to the
-current provisioning attempt; an old connection, fallback network, or cached
-address must not count as success. A fresh observation may report the same IP.
-Wrong credentials or an unavailable network need an explanation and retry
-action. If the result is unknown after disconnection, reconnect, authenticate,
-and recover fresh status for that attempt before reporting success or repeating
-a request. An unrecoverable result stays explicitly unknown. No command, SSH,
-or device-side screen interaction belongs in this operator flow. Technical installation and
-identity-label preparation happen beforehand; systemd starts the device service.
-
-An Ubuntu configurator should provide the same guided steps through its local
-Bluetooth adapter. Do not require the phone to reach a server on that computer:
-there is no shared LAN initially, and `localhost` on the phone is the phone.
-The BLE design must prepare and install a working client on each mobile platform
-before provisioning starts, including all assets needed for offline startup.
-Serving a web page from the unprovisioned device would need a separate,
-validated bootstrap channel.
-
-Both mobile platforms are fixed requirements. Before selecting a mobile framework,
-review an authenticated bootstrap that works offline with a headless device on
-both platforms: how a trusted physical label binds device identity, how the
-technician is authorized, and how impersonation/replay and interrupted-result
-recovery are handled. Check the proposed channel's platform APIs and maintained
-library support; a QR, BLE name, or successful hello is not proof of security.
-This is an early design/feasibility review only. Security implementation and
-credential transfer remain blocked until the real harmless BLE milestone passes.
-Then select adapters against the actual supported models and OS versions:
-
-- Android exposes native BLE central APIs for discovery and GATT exchange
-  ([Android documentation](https://developer.android.com/develop/connectivity/bluetooth/ble/ble-overview)).
-  Verify the actual build's scan/connect runtime permissions and denial/retry
-  behavior ([Android permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)).
-- iOS exposes native central operations through Core Bluetooth
-  ([Apple documentation](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/PerformingCommonCentralRoleTasks/PerformingCommonCentralRoleTasks.html)).
-  Verify build, signing, and preinstallation feasibility before choosing an iOS app.
-- A browser client is conditional: verify the exact phone/browser, secure context,
-  offline asset delivery, and user-initiated device selection. Chrome documents
-  Web Bluetooth on Android and requires a secure context and user gesture
-  ([Chrome documentation](https://developer.chrome.com/docs/capabilities/bluetooth)).
-  This does not establish an iPhone solution or encrypt the GATT payload;
-  Android browser success cannot satisfy iPhone acceptance.
-
-Rust remains the device stack. `bluer` is a Linux adapter, not a cross-platform
-mobile UI library. No mobile framework is selected: shared UI or separate native
-clients must first satisfy the same bootstrap and BLE requirements on both
-platforms. Record model/OS versions, build/signing/distribution, preinstallation,
-offline startup, and physical BLE results separately for Android and iPhone.
-The MVP excludes SoftAP and captive portals to avoid
-depending on an interpretation of the challenge's shared-network constraint;
-see [decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp). A physical QR label
-may bootstrap device identity without creating a Wi-Fi setup network.
-The phone configurator exists as a hello probe (`configurator/`); the guided provisioning flow is still a mockup.
-
-## Responsibility boundaries
+## System at a glance
 
 ```mermaid
 flowchart LR
-    C[Configurator hello flow] --> T[Selected transport]
-    T --> P[Shared message handler]
-    P --> D[Device response]
-    D --> T
-    T --> C
+    subgraph workshop["Workshop, before deployment"]
+        stage["stage<br/>device key + 256-bit label secret"] --> label["QR label on the sensor<br/>T1 : id : public key : secret"]
+    end
+    subgraph device["IoT device, Ubuntu, headless"]
+        svc["Device service, Rust<br/>BlueZ GATT, Noise responder"] -->|"D-Bus, password never in argv"| nm["NetworkManager"]
+    end
+    subgraph hallway["Hospital hallway: no Internet, no shared network"]
+        tech(["Technician"]) --> app["provide. app<br/>iPhone or Android"]
+    end
+    label -.->|"camera scan"| app
+    app <-->|"BLE GATT<br/>Noise NKpsk2, ChaCha20-Poly1305"| svc
+    nm -->|"WPA2 join, DHCP"| ap[("Site Wi-Fi")]
+    ap -.->|"once online"| smith["Smith"]
 ```
 
-In simulation, the transport supplies fake device metadata and two bounded
-channels; a worker thread runs the shared handler. The planned hardware adapter
-will use `bluer` and BlueZ for discovery, connection, and GATT exchange. The shared
-handler receives bytes and returns bytes; it imports neither BLE nor NetworkManager.
-Keep simulation wiring out of the real service.
+The device exposes one GATT service with two characteristics. **Hello** answers `world` to `hello` and never
+carries credentials; it lets a technician check the radio link. **Provisioning** carries Noise messages, one per
+acknowledged write, and exists only while the device is staged and not yet provisioned.
 
-The current single Cargo package contains:
+## The technician's flow
+
+<table>
+<tr>
+<td align="center"><img src="architecture/01-searching.png" width="190"><br><sub>1. The app scans as soon as it opens</sub></td>
+<td align="center"><img src="architecture/02-sensors-found.png" width="190"><br><sub>2. Sensors appear; the site Wi-Fi is missing</sub></td>
+<td align="center"><img src="architecture/03-site-wifi.png" width="190"><br><sub>3. Site Wi-Fi, entered once per facility</sub></td>
+<td align="center"><img src="architecture/04-scan-label.png" width="190"><br><sub>4. Scan the label of this sensor</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="architecture/05-encrypted-progress.png" width="190"><br><sub>5. Plain-language steps, inside the card</sub></td>
+<td align="center"><img src="architecture/06-device-connected.png" width="190"><br><sub>6. Device connected, with its new IP</sub></td>
+<td align="center"><img src="architecture/07-label-refused.png" width="190"><br><sub>7. A key mismatch stops before any secret leaves</sub></td>
+<td></td>
+</tr>
+</table>
+
+Video, 33 s: [architecture/demo-simulator.mp4](architecture/demo-simulator.mp4).
+
+The technician taps **Set up** on a sensor. The first time, the app asks for the site Wi-Fi (facility name,
+network, password) and keeps it in the Keychain behind Face ID. Then it opens the camera on the sensor's label,
+runs the four steps (connecting, securing the channel, sending the network, joining the Wi-Fi) and shows the
+result in that sensor's card. The next sensor in the room needs one tap and one scan. Errors name the fix:
+"The Wi-Fi password was refused. Edit the site password, then try again." The device needs no screen, keyboard or
+SSH.
+
+**What these images prove.** They come from the iOS Simulator (`SIMULATION`): the radio is faked, the rest is the
+app's own code. `IOT-DEMO-001` answers with the byte transcript that the device's Rust code produced with `snow`
+(`tests/noise_vectors.rs`), so the app runs its real handshake, encryption and decryption against it.
+`IOT-DEMO-002` answers with a key that does not match its label. NetworkManager plays no part in this video. The
+real-hardware runs are listed under [What is proven](#what-is-proven).
+
+## How one sensor gets its Wi-Fi
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor T as Technician
+    participant P as provide. app
+    participant D as Device service
+    participant N as NetworkManager
+    T->>P: Set up IOT-DEMO-001
+    P->>T: Scan the sensor label
+    T->>P: QR with device ID, public key, label secret
+    P->>D: BLE connect, provisioning service
+    P->>D: write frame 0, Noise message 1 (e, es)
+    D-->>P: read Noise message 2 (e, ee, psk)
+    Note over P: The device proved it holds the key on the label.<br/>A forged reply stops here, nothing secret was sent.
+    P->>D: write frame 1, encrypted Provision(attempt ID, SSID, password)
+    Note over D: Decryption works only if the phone used the label secret.<br/>This phone now holds the device, others get "busy".
+    D-->>P: encrypted Pending
+    D->>N: AddAndActivateConnection, fixed profile UUID, autoconnect off
+    loop every second, up to 60 s
+        P->>D: encrypted Status(attempt ID)
+        D-->>P: encrypted Pending
+    end
+    N-->>D: profile active, IPv4 assigned
+    D->>N: turn autoconnect on
+    Note over D: fsync the provisioned marker
+    P->>D: encrypted Status(attempt ID)
+    D-->>P: encrypted Connected(IPv4)
+    P->>T: Device connected, joined Ward-3
+```
+
+Success means the profile created for this attempt is active and holds an IPv4 address. A fallback connection or
+an older profile never counts. The device reads join failures from NetworkManager's `StateChanged` signal and maps
+them to the technician's words: wrong password, network not in range, timeout.
+
+The attempt ID makes retries safe. If the phone loses the link after sending, the next tap reconnects, runs a
+fresh handshake and sends the same attempt again; the device answers with the stored result instead of joining twice.
+The same ID with a different password is refused, so a corrected password starts a new attempt.
+
+```mermaid
+stateDiagram-v2
+    [*] --> HelloOnly: service starts, no key
+    HelloOnly --> Open: stage, then restart
+    Open --> Claimed: a phone proves the label
+    Claimed --> Open: idle 60 s or bad message
+    Claimed --> Joining: encrypted Provision
+    Joining --> Claimed: wrong password, absent network, timeout
+    Joining --> Provisioned: profile active with IPv4, marker on disk
+    Provisioned --> [*]: provisioning service removed after 20 s
+```
+
+A failed join deletes its profile. At startup an unprovisioned device deletes any profile a crash left behind, so
+only a recorded success can autoconnect after a reboot. A provisioned device never reopens provisioning, even after
+a restart or a power cut.
+
+## Why Bluetooth Low Energy
+
+The constraints rule out most channels before taste enters. The configurator and the device may share no network at
+the start, the technician carries an iPhone or an Android phone, and the device has no screen.
+
+```mermaid
+flowchart TD
+    need["Phone to headless device<br/>no Internet, no shared network"] --> ip{"Creates or needs an IP network?"}
+    ip -->|"yes: building LAN, cloud relay, SoftAP"| out1["Excluded"]
+    ip -->|no| phone{"Works from both iPhone and Android?"}
+    phone -->|"no: Wi-Fi Easy Connect (DPP), Web Bluetooth"| out2["Excluded"]
+    phone -->|yes| hw{"What does the device have?"}
+    hw -->|"BLE radio (noe-lab: MT7921)"| ble["BLE GATT: chosen"]
+    hw -->|"camera (IoT sensors)"| cam["QR shown to the camera: first fallback"]
+    hw -->|"USB port"| usb["Cable: workshop only"]
+```
+
+| Option | Verdict | Reason |
+| --- | --- | --- |
+| **BLE GATT** | **Chosen** | Both phone platforms expose it to apps; Ubuntu exposes a GATT peripheral through BlueZ; no IP network forms; the range of a few metres keeps the technician in front of the device. |
+| SoftAP (the device hosts a setup Wi-Fi) | Excluded | Needs no app install, but the phone joins a network the device creates. The brief forbids a shared local network at the start; we chose not to bet the submission on a reading of "at the start". |
+| Wi-Fi Easy Connect (DPP) | Excluded | Built for this exact job, but only Android offers it to a configurator; iPhone has no API. |
+| Web Bluetooth page | Excluded | Safari on iPhone does not support it, and the page still has to reach the phone offline. |
+| QR shown to the device's camera | Fallback | IoT sensors have cameras; one-way, so success needs feedback (LED, sound, or Smith). Reuses the label key and the NetworkManager code. |
+| USB cable | Fallback | No radio at all; needs a reachable port on a mounted sensor. |
+
+**What BLE costs us.**
+
+- The technician needs a prepared app; nothing works from a bare browser. We build it once with Expo and install it
+  before the visit.
+- BLE pairing does not help. "Just Works" authenticates nobody, a static passkey on the label leaks in about 19
+  reconnects, and out-of-band pairing is closed to iOS apps. We run our own authenticated channel above GATT
+  ([SECURITY.md](SECURITY.md)).
+- Small packets: each Noise message fits one GATT write (the longest is 131 bytes, the limit 512), so the code has
+  no chunking layer.
+- the production sensors may lack BLE. noe-lab, the "device" of this demo, has it; we asked IoT and ranked the
+  fallbacks above ([decision 25](DECISIONS.md#25-channel-if-iots-own-sensors-have-no-ble)).
+
+## How credentials are protected in transit
+
+```mermaid
+flowchart LR
+    L["QR label<br/>device public key + label secret"] --> H{"Noise NKpsk2 handshake"}
+    H -->|"NK: phone checks the device's static key"| A1["Right device"]
+    H -->|"psk2: device checks the phone used the label secret"| A2["Phone that read the label"]
+    A1 & A2 --> C["Session keys from fresh ephemerals"]
+    C --> M["Provision message<br/>ChaCha20-Poly1305"]
+```
+
+- **Handshake.** `Noise_NKpsk2_25519_ChaChaPoly_SHA256`. The phone knows the device's static public key from the
+  label, so a look-alike that advertises `IOT-DEMO-001` cannot answer. The 256-bit label secret, mixed in as a
+  pre-shared key, makes the device accept only phones that read this label. The prologue binds the protocol version
+  and the device ID.
+- **Payload.** The SSID and password leave the phone only inside a transport message, after the handshake. AEAD
+  gives confidentiality and integrity; fresh ephemeral keys give each session new keys, so a recorded session
+  cannot be replayed.
+- **One phone at a time.** The device grants its single slot when the phone's first encrypted message decrypts.
+  Anyone can replay a first handshake message, so that message alone grants nothing.
+- **Single use.** After success the device removes the provisioning service and refuses to reopen it. Changing the
+  network later needs a new label secret from the workshop or, in production, a token signed by Smith.
+- **No plaintext path.** The hello characteristic accepts only `hello`, and no build flag sends credentials any
+  other way. Logs hold outcomes and attempt IDs, never SSID, password, keys or addresses.
+- **Two implementations, one transcript.** The device uses `snow`; the phone uses pure-JavaScript `@noble`
+  primitives. The phone's tests replay the exact bytes `snow` produced; a test with a forged reply checks that the
+  password never reaches the air.
+- **At rest.** The phone keeps each site password in its own Keychain entry behind Face ID. The device keeps its key
+  and secret in a 0600 state directory, and NetworkManager keeps the PSK in a root-only file.
+
+**Risks we accept for the demo.** Someone who photographs a label can provision that sensor before the technician
+does; a Smith manifest or device attestation closes this ([decision 24](DECISIONS.md#24-authenticate-the-sensor-with-its-qr-label-for-the-mvp)).
+With WPA2-Personal every sensor holds the same site password. `snow` has had no formal audit.
+
+## 200 devices in a hospital wing
+
+The flow above already avoids per-device typing: the site Wi-Fi goes in once, and each sensor costs one tap and one
+scan. A wing of 200 sensors run by a facilities team needs the changes below. None of them exist in this repository.
+
+| Change | Why |
+| --- | --- |
+| **Work order from Smith** synced to the phone before the visit: sensor IDs, public keys, room assignments | The phone refuses a label that is not on the list (a sticker swapped in a patient room), and the label secret stops being the only authorization. Device attestation (a per-device certificate from a IoT CA) later removes secrets from labels. |
+| **Per-device Wi-Fi credentials** (EAP-TLS or per-device PSK) issued by Smith | One stolen sensor no longer exposes the hospital's network, revoking one sensor touches one credential, and the phone never holds a facility password. |
+| **Room batches with a queue** | The technician scans every label in a room, then taps once; the app works through the sensors and shows one status each, with targeted retries. Several technicians split the wing. |
+| **Stop the batch on the first wrong password** | A typo should cost one attempt, not 200. |
+| **Staggered joins** | 200 sensors associating and asking for DHCP at once can exhaust an AP or a DHCP pool. |
+| **Result sync to Smith** | The phone records sensor, room, attempt and result, and uploads them when it has a connection. The sensor's own check-in with Smith becomes the final proof. |
+| **Weak-coverage report** | "Network not in range" maps to a room, which tells IT where to add an access point. |
+
+BLE throughput is not the bottleneck: the exchange is a few hundred bytes. The network join dominates (NetworkManager
+allows 45 s), so parallel technicians or concurrent BLE links on one phone set the pace. We have not measured
+concurrent links.
+
+## The path we took
+
+| Step | What we did | What changed our mind |
+| --- | --- | --- |
+| 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match the fleet ([decision 11](DECISIONS.md#11-rust-to-align-with-the-fleet)). |
+| 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([BENCHMARKS.md](BENCHMARKS.md)). |
+| 3 | Wrote `audit-host`, a read-only preflight of BlueZ and NetworkManager, then inventoried the real host. | Bluetooth was soft-blocked by rfkill and BlueZ reported it as a generic "busy"; the device now names rfkill when it cannot power the adapter. |
+| 4 | Compared channels. SoftAP looked best for a zero-install web page. | We excluded it to stay clear of "no shared local network" ([decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
+| 5 | Reviewed security before sending any secret: Just Works, static passkey, LE Secure Connections OOB, SRP6a, Noise. | iOS apps cannot use out-of-band pairing, so the channel had to live above GATT: Noise NKpsk2 keyed by the QR label. |
+| 6 | Built the BlueZ hello peripheral, then an Expo app; first real exchange from an iPhone 15 Pro to Ubuntu. | Six exchanges and a reconnect after a service restart worked ([demo/phone-hello.txt](../demo/phone-hello.txt)). |
+| 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](configurator/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
+| 8 | Added staging, the Noise channel on both sides, attempt IDs and NetworkManager over D-Bus. | Site Wi-Fi once per visit, then saved sites behind Face ID because a technician serves several facilities ([decision 26](DECISIONS.md#26-saved-sites-behind-face-id)). |
+| 9 | Ran two independent reviews. | Eight fixes: a double prompt, a double scan, a cached bad label, a replayed first message that locked the device, a non-durable "provisioned" marker, profiles that kept autoconnect, missed failure reasons. |
+| 10 | Next: join a real Wi-Fi on noe-lab with SSH kept on Ethernet, capture the air with `btmon`, start the service from systemd, run offline, run on Android. | |
+
+The [standalone mockup](architecture-demo.html) from step 4 shows the early design; the app has replaced it.
+
+## What is proven
+
+| Claim | Evidence | Class |
+| --- | --- | --- |
+| An iPhone finds the device by service UUID and exchanges `hello`/`world` over real BLE, again after a restart | [demo/phone-hello.txt](../demo/phone-hello.txt): iPhone 15 Pro, iOS 27.0; Ubuntu 22.04.5, BlueZ 5.64 | `ACTUAL_BLE` |
+| Phone and device speak the same Noise, byte for byte, and a forged device never receives the password | `tests/noise_vectors.rs`, `configurator/src/noise.test.ts`, `configurator/src/setup.test.ts` | `COMMAND_FIXTURE` |
+| Device protocol: replay, conflicting attempts, single use, one phone at a time, durable marker | `cargo test --features ble --bin device`, `cargo test --features stage`, [demo/tdd-provision.txt](../demo/tdd-provision.txt) | `COMMAND_FIXTURE` |
+| Technician flow on screen, including the refusal of a mismatched label | Screens and video above | `SIMULATION` |
+| The device joins a real Wi-Fi network with received credentials | Waiting for an Ethernet cable on noe-lab, so the test cannot cut the SSH link it runs over | `NOT_RUN` |
+| No SSID or password bytes in a BLE capture | `btmon` capture planned with the real join | `NOT_RUN` |
+| Full flow with Internet off, systemd start at boot, Android | Planned | `NOT_RUN` |
+
+## Code map
 
 ```text
-Cargo.toml / Cargo.lock / rust-toolchain.toml
-src/lib.rs / src/protocol.rs   shared byte handler, unit tests beside code
-src/simulation.rs             reusable fake transport, lifecycle unit tests
-src/simulation/batch.rs       bounded pool of independent simulated device jobs
-tests/simulation.rs           discovery, exchange, rejection, recovery tests
-tests/scaled.rs               public batch API coverage and concurrency bounds
-examples/simulation.rs        labeled hello demonstration
-examples/benchmark.rs         local measurements and bounded soak runner
-device/audit.rs               read-only Ubuntu host preflight binary
-tests/host_audit.rs           public CLI tests with external-command fixtures
+src/provision.rs      Noise session, request/response encoding, attempt registry (shared with tests)
+src/protocol.rs       Service and characteristic UUIDs, the hello contract
+device/main.rs        BLE peripheral: hello and provisioning characteristics, one-phone claim, single use
+device/wifi.rs        NetworkManager over D-Bus: activation, failure reasons, profile cleanup
+device/stage.rs       Staging: key, label secret, QR label, handshake self-check
+device/audit.rs       Read-only host preflight
+configurator/App.tsx  Scan, sensor cards, set-up flow wiring
+configurator/src/     noise.ts (Noise initiator), setup.ts (one sensor), flow.ts (site → label → join),
+                      SiteSheet.tsx (sites behind Face ID), LabelScanner.tsx (QR), probe.ts (hello test)
+tests/                Noise vectors, simulation, scale and host-audit tests
 ```
-
-`device/main.rs` is the real BLE peripheral, declared with
-`required-features = ["ble"]` and optional `bluer`/`tokio` dependencies.
-`configurator/` is a separate Expo project, not a Cargo target. Default software
-tests must not build libdbus or connect to BlueZ. The demo, integration tests, and benchmark reuse the same
-simulation module and handler. Add no unused modules, generic transport
-framework, or multi-crate workspace.
-
-## First message contract
-
-- Demo identity: `IOT-DEMO-001`; its name is only a discovery hint.
-- Request: exactly the five bytes `hello`; response: exactly `world`.
-- Reject other input without echoing or logging it. This endpoint accepts no credentials.
-- One request at a time; nonblocking sends, finite receive deadlines, explicit errors.
-- The simulator rejects inputs above 20 bytes before copying; this is a software
-  bound, not a measured BLE MTU.
-- Each new connection gets fresh channels. Timeout/disconnect closes the session;
-  retry requires a fresh connection. Invalid input leaves a valid session usable.
-- Closing drops the reply receiver before the request sender, then joins the worker,
-  so late replies cannot be accepted by the closed session.
-- Device stop disables discovery, new connections, and subsequent requests. A wait
-  already in progress keeps its receive deadline; stop is not instant cancellation.
-
-The eventual BLE adapter advertises a project-specific service UUID and exposes
-one characteristic with write and read properties. The configurator performs
-an acknowledged write, then reads the response. Both messages are small; no
-fragmentation or notification protocol is needed for this probe. The UUID will
-be generated once and stored in the shared contract when the BLE adapter is built.
-The secure provisioning protocol may need a different framing scheme later.
-
-## What simulation proves
-
-| Check | Software simulation | Required later |
-| --- | --- | --- |
-| Discover expected demo ID | Synthetic registry only | Actual advertisements and scan |
-| `hello` response | Actual shared handler through channels | GATT write/read over BLE |
-| Timeout, disconnect, retry | Injected dropped reply/disconnect; bounded real-time waits | Driver/radio disconnect behavior |
-| Restart | Replace simulated device instance | systemd restart and machine reboot |
-| Offline operation | No external services by construction | Radio demo without Internet or shared LAN |
-| Wi-Fi success | Not simulated in milestone one | Fresh authenticated status for requested target connection and its assigned IP; no old/fallback success |
-
-Do not label software logs as successful BLE provisioning. Future fake network
-results must also be labeled simulations; they cannot satisfy the real-Wi-Fi requirement.
-
-The 40 Rust tests (15 handler/simulation, four scaled batches, four benchmark harness,
-17 host-preflight CLI tests)
-pass in debug and release on the installed Rust 1.88.0 compiler. The software checkpoint includes
-three benchmark trials and a completed 300-second recovery soak; see
-[the measured results and raw evidence](BENCHMARKS.md).
-The follow-up scale matrix also has three independent process trials.
-The public release-executable regression adds four CLI cases through
-`python3 tests/benchmark_cli.py target/release/examples/benchmark` after building
-the examples; it checks help and redacted rejection of invalid OS arguments.
-Run the full suite with
-`RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline`; use this
-override only after confirming `stable` is 1.88.0. Standard Ubuntu setup must
-preinstall the pinned toolchain and its Rustfmt/Clippy components; Cargo's
-`--offline` flag does not prevent rustup from downloading a missing compiler.
-
-Benchmark and soak evidence must identify the release profile, commands, host,
-sample counts, elapsed time, and outcomes. Thread/channel measurements describe
-this software harness only; they predict neither BLE throughput nor capacity
-for 200 real devices. A simulated restart replaces an object, not a systemd
-service or machine reboot.
-
-`audit-host [hciN]` prepares actual Ubuntu checks without requiring Rust BLE
-libraries. It resolves the current BlueZ unique bus name before reading the
-selected adapter's power, GATT method, and advertising method/capacity. Unique
-names cannot autoactivate BlueZ if it is stopped or disappears. NetworkManager
-is queried only for device type and management status, not profiles or addresses.
-GNU timeout kills each read-only command group at four seconds; stdout capture
-is capped at 8 KiB and stderr is discarded. Exit 0 means observed prerequisites,
-not working registration permissions, advertisements, or Wi-Fi activation.
-The actual restricted-host run fails closed; public-command fixtures validate
-software behavior only. See decision 16 and the README preflight command.
-
-The scaled software workload queues task indices at batch start. A bounded
-pool creates an independent fake device/session for each job, checks literal
-`hello`/`world`, and closes/joins it. The public batch API rejects sizes outside
-1-10,000 jobs and concurrency outside 1-32 clients before allocation/spawning.
-Each active client uses at most one session worker; a healthy batch therefore
-uses at most twice its client limit plus the calling thread. This is a per-batch
-limit; callers running several batches at once must bound their aggregate load.
-The example uses at most eight clients. Indices identify synthetic jobs, not
-advertised physical identities. BLE discovery and production queueing remain future work.
-
-## Docker and alternatives
-
-Docker is optional packaging for the same software tests. If added, use an
-unprivileged runner with networking disabled and dependencies already in the
-image. Do not add a Compose network: it would introduce a shared LAN the actual
-challenge does not assume. Docker's host Bluetooth/D-Bus passthrough would still
-exercise host hardware and require host access.
-
-A BlueZ `btvirt`/VHCI integration lab could later test actual GATT registration
-without physical radios, but requires host kernel/device access. It is outside
-the first simulation; see the [BlueZ emulator source](https://kernel.googlesource.com/pub/scm/bluetooth/bluez.git/+/master/emulator/vhci.c).
-SoftAP was considered for a zero-install local web interface, but is excluded
-from the MVP under decision 18. If BLE proves unsuitable, record the failed gate
-and reassess hardware/client options without silently adding a setup Wi-Fi network.
-QR provisioning remains a documented alternative, not another implementation.
-
-## Boundaries for later phases
-
-Review authenticated-channel and physical device-identity bootstrap feasibility
-on both mobile platforms before framework selection. Before any wireless
-credential transfer, select and validate that authenticated, encrypted channel. Evaluate BLE
-authenticated pairing against a library-based application channel; decide based on actual
-I/O capabilities and platform support. A BLE name, RSSI, or raw Diffie-Hellman
-exchange is insufficient. Record sender authorization, replay policy, and
-post-success exposure in `docs/SECURITY.md` before enabling secrets.
-
-Then implement NetworkManager activation with fresh, authenticated confirmation
-of the requested target connection and its IP, recovery after an interrupted
-result, technician-friendly errors, and the required Android/iPhone graphical
-interfaces. Keep the Ubuntu alternative. The demo targets
-personal WPA Wi-Fi; hospital EAP/certificate requirements are a separate scope.
-Discuss site profiles, authenticated manifests, bounded queues, multiple operators,
-and staging versus corridor setup for 200 devices; do not implement orchestration now.

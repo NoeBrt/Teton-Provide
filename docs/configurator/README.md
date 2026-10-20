@@ -5,8 +5,8 @@ screen a facilities technician uses, and why each change was made. All screensho
 Simulator with fake sensors (`SIMULATION`) unless stated otherwise; the real BLE run is recorded in
 [`demo/phone-hello.txt`](../../demo/phone-hello.txt) (`ACTUAL_BLE`).
 
-The app still only sends `hello` and expects `world`. It carries no Wi-Fi credentials and no
-cryptography: those come after the radio milestone (see `tasks/todo.md`, checkpoint H).
+This history covers the hello-probe stage. The app now also sets up a sensor's Wi-Fi over the encrypted
+channel; those screens and a video are in [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md#the-technicians-flow).
 
 ## Evolution
 
