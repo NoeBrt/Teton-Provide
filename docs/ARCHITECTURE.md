@@ -120,7 +120,7 @@ stateDiagram-v2
     Claimed --> Joining: encrypted Provision
     Joining --> Claimed: wrong password, absent network, timeout
     Joining --> Provisioned: profile active with IPv4, marker on disk
-    Provisioned --> [*]: provisioning service removed after 20 s
+    Provisioned --> [*]: provisioning service removed after 2 min
 ```
 
 A failed join deletes its profile. At startup an unprovisioned device deletes any profile a crash left behind, so
@@ -231,7 +231,7 @@ concurrent links.
 | 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](configurator/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
 | 8 | Added staging, the Noise channel on both sides, attempt IDs and NetworkManager over D-Bus. | Site Wi-Fi once per visit, then saved sites behind Face ID because a technician serves several facilities ([decision 26](DECISIONS.md#26-saved-sites-behind-face-id)). |
 | 9 | Ran two independent reviews. | Eight fixes: a double prompt, a double scan, a cached bad label, a replayed first message that locked the device, a non-durable "provisioned" marker, profiles that kept autoconnect, missed failure reasons. |
-| 10 | Next: join a real Wi-Fi on noe-lab with SSH kept on Ethernet, capture the air with `btmon`, start the service from systemd, run offline, run on Android. | |
+| 10 | Installed the systemd service and ran the real setup from the iPhone, with SSH on Ethernet and `btmon` recording. | The device joined, but the phone never got the result: BlueZ's battery plugin read the iPhone's battery level, iOS asked to pair, and BlueZ stopped answering. `bluetoothd` now runs without that plugin; the second run showed **Device connected** ([demo/real-join.txt](../demo/real-join.txt)). |
 
 The [standalone mockup](architecture-demo.html) from step 4 shows the early design; the app has replaced it.
 
@@ -243,9 +243,10 @@ The [standalone mockup](architecture-demo.html) from step 4 shows the early desi
 | Phone and device speak the same Noise, byte for byte, and a forged device never receives the password | `tests/noise_vectors.rs`, `configurator/src/noise.test.ts`, `configurator/src/setup.test.ts` | `COMMAND_FIXTURE` |
 | Device protocol: replay, conflicting attempts, single use, one phone at a time, durable marker | `cargo test --features ble --bin device`, `cargo test --features stage`, [demo/tdd-provision.txt](../demo/tdd-provision.txt) | `COMMAND_FIXTURE` |
 | Technician flow on screen, including the refusal of a mismatched label | Screens and video above | `SIMULATION` |
-| The device joins a real Wi-Fi network with received credentials | Waiting for an Ethernet cable on noe-lab, so the test cannot cut the SSH link it runs over | `NOT_RUN` |
-| No SSID or password bytes in a BLE capture | `btmon` capture planned with the real join | `NOT_RUN` |
-| Full flow with Internet off, systemd start at boot, Android | Planned | `NOT_RUN` |
+| An iPhone sets up the device's Wi-Fi end to end: label scan, encrypted exchange, NetworkManager join, Device connected with the address | [demo/real-join.txt](../demo/real-join.txt) | `ACTUAL` |
+| The credentials cross the air only inside an encrypted write; the SSID bytes appear nowhere in a `btmon` capture | [demo/real-join.txt](../demo/real-join.txt) | `ACTUAL` |
+| The systemd service answers a phone whose network is off | [demo/service-offline-hello.txt](../demo/service-offline-hello.txt) | `ACTUAL_BLE` |
+| Wrong password and absent network on hardware, reboot, Android | Planned | `NOT_RUN` |
 
 ## Code map
 

@@ -16,17 +16,17 @@ network through NetworkManager and reports the IPv4 address it received for that
 | Device service (Rust) | `device/main.rs` (BLE peripheral), `device/wifi.rs` (NetworkManager), `src/provision.rs` (Noise, protocol), `device/stage.rs` (label) |
 | Configurator app **provide.** (Expo, React Native) | `configurator/` |
 
-**Status.** The phone and the device exchange messages over real BLE, and the encrypted protocol passes its tests
-on both sides. The full flow runs in the iOS Simulator against the device's own Noise transcript. A real Wi-Fi join
-from the phone has **not** run yet: the test machine has no second network link, and joining its Wi-Fi would cut
-the SSH session the test runs over. See [What is proven](docs/ARCHITECTURE.md#what-is-proven).
+**Status.** An iPhone set up the Wi-Fi of the Ubuntu device end to end on real hardware: label scan, encrypted
+BLE exchange, NetworkManager join, **Device connected** with the address ([demo/real-join.txt](demo/real-join.txt)).
+A `btmon` capture shows the credentials only inside an encrypted write. Not run yet: wrong-password and
+absent-network cases on hardware, a reboot test, Android. See [What is proven](docs/ARCHITECTURE.md#what-is-proven).
 
 ## Hardware and assumptions
 
 | Role | Requirement | Tested with |
 | --- | --- | --- |
 | Device | Ubuntu 22.04 or 24.04, x86-64; one adapter with **BLE peripheral** support and one **Wi-Fi** interface managed by NetworkManager | Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MediaTek MT7921 (Wi-Fi + Bluetooth) |
-| Device admin link | Ethernet or console if you administer over SSH: provisioning moves the Wi-Fi interface to the new network | none yet (see Status) |
+| Device admin link | Ethernet or console if you administer over SSH: provisioning moves the Wi-Fi interface to the new network | Ethernet (`eno1`) |
 | Target network | WPA2-Personal (SSID and passphrase, 8 to 63 characters). Enterprise Wi-Fi (EAP) is out of scope. | |
 | Configurator | iPhone with the app installed beforehand; Android builds from the same code | iPhone 15 Pro, iOS 27.0; Android not run |
 | Label | A way to print the device's QR label (any printer, or a screen) | 48 mm thermal sticker printer |
@@ -129,7 +129,9 @@ NetworkManager without changing anything.
 | iPhone to Ubuntu over real BLE: discovery, six exchanges, reconnect after a service restart | [demo/phone-hello.txt](demo/phone-hello.txt) | `ACTUAL_BLE` |
 | Encrypted protocol, test-first trace | [demo/tdd-provision.txt](demo/tdd-provision.txt) | `COMMAND_FIXTURE` |
 | Full technician flow, real app code, recorded device transcript, fake radio | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-technicians-flow) | `SIMULATION` |
-| Real Wi-Fi join, BLE capture without credential bytes, Android | | `NOT_RUN` |
+| Real setup from the iPhone: encrypted exchange, Wi-Fi join, Device connected; capture without the SSID | [demo/real-join.txt](demo/real-join.txt) | `ACTUAL` |
+| Offline hello against the systemd service | [demo/service-offline-hello.txt](demo/service-offline-hello.txt) | `ACTUAL_BLE` |
+| Wrong password and absent network on hardware, reboot, Android | | `NOT_RUN` |
 
 Earlier material: [solution report (PDF, French)](docs/rapport-solution.pdf) and the
 [first interactive mockup](docs/architecture-demo.html); the step-by-step engineering log is in

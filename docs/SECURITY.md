@@ -71,7 +71,7 @@ recorded in decision 24 of `docs/DECISIONS.md`; the MVP keeps the QR label.
   For a 200-device rollout the phone also checks the scanned key against a fleet
   manifest signed by Smith and preloaded, which defeats a QR stuck over the label.
 - **Single use.** Success is terminal: the device unregisters the provisioning
-  GATT service 20 s after success, which leaves the phone time to read the result. DEVIATION: it does not actively
+  GATT service 2 min after success, which leaves time to read the result or recover it with a retry. DEVIATION: it does not actively
   disconnect peers; they lose the service. A provisioned device never reopens
   provisioning after a restart, crash, or power cut; software cannot tell those
   apart. Re-provisioning needs a re-provision token signed by Smith, or a

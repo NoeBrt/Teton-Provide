@@ -17,8 +17,16 @@ install -d /etc/polkit-1/localauthority/50-local.d /etc/polkit-1/rules.d
 install -m 644 device/systemd/iot-device.pkla /etc/polkit-1/localauthority/50-local.d/
 install -m 644 device/systemd/50-iot-device.rules /etc/polkit-1/rules.d/
 if [ -n "${1:-}" ]; then echo "IOT_WIFI_INTERFACE=$1" > /etc/default/iot-device; fi
+# A IoT device is a BLE peripheral only. BlueZ's battery plugin reads the battery level of each connected phone;
+# iOS requires an encrypted link for it, so BlueZ asks the phone to pair, pairing fails, and BlueZ stops answering
+# the phone's reads until it disconnects (seen in a btmon capture of a real setup). Run bluetoothd without it.
+bluetoothd=$(ls /usr/libexec/bluetooth/bluetoothd /usr/lib/bluetooth/bluetoothd 2>/dev/null | head -n 1)
+install -d /etc/systemd/system/bluetooth.service.d
+printf '[Service]\nExecStart=\nExecStart=%s --noplugin=battery\n' "$bluetoothd" > /etc/systemd/system/bluetooth.service.d/iot-device.conf
 install -d -o iot -g iot -m 700 /var/lib/iot-device
 
 systemctl daemon-reload
-systemctl enable --now iot-device
+systemctl restart bluetooth
+systemctl enable iot-device
+systemctl restart iot-device   # also picks up a new binary on reinstall
 systemctl --no-pager --lines=5 status iot-device
