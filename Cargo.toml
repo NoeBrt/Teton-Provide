@@ -22,15 +22,21 @@ path = "device/stage.rs"
 required-features = ["stage"]
 
 [[bin]]
+name = "authority"
+path = "device/authority.rs"
+required-features = ["stage"]
+
+[[bin]]
 name = "device"
 path = "device/main.rs"
 required-features = ["ble"]
 
 [features]
 ble = ["dep:bluer", "dep:tokio", "dep:dbus", "provision"]
-# Encrypted Wi-Fi provisioning protocol (Noise NKpsk2); default builds stay free of third-party crates.
-provision = ["dep:snow", "dep:sha2"]
-# Staging tool: prints the device's QR label.
+# Encrypted Wi-Fi provisioning protocol (Noise XX, device certificates, technician tokens); default builds stay
+# free of third-party crates.
+provision = ["dep:snow", "dep:sha2", "dep:ed25519-dalek"]
+# Staging (on the device) and authority (at the workshop) tools; the authority prints token QR codes.
 stage = ["provision", "dep:qrcode"]
 
 [dependencies]
@@ -38,9 +44,11 @@ bluer = { version = "0.17.4", features = ["bluetoothd"], optional = true }
 tokio = { version = "1", features = ["rt", "macros", "signal", "sync", "time"], optional = true }
 # Same dbus crate bluer already uses; talks to NetworkManager.
 dbus = { version = "0.9", optional = true }
-qrcode = { version = "0.14", default-features = false, features = ["svg"], optional = true }
+qrcode = { version = "0.14", default-features = false, optional = true }
 snow = { version = "0.10", optional = true }
 sha2 = { version = "0.10", optional = true }
+# Device certificates and technician tokens; shares curve25519-dalek and sha2 with snow.
+ed25519-dalek = { version = "2", optional = true }
 
 [dev-dependencies]
 # Already in the graph through snow; derives the fixed test key's public half for the interop vectors.

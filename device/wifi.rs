@@ -1,7 +1,11 @@
 //! Wi-Fi activation through NetworkManager's D-Bus API (never `nmcli`: the password must not reach argv).
 //! Success means the profile created for *this* attempt is active and holds an IPv4 address; an older or
-//! fallback connection never counts. The profile has one fixed UUID and is created without autoconnect;
-//! autoconnect is turned on only after success, and [`forget`] removes a failed or orphaned profile.
+//! fallback connection never counts.
+//!
+//! The service owns two profiles with fixed UUIDs and uses them in turn. A new attempt (first setup or a
+//! reconfiguration) joins with the one not in use, created without autoconnect; only after success does it get
+//! autoconnect and replace the previous one. A failure deletes the new profile and brings the previous one back,
+//! so a typo in a new password never leaves a sensor offline.
 
 use dbus::Path;
 use dbus::arg::{PropMap, Variant};
@@ -23,8 +27,11 @@ const SETTINGS_PATH: &str = "/org/freedesktop/NetworkManager/Settings";
 const SETTINGS: &str = "org.freedesktop.NetworkManager.Settings";
 const PROFILE: &str = "org.freedesktop.NetworkManager.Settings.Connection";
 const NOT_FOUND: &str = "org.freedesktop.NetworkManager.Settings.InvalidConnection";
-/// The only profile this service creates, so a retry or a restart finds and replaces it.
-const PROFILE_UUID: &str = "4a7db77c-6fda-47aa-95ca-d186c5096b32";
+/// The only two profiles this service creates; the first one is also the profile of earlier versions.
+pub const PROFILE_UUIDS: [&str; 2] = [
+    "4a7db77c-6fda-47aa-95ca-d186c5096b32",
+    "b5b2bc3f-8221-4a28-8c40-5e078953fcf2",
+];
 const CALL: Duration = Duration::from_secs(5);
 const ACTIVATION: Duration = Duration::from_secs(45);
 const POLL: Duration = Duration::from_millis(100);
@@ -33,12 +40,53 @@ const ACTIVE_ACTIVATED: u32 = 2;
 const ACTIVE_DEACTIVATED: u32 = 4;
 const DEVICE_STATE_FAILED: u32 = 120;
 
-/// Joins the network and reports the outcome; `interface` pins the Wi-Fi device (`TETON_WIFI_INTERFACE`).
-pub fn activate(ssid: &[u8], password: &[u8], interface: Option<&str>) -> Outcome {
+/// The profile a new attempt uses: the one not holding the current working network.
+pub fn next_profile(current: Option<&str>) -> &'static str {
+    if current == Some(PROFILE_UUIDS[0]) {
+        PROFILE_UUIDS[1]
+    } else {
+        PROFILE_UUIDS[0]
+    }
+}
+
+/// Joins the network with the profile not in use and reports the outcome and that profile;
+/// `interface` pins the Wi-Fi device (`TETON_WIFI_INTERFACE`), `current` is the working profile, if any.
+pub fn activate(
+    ssid: &[u8],
+    password: &[u8],
+    interface: Option<&str>,
+    current: Option<&str>,
+) -> (Outcome, &'static str) {
+    let profile = next_profile(current);
     let Ok(password) = std::str::from_utf8(password) else {
-        return Outcome::Failed(Failure::WrongPsk); // a WPA2 passphrase is printable ASCII
+        return (Outcome::Failed(Failure::WrongPsk), profile); // a WPA2 passphrase is printable ASCII
     };
-    run(ssid, password, interface).unwrap_or(Outcome::Failed(Failure::NmcliError))
+    let outcome =
+        run(ssid, password, interface, profile).unwrap_or(Outcome::Failed(Failure::NmcliError));
+    if !matches!(outcome, Outcome::Connected { .. }) {
+        roll_back(profile, current, interface);
+    }
+    (outcome, profile)
+}
+
+/// Undoes an attempt: deletes its profile and brings the working one back, if there was one.
+pub fn roll_back(attempt: &str, current: Option<&str>, interface: Option<&str>) {
+    let undone = || -> Result<(), dbus::Error> {
+        let bus = Connection::new_system()?;
+        delete(&bus, attempt)?;
+        if let Some(current) = current {
+            let nm = bus.with_proxy(NM, NM_PATH, CALL);
+            let device = wifi_device(&bus, &nm, interface)?;
+            let profile = find(&bus, current)?
+                .ok_or_else(|| dbus::Error::new_failed("working profile missing"))?;
+            let _: (Path<'static>,) =
+                nm.method_call(NM, "ActivateConnection", (profile, device, Path::from("/")))?;
+        }
+        Ok(())
+    };
+    if undone().is_err() {
+        println!("could not restore the previous Wi-Fi profile; its autoconnect will retry");
+    }
 }
 
 /// NMDeviceStateReason values seen when joining fails (NetworkManager's nm-dbus-interface.h).
@@ -50,8 +98,8 @@ pub fn failure_for(reason: u32) -> Failure {
     }
 }
 
-/// Whether the provisioning profile is the one up on a device right now (read-only; no polkit needed).
-pub fn profile_active() -> bool {
+/// Whether `profile` is the one up on a device right now (read-only; no polkit needed).
+pub fn profile_active(profile: &str) -> bool {
     let check = || -> Result<bool, dbus::Error> {
         let bus = Connection::new_system()?;
         let active: Vec<Path<'static>> = bus
@@ -59,7 +107,7 @@ pub fn profile_active() -> bool {
             .get(NM, "ActiveConnections")?;
         for path in active {
             let connection = bus.with_proxy(NM, &path, CALL);
-            if connection.get::<String>(ACTIVE, "Uuid")? == PROFILE_UUID {
+            if connection.get::<String>(ACTIVE, "Uuid")? == profile {
                 return Ok(connection.get::<u32>(ACTIVE, "State")? == ACTIVE_ACTIVATED);
             }
         }
@@ -68,30 +116,46 @@ pub fn profile_active() -> bool {
     check().unwrap_or(false)
 }
 
-/// Deletes the provisioning profile if there is one: a failed attempt, or one left by a crash before
-/// success was recorded. Never touches other profiles.
-pub fn forget() -> Result<(), dbus::Error> {
-    forget_on(&Connection::new_system()?)
+/// Deletes this service's profiles except `keep`: a failed attempt, or one left by a crash before its success
+/// was recorded. Never touches other profiles.
+pub fn forget_except(keep: Option<&str>) -> Result<(), dbus::Error> {
+    let bus = Connection::new_system()?;
+    for profile in PROFILE_UUIDS.into_iter().filter(|p| Some(*p) != keep) {
+        delete(&bus, profile)?;
+    }
+    Ok(())
 }
 
-fn forget_on(bus: &Connection) -> Result<(), dbus::Error> {
+fn find(bus: &Connection, uuid: &str) -> Result<Option<Path<'static>>, dbus::Error> {
     let found: Result<(Path<'static>,), dbus::Error> = bus
         .with_proxy(NM, SETTINGS_PATH, CALL)
-        .method_call(SETTINGS, "GetConnectionByUuid", (PROFILE_UUID,));
+        .method_call(SETTINGS, "GetConnectionByUuid", (uuid,));
     match found {
-        Ok((profile,)) => bus
-            .with_proxy(NM, &profile, CALL)
-            .method_call(PROFILE, "Delete", ()),
-        Err(error) if error.name() == Some(NOT_FOUND) => Ok(()),
+        Ok((profile,)) => Ok(Some(profile)),
+        Err(error) if error.name() == Some(NOT_FOUND) => Ok(None),
         Err(error) => Err(error),
     }
 }
 
-fn run(ssid: &[u8], password: &str, interface: Option<&str>) -> Result<Outcome, dbus::Error> {
+fn delete(bus: &Connection, uuid: &str) -> Result<(), dbus::Error> {
+    match find(bus, uuid)? {
+        Some(profile) => bus
+            .with_proxy(NM, &profile, CALL)
+            .method_call(PROFILE, "Delete", ()),
+        None => Ok(()),
+    }
+}
+
+fn run(
+    ssid: &[u8],
+    password: &str,
+    interface: Option<&str>,
+    uuid: &str,
+) -> Result<Outcome, dbus::Error> {
     let bus = Connection::new_system()?;
     let nm = bus.with_proxy(NM, NM_PATH, CALL);
     let device = wifi_device(&bus, &nm, interface)?;
-    forget_on(&bus)?; // a previous attempt's profile would clash on the fixed UUID
+    delete(&bus, uuid)?; // an earlier attempt's leftover would clash on the fixed UUID
     // Every device state change is caught: a short FAILED state between two polls is not lost.
     let failed_reason = Arc::new(AtomicU32::new(0));
     let seen = failed_reason.clone();
@@ -107,7 +171,11 @@ fn run(ssid: &[u8], password: &str, interface: Option<&str>) -> Result<Outcome, 
     let (profile, active): (Path<'static>, Path<'static>) = nm.method_call(
         NM,
         "AddAndActivateConnection",
-        (settings(ssid, password, false), device, Path::from("/")),
+        (
+            settings(ssid, password, false, uuid),
+            device,
+            Path::from("/"),
+        ),
     )?;
     let mut outcome = wait(&bus, &active, &failed_reason);
     let _ = bus.remove_match(token);
@@ -116,19 +184,21 @@ fn run(ssid: &[u8], password: &str, interface: Option<&str>) -> Result<Outcome, 
         let enabled: Result<(), dbus::Error> = bus.with_proxy(NM, &profile, CALL).method_call(
             PROFILE,
             "Update",
-            (settings(ssid, password, true),),
+            (settings(ssid, password, true, uuid),),
         );
         if enabled.is_err() {
             outcome = Outcome::Failed(Failure::NmcliError);
         }
     }
-    if !matches!(outcome, Outcome::Connected { .. }) && forget_on(&bus).is_err() {
-        println!("failed profile could not be deleted");
-    }
     Ok(outcome)
 }
 
-fn settings(ssid: &[u8], password: &str, autoconnect: bool) -> HashMap<&'static str, PropMap> {
+fn settings(
+    ssid: &[u8],
+    password: &str,
+    autoconnect: bool,
+    uuid: &str,
+) -> HashMap<&'static str, PropMap> {
     let text = |value: &str| Variant(Box::new(value.to_string()) as Box<dyn dbus::arg::RefArg>);
     let section = |entries: Vec<(&str, Variant<Box<dyn dbus::arg::RefArg>>)>| -> PropMap {
         entries
@@ -142,7 +212,7 @@ fn settings(ssid: &[u8], password: &str, autoconnect: bool) -> HashMap<&'static 
             section(vec![
                 ("type", text("802-11-wireless")),
                 ("id", text("teton-provisioned")),
-                ("uuid", text(PROFILE_UUID)),
+                ("uuid", text(uuid)),
                 ("autoconnect", Variant(Box::new(autoconnect))),
             ]),
         ),
@@ -232,6 +302,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn attempts_alternate_between_the_two_profiles() {
+        assert_eq!(next_profile(None), PROFILE_UUIDS[0]);
+        assert_eq!(next_profile(Some(PROFILE_UUIDS[0])), PROFILE_UUIDS[1]);
+        assert_eq!(next_profile(Some(PROFILE_UUIDS[1])), PROFILE_UUIDS[0]);
+        assert_ne!(PROFILE_UUIDS[0], PROFILE_UUIDS[1]);
+    }
+
+    #[test]
     fn join_failures_map_to_technician_messages() {
         assert_eq!(failure_for(7), Failure::WrongPsk);
         assert_eq!(failure_for(8), Failure::WrongPsk);
@@ -241,15 +319,13 @@ mod tests {
 
     #[test]
     fn a_non_utf8_password_fails_without_touching_networkmanager() {
-        assert_eq!(
-            activate(b"Ward-3", &[0xff; 8], Some("none")),
-            Outcome::Failed(Failure::WrongPsk)
-        );
+        let (outcome, _) = activate(b"Ward-3", &[0xff; 8], Some("none"), None);
+        assert_eq!(outcome, Outcome::Failed(Failure::WrongPsk));
     }
 
     #[test]
     fn settings_ask_for_wpa_psk_with_dhcp() {
-        let settings = settings(b"Ward-3", "correct horse", false);
+        let settings = settings(b"Ward-3", "correct horse", false, PROFILE_UUIDS[1]);
         let key = |section: &str, key: &str| settings[section][key].0.as_str().map(str::to_string);
         assert_eq!(
             key("802-11-wireless-security", "key-mgmt").as_deref(),
@@ -260,7 +336,7 @@ mod tests {
             key("connection", "type").as_deref(),
             Some("802-11-wireless")
         );
-        assert_eq!(key("connection", "uuid").as_deref(), Some(PROFILE_UUID));
+        assert_eq!(key("connection", "uuid").as_deref(), Some(PROFILE_UUIDS[1]));
         assert_eq!(
             settings["connection"]["autoconnect"].0.as_u64(),
             Some(0),

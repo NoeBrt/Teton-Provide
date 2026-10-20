@@ -1,25 +1,37 @@
-//! Staging, run once per device before deployment (never over BLE): creates the device key and label
-//! secret in the state directory, checks them with a real handshake, and prints the QR label.
+//! Staging, run on the device before deployment (never over BLE).
 //!
-//! Usage: `stage [STATE_DIRECTORY]` (default `./state`; the systemd unit uses /var/lib/teton-device).
-//! The label holds the label secret: print it, stick it on the device, and do not share the image.
+//! ```text
+//! stage init STATE_DIRECTORY
+//!     creates the device's static key; prints its public key, to be certified at the workshop
+//! stage install STATE_DIRECTORY CERTIFICATE_HEX TECHNICIAN_AUTHORITY_HEX
+//!     stores the certificate the device authority signed for this key, and the technician authority's public
+//!     key; the device then advertises its ID and accepts encrypted provisioning
+//! ```
+//!
+//! Nothing here is secret on the command line: the private key never leaves the state directory (0600).
 
-use qrcode::QrCode;
-use qrcode::render::{svg, unicode};
-use snow::Builder;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use teton_provisioning::protocol::DEVICE_ID;
-use teton_provisioning::provision::{
-    IDENTITY_FILE, Identity, MAX_MESSAGE, NOISE_PARAMS, Provisioner, Session, prologue,
-};
+use teton_provisioning::authority::{DeviceCertificate, device_id};
+use teton_provisioning::provision::{Identity, KeyPair, hex};
+
+const USAGE: &str = "usage: stage init STATE_DIRECTORY | stage install STATE_DIRECTORY CERTIFICATE_HEX TECHNICIAN_AUTHORITY_HEX";
 
 fn main() -> ExitCode {
-    let dir = PathBuf::from(std::env::args_os().nth(1).unwrap_or_else(|| "state".into()));
-    match stage(&dir) {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let result = match args
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        ["init", dir] => init(&PathBuf::from(dir)),
+        ["install", dir, certificate, authority] => {
+            install(&PathBuf::from(dir), certificate, authority)
+        }
+        _ => Err(USAGE.to_string()),
+    };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("stage: {message}");
@@ -28,72 +40,51 @@ fn main() -> ExitCode {
     }
 }
 
-fn stage(dir: &std::path::Path) -> Result<(), String> {
-    if dir.join(IDENTITY_FILE).exists() {
+fn init(dir: &std::path::Path) -> Result<(), String> {
+    if KeyPair::load(dir).map_err(|e| e.to_string())?.is_some() {
         return Err(format!(
-            "{} is already staged; a key is never regenerated",
+            "{} already has a key; a key is never regenerated",
             dir.display()
         ));
     }
-    let identity = Identity::generate().map_err(|_| "cannot generate keys")?;
-    identity
-        .save_new(dir)
-        .map_err(|error| format!("cannot write identity: {error}"))?;
-    let saved = Identity::load(dir)
-        .map_err(|error| format!("cannot read identity back: {error}"))?
-        .ok_or("identity missing after write")?;
-    handshake_check(&saved)?;
-
-    let label = saved.label(DEVICE_ID);
-    let code = QrCode::new(label.as_bytes()).map_err(|_| "label too long for a QR code")?;
-    let svg_path = dir.join("label.svg");
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600) // the label carries the secret
-        .open(&svg_path)
-        .map_err(|error| format!("cannot write {}: {error}", svg_path.display()))?;
-    file.write_all(
-        code.render::<svg::Color>()
-            .min_dimensions(400, 400)
-            .build()
-            .as_bytes(),
-    )
-    .map_err(|error| format!("cannot write {}: {error}", svg_path.display()))?;
-
+    let keys = KeyPair::generate().map_err(|_| "cannot generate a key")?;
+    keys.save_new(dir)
+        .map_err(|e| format!("cannot write the key: {e}"))?;
+    println!("{} keyed in {}", device_id(&keys.public_key), dir.display());
     println!(
-        "{}",
-        code.render::<unicode::Dense1x2>().quiet_zone(true).build()
+        "public key (certify it with `authority certify`): {}",
+        hex(&keys.public_key)
     );
-    println!(
-        "{DEVICE_ID} staged in {}; label image {}",
-        dir.display(),
-        svg_path.display()
-    );
-    println!("Handshake with the label: OK");
     Ok(())
 }
 
-/// Plays the phone's side from the label alone, against the device session built from the saved file.
-fn handshake_check(identity: &Identity) -> Result<(), String> {
-    let prologue = prologue(DEVICE_ID);
-    let mut phone = Builder::new(NOISE_PARAMS.parse().expect("valid Noise pattern"))
-        .remote_public_key(&identity.public_key)
-        .and_then(|b| b.psk(2, &identity.secret))
-        .and_then(|b| b.prologue(&prologue))
-        .and_then(|b| b.build_initiator())
-        .map_err(|_| "cannot build the check handshake")?;
-    let mut device =
-        Session::new(identity, DEVICE_ID).map_err(|_| "cannot build the device session")?;
-    let mut buffer = [0u8; MAX_MESSAGE];
-    let len = phone
-        .write_message(&[], &mut buffer)
-        .map_err(|_| "handshake check failed")?;
-    let reply = device
-        .on_write(&buffer[..len], &mut Provisioner::new(false))
-        .map_err(|_| "handshake check failed")?;
-    phone
-        .read_message(&reply, &mut buffer)
-        .map_err(|_| "handshake check failed: label and key disagree")?;
+fn install(dir: &std::path::Path, certificate: &str, authority: &str) -> Result<(), String> {
+    let certificate = unhex(certificate).ok_or("the certificate is not hex")?;
+    let authority: [u8; 32] = unhex(authority)
+        .and_then(|a| a.try_into().ok())
+        .ok_or("the technician authority is not 32 hex bytes")?;
+    let customer = DeviceCertificate::decode(&certificate)
+        .map_err(|e| format!("certificate {e}"))?
+        .customer;
+    Identity::install(dir, &certificate, &authority).map_err(|e| e.to_string())?;
+    let identity = Identity::load(dir)
+        .map_err(|e| e.to_string())?
+        .ok_or("installed files missing")?;
+    println!(
+        "{} certified for customer {customer}; restart the service to advertise it",
+        identity.device_id()
+    );
     Ok(())
+}
+
+fn unhex(text: &str) -> Option<Vec<u8>> {
+    let text = text.trim();
+    (text.len() % 2 == 0)
+        .then(|| {
+            (0..text.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
+                .collect()
+        })
+        .flatten()
 }

@@ -1,18 +1,29 @@
 // Wi-Fi setup of one sensor over the encrypted channel (docs/SECURITY.md):
-// label → connect → Noise handshake → encrypted credentials → wait for the device's own result.
-// Credentials are encrypted only after the device proved it holds the label's key and secret.
-import { initiator, type Label } from './noise.ts';
+// connect → Noise XX → the sensor proves it is genuine (a certificate from Teton's device authority, for the key it
+// just proved, matching the ID it advertises) → only then the technician token → encrypted credentials → the
+// sensor's own result. Nothing secret leaves the phone for a sensor that is not genuine or not this customer's.
+import { initiator } from './noise.ts';
+import { DEVICE_AUTHORITY, deviceId, verifyCertificate, type Token } from './authority.ts';
 import { ATTEMPT_ID_LEN, decodeResponse, PROVISION_CHARACTERISTIC_UUID, provisionRequest, statusRequest, type Failure, type Outcome } from './provision.ts';
 import { SERVICE_UUID, TimeoutError, withTimeout, type BleLink } from './probe.ts';
 
-// First byte of every write (src/provision.rs FRAME_*): new handshake, or encrypted message.
+// First byte of every write (src/provision.rs FRAME_*): start a handshake, or continue the session.
 const FRAME_HANDSHAKE = 0;
 const FRAME_TRANSPORT = 1;
-const MAX_MESSAGE = 512;
+const MAX_MESSAGE = 511;
+// The sensor's answer to the token (src/provision.rs TOKEN_*, REFUSED_*).
+const TOKEN_ACCEPTED = 0;
+const REFUSED_OTHER_CUSTOMER = 2;
+const REFUSED_EXPIRED = 3;
 
 export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
-/** `closed`: the sensor has no provisioning service: already set up (it removes it), or never staged. */
-export type SetupFailure = Failure | 'timeout' | 'rejected' | 'not-authenticated' | 'unknown' | 'closed';
+/**
+ * `not-genuine`: no valid Teton certificate for the key and ID it shows (nothing secret was sent);
+ * `other-customer`: a genuine sensor of a customer this token does not cover;
+ * `token-invalid` / `token-expired`: the sensor refused the token; `closed`: the sensor is not staged.
+ */
+export type SetupFailure =
+  | Failure | 'timeout' | 'rejected' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed';
 /** The phone cannot tell what happened: retrying must reuse this attempt so the device can answer it. */
 export const isUnsettled = (result: SetupResult) =>
   !result.ok && result.attempt !== undefined && (result.reason === 'timeout' || result.reason === 'rejected');
@@ -21,14 +32,6 @@ export type SetupResult =
   | { ok: true; ipv4: string; attempt: Uint8Array }
   | { ok: false; step: SetupStep; reason: SetupFailure; attempt?: Uint8Array };
 
-const fromHex = (hex: string) => Uint8Array.from(hex.match(/../g)!.map(byte => parseInt(byte, 16)));
-
-/** `T1:<device id>:<public key hex>:<label secret hex>`, as printed by `stage`. Anything else is refused. */
-export function parseLabel(text: string): Label | null {
-  const match = /^T1:([A-Za-z0-9-]{1,32}):([0-9a-f]{64}):([0-9a-f]{64})$/.exec(text.trim());
-  return match ? { deviceId: match[1], devicePublic: fromHex(match[2]), secret: fromHex(match[3]) } : null;
-}
-
 export interface SetupOptions {
   /** Retry after an unknown result: the device answers a repeated attempt with its stored result. */
   attempt?: Uint8Array;
@@ -36,17 +39,24 @@ export interface SetupOptions {
   joinMs?: number; // how long the device may take to join the network
   pollMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  deviceAuthority?: Uint8Array;
 }
+
+const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((byte, i) => byte === b[i]);
 
 export async function setup(
   ble: BleLink,
   id: string,
-  label: Label,
+  sensorName: string,
+  token: Token,
   ssid: string,
   password: string,
   random: (length: number) => Uint8Array,
   onStep: (step: SetupStep) => void = () => {},
-  { attempt: resume, timeoutMs = 10_000, joinMs = 60_000, pollMs = 1_000, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }: SetupOptions = {},
+  {
+    attempt: resume, timeoutMs = 10_000, joinMs = 60_000, pollMs = 1_000,
+    sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), deviceAuthority = DEVICE_AUTHORITY,
+  }: SetupOptions = {},
 ): Promise<SetupResult> {
   let step: SetupStep = 'connect';
   let attempt: Uint8Array | undefined;
@@ -73,13 +83,24 @@ export async function setup(
     }
 
     at('secure');
-    const phone = initiator(label, random(32));
-    const reply = await exchange(FRAME_HANDSHAKE, phone.first());
-    let channel;
+    const handshake = initiator(random(32), random(32)); // this session's static key, then its ephemeral key
+    const reply = await exchange(FRAME_HANDSHAKE, handshake.first()); // a busy or silent sensor fails here, as a link error
+    let device;
     try {
-      channel = phone.finish(reply);
+      device = handshake.second(reply);
     } catch {
-      return { ok: false, step, reason: 'not-authenticated' }; // nothing secret was sent
+      return { ok: false, step, reason: 'not-genuine' }; // its reply does not prove any key
+    }
+    const certificate = verifyCertificate(device.payload, deviceAuthority);
+    if (!certificate || !same(certificate.publicKey, device.deviceStatic) || deviceId(certificate.publicKey) !== sensorName) {
+      return { ok: false, step, reason: 'not-genuine' }; // the token never left the phone
+    }
+    if (!token.customers.includes(certificate.customer)) return { ok: false, step, reason: 'other-customer' };
+    const { message, transport: channel } = handshake.third(token.bytes);
+    const answer = channel.open(await exchange(FRAME_TRANSPORT, message));
+    if (answer[0] !== TOKEN_ACCEPTED) {
+      const reason = answer[1] === REFUSED_OTHER_CUSTOMER ? 'other-customer' : answer[1] === REFUSED_EXPIRED ? 'token-expired' : 'token-invalid';
+      return { ok: false, step, reason };
     }
 
     at('send');

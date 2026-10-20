@@ -1,13 +1,18 @@
 //! Encrypted Wi-Fi provisioning, device side (see docs/SECURITY.md).
 //!
-//! The phone and the device run `Noise_NKpsk2_25519_ChaChaPoly_SHA256` over one GATT characteristic:
-//! each acknowledged write carries one Noise message and the following read returns the device's reply.
-//! NK authenticates the device (its static key is on the label); the `psk2` label secret authenticates
-//! the phone. Credentials only ever travel as Noise transport messages, after the handshake.
+//! The phone and the device run `Noise_XX_25519_ChaChaPoly_SHA256` over one GATT characteristic: each
+//! acknowledged write carries one Noise message and the following read returns the device's reply.
+//! - message 1, phone: `-> e`, empty;
+//! - message 2, device: `<- e, ee, s, es`, carrying its device certificate: the phone checks it was signed by
+//!   Teton's device authority for the static key it just proved, before anything secret leaves the phone;
+//! - message 3, phone: `-> s, se`, carrying the technician token: the device checks it was signed by Teton's
+//!   technician authority, names this device's customer and has not expired, and answers accepted or refused.
 //!
+//! Credentials only ever travel as Noise transport messages, after an accepted token.
 //! This module is pure logic: no BLE, no NetworkManager. The binary feeds it GATT writes and runs the
 //! Wi-Fi activation it asks for, then reports the outcome back with [`Provisioner::complete`].
 
+use crate::authority::{AuthorityError, DeviceCertificate, TechnicianToken};
 use sha2::{Digest, Sha256};
 use snow::{Builder, HandshakeState, TransportState};
 use std::collections::HashMap;
@@ -17,12 +22,14 @@ use std::io::{self, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-pub const NOISE_PARAMS: &str = "Noise_NKpsk2_25519_ChaChaPoly_SHA256";
+pub const NOISE_PARAMS: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
+/// Binds the protocol version into the handshake transcript.
+pub const PROLOGUE: &[u8] = b"teton-provision/2";
 pub const PROVISION_CHARACTERISTIC_UUID: u128 = 0x3c2c02fa_847e_480c_9f22_b239dfa524c9;
-/// One Noise message per GATT value; the ATT attribute limit is 512 bytes.
-/// ponytail: no chunk layer, every message here is under 200 bytes; add one if payloads grow (EAP-TLS).
-pub const MAX_MESSAGE: usize = 512;
-/// First byte of every GATT write: a new handshake (resets this phone's session) or an encrypted message.
+/// One Noise message per GATT value; with its frame byte it stays within the 512-byte ATT attribute limit.
+/// ponytail: no chunk layer, the largest message (a full technician token) is under 450 bytes.
+pub const MAX_MESSAGE: usize = 511;
+/// First byte of every GATT write: start a new handshake (resets this phone's session) or continue it.
 /// It sits outside the encryption; altering it only makes the handshake or decryption fail.
 pub const FRAME_HANDSHAKE: u8 = 0;
 pub const FRAME_TRANSPORT: u8 = 1;
@@ -32,12 +39,15 @@ pub const MAX_SSID: usize = 32;
 /// WPA2-Personal passphrase bounds (IEEE 802.11i).
 pub const PASSWORD_LEN: std::ops::RangeInclusive<usize> = 8..=63;
 
-pub type AttemptId = [u8; ATTEMPT_ID_LEN];
+/// The device's answer to message 3, inside the channel: `[0]` accepted, or `[1][reason]` refused.
+pub const TOKEN_ACCEPTED: u8 = 0;
+pub const TOKEN_REFUSED: u8 = 1;
+/// Refusal reasons the app turns into a sentence for the technician.
+pub const REFUSED_INVALID: u8 = 1;
+pub const REFUSED_OTHER_CUSTOMER: u8 = 2;
+pub const REFUSED_EXPIRED: u8 = 3;
 
-/// Binds the protocol version and the device identity into the handshake transcript.
-pub fn prologue(device_id: &str) -> Vec<u8> {
-    [b"teton-provision/1:".as_slice(), device_id.as_bytes()].concat()
-}
+pub type AttemptId = [u8; ATTEMPT_ID_LEN];
 
 /// Requests the phone sends inside the encrypted channel.
 #[derive(PartialEq, Eq)]
@@ -132,6 +142,7 @@ pub enum Failure {
     NotInRange = 2,
     Timeout = 3,
     NmcliError = 4,
+    /// No longer sent: a technician token authorizes reconfiguration. Kept so codes stay stable.
     AlreadyProvisioned = 5,
     Busy = 6,
     /// Same attempt ID with a different payload: a corrected password needs a new attempt.
@@ -213,7 +224,7 @@ impl Response {
 pub enum ProtocolError {
     Oversized,
     Malformed,
-    /// Handshake or decryption failed: wrong key, wrong label secret, tampering, replay, reordering.
+    /// Handshake or decryption failed: tampering, replay, reordering, a broken key exchange.
     Crypto,
     Closed,
 }
@@ -231,21 +242,17 @@ impl fmt::Display for ProtocolError {
 
 impl std::error::Error for ProtocolError {}
 
-/// The device's label material: static X25519 key and the label secret (the Noise PSK).
-pub struct Identity {
+/// The device's static X25519 key pair, created once at staging.
+pub struct KeyPair {
     pub private_key: [u8; KEY_LEN],
     pub public_key: [u8; KEY_LEN],
-    pub secret: [u8; KEY_LEN],
 }
 
-impl Identity {
-    /// Fresh key pair and label secret from the operating system's RNG (used by staging only).
+impl KeyPair {
+    /// A fresh key pair from the operating system's RNG (used by staging only).
     pub fn generate() -> Result<Self, snow::Error> {
         let keypair = Builder::new(params()).generate_keypair()?;
-        let mut secret = [0; KEY_LEN];
-        // A throwaway key pair is 32 uniformly random bytes from the same RNG; its private half is the secret.
-        secret.copy_from_slice(&Builder::new(params()).generate_keypair()?.private);
-        Ok(Identity {
+        Ok(KeyPair {
             private_key: keypair
                 .private
                 .try_into()
@@ -254,57 +261,123 @@ impl Identity {
                 .public
                 .try_into()
                 .expect("X25519 public key is 32 bytes"),
-            secret,
         })
     }
 
-    /// What the device's QR label carries: `T1:<device id>:<public key hex>:<label secret hex>`.
-    pub fn label(&self, device_id: &str) -> String {
-        format!(
-            "T1:{device_id}:{}:{}",
-            hex(&self.public_key),
-            hex(&self.secret)
+    /// Writes the key pair; refuses to overwrite one, so a staged key is never replaced by accident.
+    pub fn save_new(&self, dir: &Path) -> io::Result<()> {
+        std::fs::create_dir_all(dir)?;
+        write_new(
+            dir,
+            IDENTITY_FILE,
+            &[self.private_key, self.public_key].concat(),
         )
     }
 
-    /// Writes a new identity; refuses to overwrite one, so a staged key is never replaced by accident.
-    pub fn save_new(&self, dir: &Path) -> io::Result<()> {
-        std::fs::create_dir_all(dir)?;
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(dir.join(IDENTITY_FILE))?;
-        file.write_all(&[self.private_key, self.public_key, self.secret].concat())?;
-        file.sync_all()
-    }
-
-    /// `Ok(None)` when the device was never staged: it then offers the hello probe only.
+    /// `Ok(None)` when the device has no key yet.
     pub fn load(dir: &Path) -> io::Result<Option<Self>> {
-        let bytes = match std::fs::read(dir.join(IDENTITY_FILE)) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error),
+        let Some(bytes) = read_optional(dir, IDENTITY_FILE)? else {
+            return Ok(None);
         };
         let part = |i: usize| -> Option<[u8; KEY_LEN]> {
             bytes.get(i * KEY_LEN..(i + 1) * KEY_LEN)?.try_into().ok()
         };
-        match (bytes.len() == 3 * KEY_LEN, part(0), part(1), part(2)) {
-            (true, Some(private_key), Some(public_key), Some(secret)) => Ok(Some(Identity {
+        match (bytes.len() == 2 * KEY_LEN, part(0), part(1)) {
+            (true, Some(private_key), Some(public_key)) => Ok(Some(KeyPair {
                 private_key,
                 public_key,
-                secret,
             })),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "corrupt identity file",
-            )),
+            _ => Err(invalid("corrupt identity file")),
         }
     }
 }
 
+/// Everything the device needs to provision: its key pair, its certificate from Teton's device authority, and
+/// the public key of Teton's technician authority, which signs the tokens it accepts.
+pub struct Identity {
+    pub keys: KeyPair,
+    pub certificate: DeviceCertificate,
+    pub technician_authority: [u8; KEY_LEN],
+}
+
+impl Identity {
+    /// Stores the certificate and the technician authority next to the key pair. Refuses a certificate made for
+    /// another key, and never replaces an installed one.
+    pub fn install(
+        dir: &Path,
+        certificate: &[u8],
+        technician_authority: &[u8; KEY_LEN],
+    ) -> io::Result<()> {
+        let keys =
+            KeyPair::load(dir)?.ok_or_else(|| invalid("no key pair: stage the device first"))?;
+        let parsed =
+            DeviceCertificate::decode(certificate).map_err(|_| invalid("malformed certificate"))?;
+        if parsed.public_key != keys.public_key {
+            return Err(invalid("this certificate was made for another device"));
+        }
+        write_new(dir, TECHNICIAN_AUTHORITY_FILE, technician_authority)?;
+        write_new(dir, CERTIFICATE_FILE, certificate)
+    }
+
+    /// `Ok(None)` until the device is staged and certified: it then offers the hello probe only.
+    pub fn load(dir: &Path) -> io::Result<Option<Self>> {
+        let Some(keys) = KeyPair::load(dir)? else {
+            return Ok(None);
+        };
+        let (Some(certificate), Some(authority)) = (
+            read_optional(dir, CERTIFICATE_FILE)?,
+            read_optional(dir, TECHNICIAN_AUTHORITY_FILE)?,
+        ) else {
+            return Ok(None);
+        };
+        let certificate =
+            DeviceCertificate::decode(&certificate).map_err(|_| invalid("corrupt certificate"))?;
+        let technician_authority = authority
+            .try_into()
+            .map_err(|_| invalid("corrupt technician authority"))?;
+        if certificate.public_key != keys.public_key {
+            return Err(invalid("certificate and key pair disagree"));
+        }
+        Ok(Some(Identity {
+            keys,
+            certificate,
+            technician_authority,
+        }))
+    }
+
+    /// What the device advertises and the app shows: derived from the key, so only this device can prove it.
+    pub fn device_id(&self) -> String {
+        crate::authority::device_id(&self.keys.public_key)
+    }
+}
+
+fn invalid(message: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message.to_string())
+}
+
+fn read_optional(dir: &Path, name: &str) -> io::Result<Option<Vec<u8>>> {
+    match std::fs::read(dir.join(name)) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// Creates a 0600 file that must not exist yet, synced to disk.
+fn write_new(dir: &Path, name: &str, bytes: &[u8]) -> io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(dir.join(name))?;
+    file.write_all(bytes)?;
+    file.sync_all()
+}
+
 pub const IDENTITY_FILE: &str = "identity";
-/// Present once a provisioning succeeded: the device never reopens provisioning (single use).
+pub const CERTIFICATE_FILE: &str = "certificate";
+pub const TECHNICIAN_AUTHORITY_FILE: &str = "technician-authority";
+/// Holds the UUID of the Wi-Fi profile that last succeeded; absent until a first success.
 pub const PROVISIONED_FILE: &str = "provisioned";
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -315,8 +388,19 @@ fn params() -> snow::params::NoiseParams {
     NOISE_PARAMS.parse().expect("valid Noise pattern")
 }
 
+fn refusal(error: &AuthorityError) -> u8 {
+    match error {
+        AuthorityError::OtherCustomer => REFUSED_OTHER_CUSTOMER,
+        AuthorityError::Expired => REFUSED_EXPIRED,
+        AuthorityError::Malformed | AuthorityError::BadSignature => REFUSED_INVALID,
+    }
+}
+
 enum Phase {
-    Handshake(Box<HandshakeState>),
+    /// Waits for message 1.
+    Start(Box<HandshakeState>),
+    /// Sent message 2 with the certificate; waits for message 3 with the technician token.
+    Token(Box<HandshakeState>),
     Transport(Box<TransportState>),
     Closed,
 }
@@ -324,20 +408,34 @@ enum Phase {
 /// Noise state for one connected phone. Any error closes it for good; the phone reconnects.
 pub struct Session {
     phase: Phase,
+    certificate: Vec<u8>,
+    customer: String,
+    technician_authority: [u8; KEY_LEN],
+    /// Unix seconds, already floored at the firmware date by the caller (`authority::checked_now`).
+    now: u64,
+    technician: Option<String>,
 }
 
 impl Session {
-    pub fn new(identity: &Identity, device_id: &str) -> Result<Self, ProtocolError> {
-        let prologue = prologue(device_id);
+    pub fn new(identity: &Identity, now: u64) -> Result<Self, ProtocolError> {
         let handshake = Builder::new(params())
-            .local_private_key(&identity.private_key)
-            .and_then(|b| b.psk(2, &identity.secret))
-            .and_then(|b| b.prologue(&prologue))
+            .local_private_key(&identity.keys.private_key)
+            .and_then(|b| b.prologue(PROLOGUE))
             .and_then(|b| b.build_responder())
             .map_err(|_| ProtocolError::Crypto)?;
         Ok(Session {
-            phase: Phase::Handshake(Box::new(handshake)),
+            phase: Phase::Start(Box::new(handshake)),
+            certificate: identity.certificate.encode(),
+            customer: identity.certificate.customer.clone(),
+            technician_authority: identity.technician_authority,
+            now,
+            technician: None,
         })
+    }
+
+    /// The technician whose token this session accepted; `None` before, and after a refusal.
+    pub fn technician(&self) -> Option<&str> {
+        self.technician.as_deref()
     }
 
     /// Handles one GATT write and returns the bytes the phone reads next.
@@ -363,7 +461,7 @@ impl Session {
         }
         let mut buffer = [0u8; MAX_MESSAGE];
         match std::mem::replace(&mut self.phase, Phase::Closed) {
-            Phase::Handshake(mut handshake) => {
+            Phase::Start(mut handshake) => {
                 let payload = handshake
                     .read_message(message, &mut buffer)
                     .map_err(|_| ProtocolError::Crypto)?;
@@ -371,13 +469,35 @@ impl Session {
                     return Err(ProtocolError::Malformed); // nothing may ride on the first message
                 }
                 let len = handshake
-                    .write_message(&[], &mut buffer)
+                    .write_message(&self.certificate, &mut buffer)
                     .map_err(|_| ProtocolError::Crypto)?;
-                self.phase = Phase::Transport(Box::new(
-                    handshake
-                        .into_transport_mode()
-                        .map_err(|_| ProtocolError::Crypto)?,
-                ));
+                self.phase = Phase::Token(handshake);
+                Ok(buffer[..len].to_vec())
+            }
+            Phase::Token(mut handshake) => {
+                let len = handshake
+                    .read_message(message, &mut buffer)
+                    .map_err(|_| ProtocolError::Crypto)?;
+                let token = TechnicianToken::decode(&buffer[..len]).and_then(|token| {
+                    token
+                        .verify(&self.technician_authority, &self.customer, self.now)
+                        .map(|()| token)
+                });
+                buffer.fill(0);
+                let mut transport = handshake
+                    .into_transport_mode()
+                    .map_err(|_| ProtocolError::Crypto)?;
+                let answer = match &token {
+                    Ok(_) => vec![TOKEN_ACCEPTED],
+                    Err(error) => vec![TOKEN_REFUSED, refusal(error)],
+                };
+                let len = transport
+                    .write_message(&answer, &mut buffer)
+                    .map_err(|_| ProtocolError::Crypto)?;
+                if let Ok(token) = token {
+                    self.technician = Some(token.name);
+                    self.phase = Phase::Transport(Box::new(transport));
+                } // refused: the phone reads why, then the session stays closed
                 Ok(buffer[..len].to_vec())
             }
             Phase::Transport(mut transport) => {
@@ -416,8 +536,8 @@ struct Record {
     outcome: Outcome,
 }
 
-/// Attempt registry shared by all sessions: one attempt in flight, results kept for recovery,
-/// and success is terminal (single-use provisioning).
+/// Attempt registry shared by all sessions: one attempt in flight, results kept for recovery. A technician
+/// token also authorizes reconfiguring a provisioned device (new password, new network).
 pub struct Provisioner {
     provisioned: bool,
     records: HashMap<AttemptId, Record>,
@@ -425,7 +545,7 @@ pub struct Provisioner {
 }
 
 impl Provisioner {
-    /// `provisioned` comes from the device's persisted state: a provisioned device never reopens.
+    /// `provisioned` comes from the device's persisted state.
     pub fn new(provisioned: bool) -> Self {
         Provisioner {
             provisioned,
@@ -460,7 +580,6 @@ impl Provisioner {
                 let outcome = match self.records.get(&attempt) {
                     Some(record) if record.payload_hash == payload_hash => record.outcome,
                     Some(_) => Outcome::Failed(Failure::Conflict),
-                    None if self.provisioned => Outcome::Failed(Failure::AlreadyProvisioned),
                     None if self.in_flight() => Outcome::Failed(Failure::Busy),
                     None => {
                         self.records.insert(
@@ -484,7 +603,7 @@ impl Provisioner {
         Response { attempt, outcome }
     }
 
-    /// Records the activation result. `Connected` makes the device provisioned for good.
+    /// Records the activation result. `Connected` marks the device provisioned.
     pub fn complete(&mut self, attempt: AttemptId, outcome: Outcome) {
         if let Some(record) = self.records.get_mut(&attempt) {
             record.outcome = outcome;
@@ -510,9 +629,41 @@ fn hash(ssid: &[u8], password: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority::{MAX_CUSTOMER, MAX_CUSTOMERS, MAX_NAME};
+    use ed25519_dalek::SigningKey;
 
-    const ID: &str = "TETON-DEMO-001";
     const ATTEMPT: AttemptId = [7; ATTEMPT_ID_LEN];
+    const NOW: u64 = 1_800_000_000;
+    const CUSTOMER: &str = "DEMO";
+
+    fn devices() -> SigningKey {
+        SigningKey::from_bytes(&[1; 32])
+    }
+
+    fn technicians() -> SigningKey {
+        SigningKey::from_bytes(&[2; 32])
+    }
+
+    fn identity() -> Identity {
+        let keys = KeyPair::generate().unwrap();
+        let certificate = DeviceCertificate::sign(&devices(), keys.public_key, CUSTOMER).unwrap();
+        Identity {
+            keys,
+            certificate,
+            technician_authority: technicians().verifying_key().to_bytes(),
+        }
+    }
+
+    fn token_signed_by(authority: &SigningKey, customers: &[&str], expires: u64) -> Vec<u8> {
+        let customers: Vec<String> = customers.iter().map(|c| c.to_string()).collect();
+        TechnicianToken::issue(authority, "Noé", &customers, expires)
+            .unwrap()
+            .encode()
+    }
+
+    fn token(customers: &[&str], expires: u64) -> Vec<u8> {
+        token_signed_by(&technicians(), customers, expires)
+    }
 
     fn provision(attempt: AttemptId, password: &[u8]) -> Request {
         Request::Provision {
@@ -522,19 +673,19 @@ mod tests {
         }
     }
 
-    /// The phone side, built from snow so the device is tested against a real initiator.
+    /// The phone side, built from snow so the device is tested against a real XX initiator; it checks the
+    /// certificate the way the app does.
     struct Phone {
         handshake: Option<HandshakeState>,
         transport: Option<TransportState>,
     }
 
     impl Phone {
-        fn new(device_public: &[u8], secret: &[u8; KEY_LEN], device_id: &str) -> Self {
-            let prologue = prologue(device_id);
+        fn new() -> Self {
+            let keys = KeyPair::generate().unwrap();
             let handshake = Builder::new(params())
-                .remote_public_key(device_public)
-                .and_then(|b| b.psk(2, secret))
-                .and_then(|b| b.prologue(&prologue))
+                .local_private_key(&keys.private_key)
+                .and_then(|b| b.prologue(PROLOGUE))
                 .and_then(|b| b.build_initiator())
                 .unwrap();
             Phone {
@@ -554,12 +705,41 @@ mod tests {
             out[..len].to_vec()
         }
 
-        fn finish(&mut self, reply: &[u8]) -> Result<(), snow::Error> {
+        /// Reads message 2 and checks the certificate: Teton's signature, and the key the device just proved.
+        fn certificate(&mut self, reply: &[u8]) -> Result<DeviceCertificate, String> {
+            let mut out = [0u8; MAX_MESSAGE];
+            let handshake = self.handshake.as_mut().unwrap();
+            let len = handshake
+                .read_message(reply, &mut out)
+                .map_err(|e| e.to_string())?;
+            let certificate = DeviceCertificate::decode(&out[..len]).map_err(|e| e.to_string())?;
+            certificate
+                .verify(&devices().verifying_key().to_bytes())
+                .map_err(|e| e.to_string())?;
+            if handshake.get_remote_static() != Some(&certificate.public_key[..]) {
+                return Err("certificate made for another key".into());
+            }
+            Ok(certificate)
+        }
+
+        /// Message 3: the technician token. The phone is then in transport mode.
+        fn present(&mut self, token: &[u8]) -> Vec<u8> {
             let mut out = [0u8; MAX_MESSAGE];
             let mut handshake = self.handshake.take().unwrap();
-            handshake.read_message(reply, &mut out)?;
-            self.transport = Some(handshake.into_transport_mode()?);
-            Ok(())
+            let len = handshake.write_message(token, &mut out).unwrap();
+            self.transport = Some(handshake.into_transport_mode().unwrap());
+            out[..len].to_vec()
+        }
+
+        fn plaintext(&mut self, reply: &[u8]) -> Vec<u8> {
+            let mut out = [0u8; MAX_MESSAGE];
+            let len = self
+                .transport
+                .as_mut()
+                .unwrap()
+                .read_message(reply, &mut out)
+                .unwrap();
+            out[..len].to_vec()
         }
 
         fn seal(&mut self, request: &Request) -> Vec<u8> {
@@ -574,31 +754,35 @@ mod tests {
         }
 
         fn open(&mut self, reply: &[u8]) -> Response {
-            let mut out = [0u8; MAX_MESSAGE];
-            let len = self
-                .transport
-                .as_mut()
-                .unwrap()
-                .read_message(reply, &mut out)
-                .unwrap();
-            Response::decode(&out[..len]).unwrap()
+            Response::decode(&self.plaintext(reply)).unwrap()
         }
     }
 
-    fn connected(identity: &Identity) -> (Phone, Session) {
-        let mut phone = Phone::new(&identity.public_key, &identity.secret, ID);
-        let mut session = Session::new(identity, ID).unwrap();
+    /// Runs the handshake with `token`; returns the phone, the session and the device's answer to the token.
+    fn handshake(identity: &Identity, token: &[u8], now: u64) -> (Phone, Session, Vec<u8>) {
+        let mut phone = Phone::new();
+        let mut session = Session::new(identity, now).unwrap();
+        let mut provisioner = Provisioner::new(false);
+        let reply = session.on_write(&phone.hello(), &mut provisioner).unwrap();
+        phone.certificate(&reply).unwrap();
         let reply = session
-            .on_write(&phone.hello(), &mut Provisioner::new(false))
+            .on_write(&phone.present(token), &mut provisioner)
             .unwrap();
-        phone.finish(&reply).unwrap();
+        let answer = phone.plaintext(&reply);
+        (phone, session, answer)
+    }
+
+    fn connected(identity: &Identity) -> (Phone, Session) {
+        let (phone, session, answer) = handshake(identity, &token(&[CUSTOMER], NOW + 3600), NOW);
+        assert_eq!(answer, [TOKEN_ACCEPTED]);
         (phone, session)
     }
 
     #[test]
     fn provision_then_status_reports_the_connection() {
-        let identity = Identity::generate().unwrap();
+        let identity = identity();
         let (mut phone, mut session) = connected(&identity);
+        assert_eq!(session.technician(), Some("Noé"));
         let mut provisioner = Provisioner::new(false);
 
         let reply = session
@@ -643,45 +827,108 @@ mod tests {
     }
 
     #[test]
-    fn wrong_device_key_fails_before_any_credential_is_sent() {
-        let device = Identity::generate().unwrap();
-        let impostor = Identity::generate().unwrap();
-        let mut phone = Phone::new(&impostor.public_key, &device.secret, ID);
-        let mut session = Session::new(&device, ID).unwrap();
-        assert_eq!(
-            session.on_write(&phone.hello(), &mut Provisioner::new(false)),
-            Err(ProtocolError::Crypto)
-        );
-    }
+    fn an_impostor_is_caught_by_its_certificate_before_the_token_leaves() {
+        let genuine = identity();
+        // A copied certificate: the impostor cannot prove the genuine key during the handshake.
+        let copycat = Identity {
+            keys: KeyPair::generate().unwrap(),
+            certificate: genuine.certificate.clone(),
+            technician_authority: genuine.technician_authority,
+        };
+        // Its own key, certified by an authority that is not Teton's device authority.
+        let keys = KeyPair::generate().unwrap();
+        let rogue_certificate =
+            DeviceCertificate::sign(&SigningKey::from_bytes(&[9; 32]), keys.public_key, CUSTOMER)
+                .unwrap();
+        let self_signed = Identity {
+            keys,
+            certificate: rogue_certificate,
+            technician_authority: genuine.technician_authority,
+        };
 
-    #[test]
-    fn wrong_label_secret_fails_the_handshake_on_the_phone() {
-        let device = Identity::generate().unwrap();
-        let mut phone = Phone::new(&device.public_key, &[9; KEY_LEN], ID);
-        let mut session = Session::new(&device, ID).unwrap();
-        let reply = session
+        for device in [&copycat, &self_signed] {
+            let mut phone = Phone::new();
+            let mut session = Session::new(device, NOW).unwrap();
+            let reply = session
+                .on_write(&phone.hello(), &mut Provisioner::new(false))
+                .unwrap();
+            assert!(
+                phone.certificate(&reply).is_err(),
+                "the phone stops here and never presents its token"
+            );
+        }
+        let mut phone = Phone::new();
+        let reply = Session::new(&genuine, NOW)
+            .unwrap()
             .on_write(&phone.hello(), &mut Provisioner::new(false))
             .unwrap();
-        assert!(
-            phone.finish(&reply).is_err(),
-            "the phone must not reach transport mode, so it never sends"
+        assert_eq!(
+            phone.certificate(&reply).map(|c| c.customer),
+            Ok(CUSTOMER.to_string())
         );
     }
 
     #[test]
-    fn a_device_id_mismatch_fails_the_handshake() {
-        let device = Identity::generate().unwrap();
-        let mut phone = Phone::new(&device.public_key, &device.secret, "TETON-DEMO-002");
-        let mut session = Session::new(&device, ID).unwrap();
-        assert_eq!(
-            session.on_write(&phone.hello(), &mut Provisioner::new(false)),
-            Err(ProtocolError::Crypto)
+    fn tokens_for_another_customer_expired_or_forged_are_refused_and_close_the_session() {
+        let identity = identity();
+        for (token, now, reason) in [
+            (token(&["OTHER"], NOW + 3600), NOW, REFUSED_OTHER_CUSTOMER),
+            (token(&[CUSTOMER], NOW), NOW, REFUSED_EXPIRED),
+            (
+                token_signed_by(&devices(), &[CUSTOMER], NOW + 3600),
+                NOW,
+                REFUSED_INVALID,
+            ),
+            (b"not a token".to_vec(), NOW, REFUSED_INVALID),
+        ] {
+            let (mut phone, mut session, answer) = handshake(&identity, &token, now);
+            assert_eq!(answer, [TOKEN_REFUSED, reason]);
+            assert_eq!(session.technician(), None);
+            let mut provisioner = Provisioner::new(false);
+            assert_eq!(
+                session.on_write(
+                    &phone.seal(&provision(ATTEMPT, b"correct horse")),
+                    &mut provisioner
+                ),
+                Err(ProtocolError::Closed)
+            );
+            assert!(
+                provisioner.take_activation().is_none(),
+                "no network accepted without a valid token"
+            );
+        }
+    }
+
+    #[test]
+    fn the_largest_token_fits_one_message() {
+        let customers: Vec<String> = (0..MAX_CUSTOMERS)
+            .map(|i| format!("{i:0>MAX_CUSTOMER$}"))
+            .collect();
+        let name = "N".repeat(MAX_NAME);
+        let token = TechnicianToken::issue(&technicians(), &name, &customers, NOW + 1)
+            .unwrap()
+            .encode();
+        let mut identity = identity();
+        identity.certificate =
+            DeviceCertificate::sign(&devices(), identity.keys.public_key, &customers[0]).unwrap();
+        let mut phone = Phone::new();
+        let mut session = Session::new(&identity, NOW).unwrap();
+        let mut provisioner = Provisioner::new(false);
+        let reply = session.on_write(&phone.hello(), &mut provisioner).unwrap();
+        phone.certificate(&reply).unwrap();
+        let message = phone.present(&token);
+        assert!(
+            message.len() < 512,
+            "frame byte + message = {} bytes",
+            1 + message.len()
         );
+        let reply = session.on_write(&message, &mut provisioner).unwrap();
+        assert_eq!(phone.plaintext(&reply), [TOKEN_ACCEPTED]);
     }
 
     #[test]
     fn tampered_truncated_and_replayed_messages_close_the_session() {
-        let identity = Identity::generate().unwrap();
+        let identity = identity();
         for corrupt in [
             |m: &mut Vec<u8>| m[3] ^= 1,
             |m: &mut Vec<u8>| {
@@ -717,27 +964,26 @@ mod tests {
 
     #[test]
     fn reordered_messages_are_rejected() {
-        let identity = Identity::generate().unwrap();
+        let identity = identity();
         let (mut phone, mut session) = connected(&identity);
-        let first = phone.seal(&Request::Status { attempt: ATTEMPT });
+        let _first = phone.seal(&Request::Status { attempt: ATTEMPT });
         let second = phone.seal(&Request::Status { attempt: ATTEMPT });
         assert_eq!(
             session.on_write(&second, &mut Provisioner::new(false)),
             Err(ProtocolError::Crypto)
         );
-        drop(first);
     }
 
     #[test]
-    fn oversized_and_payload_carrying_handshakes_are_rejected() {
-        let identity = Identity::generate().unwrap();
-        let mut session = Session::new(&identity, ID).unwrap();
+    fn oversized_and_payload_carrying_first_messages_are_rejected() {
+        let identity = identity();
+        let mut session = Session::new(&identity, NOW).unwrap();
         assert_eq!(
             session.on_write(&[0; MAX_MESSAGE + 1], &mut Provisioner::new(false)),
             Err(ProtocolError::Oversized)
         );
 
-        let mut phone = Phone::new(&identity.public_key, &identity.secret, ID);
+        let mut phone = Phone::new();
         let mut out = [0u8; MAX_MESSAGE];
         let len = phone
             .handshake
@@ -745,7 +991,7 @@ mod tests {
             .unwrap()
             .write_message(b"early secret", &mut out)
             .unwrap();
-        let mut session = Session::new(&identity, ID).unwrap();
+        let mut session = Session::new(&identity, NOW).unwrap();
         assert_eq!(
             session.on_write(&out[..len], &mut Provisioner::new(false)),
             Err(ProtocolError::Malformed)
@@ -869,7 +1115,7 @@ mod tests {
     }
 
     #[test]
-    fn success_is_terminal() {
+    fn a_provisioned_device_can_be_reconfigured() {
         let mut provisioner = Provisioner::new(false);
         provisioner.handle(provision(ATTEMPT, b"correct horse"));
         provisioner.take_activation();
@@ -882,40 +1128,68 @@ mod tests {
         let second: AttemptId = [8; ATTEMPT_ID_LEN];
         assert_eq!(
             provisioner
-                .handle(provision(second, b"another one"))
+                .handle(provision(second, b"new password"))
                 .outcome,
-            Outcome::Failed(Failure::AlreadyProvisioned)
+            Outcome::Pending
         );
         assert_eq!(
             Provisioner::new(true)
-                .handle(provision(second, b"another one"))
+                .handle(provision(second, b"new password"))
                 .outcome,
-            Outcome::Failed(Failure::AlreadyProvisioned)
+            Outcome::Pending
         );
     }
 
     #[test]
-    fn identity_round_trips_once_and_reports_absence() {
+    fn a_device_is_ready_only_once_keyed_and_certified_for_its_own_key() {
         let dir = std::env::temp_dir().join(format!("teton-identity-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        assert!(Identity::load(&dir).unwrap().is_none());
-        let identity = Identity::generate().unwrap();
-        identity.save_new(&dir).unwrap();
-        let loaded = Identity::load(&dir).unwrap().unwrap();
-        assert_eq!(
-            (loaded.private_key, loaded.public_key, loaded.secret),
-            (identity.private_key, identity.public_key, identity.secret)
+        assert!(Identity::load(&dir).unwrap().is_none(), "nothing staged");
+        let keys = KeyPair::generate().unwrap();
+        keys.save_new(&dir).unwrap();
+        assert!(
+            KeyPair::generate().unwrap().save_new(&dir).is_err(),
+            "a key is never overwritten"
         );
         assert!(
-            Identity::generate().unwrap().save_new(&dir).is_err(),
-            "never overwritten"
+            Identity::load(&dir).unwrap().is_none(),
+            "keyed but not certified: hello only"
         );
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(dir.join(IDENTITY_FILE))
+
+        let authority = technicians().verifying_key().to_bytes();
+        let foreign = DeviceCertificate::sign(&devices(), [5; 32], CUSTOMER)
             .unwrap()
-            .permissions()
-            .mode();
-        assert_eq!(mode & 0o777, 0o600);
+            .encode();
+        assert!(
+            Identity::install(&dir, &foreign, &authority).is_err(),
+            "certificate for another key"
+        );
+        let own = DeviceCertificate::sign(&devices(), keys.public_key, CUSTOMER)
+            .unwrap()
+            .encode();
+        Identity::install(&dir, &own, &authority).unwrap();
+        let loaded = Identity::load(&dir).unwrap().unwrap();
+        assert_eq!(
+            (loaded.keys.public_key, loaded.certificate.customer.as_str()),
+            (keys.public_key, CUSTOMER)
+        );
+        assert_eq!(
+            loaded.device_id(),
+            crate::authority::device_id(&keys.public_key)
+        );
+
+        use std::os::unix::fs::PermissionsExt;
+        for file in [IDENTITY_FILE, CERTIFICATE_FILE, TECHNICIAN_AUTHORITY_FILE] {
+            assert_eq!(
+                std::fs::metadata(dir.join(file))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600,
+                "{file}"
+            );
+        }
         std::fs::write(dir.join(IDENTITY_FILE), [0u8; 10]).unwrap();
         assert!(
             Identity::load(&dir).is_err(),
@@ -925,21 +1199,8 @@ mod tests {
     }
 
     #[test]
-    fn label_carries_id_key_and_secret() {
-        let identity = Identity {
-            private_key: [1; 32],
-            public_key: [0xab; 32],
-            secret: [0x0f; 32],
-        };
-        assert_eq!(
-            identity.label(ID),
-            format!("T1:{ID}:{}:{}", "ab".repeat(32), "0f".repeat(32))
-        );
-    }
-
-    #[test]
     fn random_input_never_panics() {
-        let identity = Identity::generate().unwrap();
+        let identity = identity();
         let mut seed = 0x2545_f491_4f6c_dd1du64;
         let mut next = || {
             seed ^= seed << 13;
@@ -953,8 +1214,10 @@ mod tests {
             let bytes: Vec<u8> = (0..len).map(|_| next() as u8).collect();
             let _ = Request::decode(&bytes);
             let _ = Response::decode(&bytes);
+            let _ = TechnicianToken::decode(&bytes);
+            let _ = DeviceCertificate::decode(&bytes);
             if round % 100 == 0 {
-                let mut session = Session::new(&identity, ID).unwrap();
+                let mut session = Session::new(&identity, NOW).unwrap();
                 let _ = session.on_write(&bytes, &mut Provisioner::new(false));
                 let (_, mut transport) = connected(&identity);
                 let _ = transport.on_write(&bytes, &mut Provisioner::new(false));
