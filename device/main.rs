@@ -9,7 +9,7 @@
 
 mod wifi;
 
-use bluer::adv::Advertisement;
+use bluer::adv::{Advertisement, AdvertisementHandle};
 use bluer::gatt::local::{
     Application, ApplicationHandle, Characteristic, CharacteristicRead, CharacteristicWrite,
     CharacteristicWriteMethod, ReqError, Service,
@@ -19,7 +19,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use iot_provisioning::protocol::{self, CHARACTERISTIC_UUID, DEVICE_ID, SERVICE_UUID};
+use iot_provisioning::protocol::{
+    self, CHARACTERISTIC_UUID, DEVICE_ID, SERVICE_UUID, STATE_COMPANY_ID, STATE_NOT_STAGED,
+    STATE_OFFLINE, STATE_ONLINE, STATE_READY,
+};
 use iot_provisioning::provision::{
     Activation, FRAME_HANDSHAKE, FRAME_TRANSPORT, Failure, Identity, Outcome,
     PROVISION_CHARACTERISTIC_UUID, PROVISIONED_FILE, Provisioner, Session, hex,
@@ -32,8 +35,11 @@ type Pending = Mutex<Option<(Address, &'static [u8])>>;
 
 /// A phone that is not heard from for this long loses its session (and its claim on the device).
 const IDLE: Duration = Duration::from_secs(60);
-/// Time left to the phone to read a success before the provisioning characteristic goes away.
-const GRACE: Duration = Duration::from_secs(20);
+/// Time left to the phone to read a success before the provisioning characteristic goes away; long enough for a
+/// technician to tap Try again after a lost reply, so the retry recovers the stored result.
+const GRACE: Duration = Duration::from_secs(120);
+/// How often a provisioned sensor checks its Wi-Fi profile, to keep its advertised state current.
+const STATE_REFRESH: Duration = Duration::from_secs(30);
 
 fn write(pending: &Pending, client: Address, offset: u16, value: &[u8]) -> Result<(), ReqError> {
     let mut slot = pending.lock().unwrap();
@@ -206,6 +212,33 @@ fn start(context: &Arc<Context>, activation: Activation) {
     });
 }
 
+/// The advertised state byte (`protocol::STATE_*`).
+fn sensor_state(staged: bool, provisioned: bool, online: bool) -> u8 {
+    match (staged, provisioned, online) {
+        (false, _, _) => STATE_NOT_STAGED,
+        (true, false, _) => STATE_READY,
+        (true, true, true) => STATE_ONLINE,
+        (true, true, false) => STATE_OFFLINE,
+    }
+}
+
+fn advertisement(state: u8) -> Advertisement {
+    Advertisement {
+        service_uuids: [Uuid::from_u128(SERVICE_UUID)].into(),
+        manufacturer_data: [(STATE_COMPANY_ID, vec![state])].into(),
+        discoverable: Some(true),
+        local_name: Some(DEVICE_ID.to_string()),
+        ..Default::default()
+    }
+}
+
+/// Whether the provisioned Wi-Fi profile is up, checked off the async runtime.
+async fn online() -> bool {
+    tokio::task::spawn_blocking(wifi::profile_active)
+        .await
+        .unwrap_or(false)
+}
+
 fn application(hello: Arc<Pending>, provisioning: Option<Arc<Context>>) -> Application {
     let on_write = hello.clone();
     let mut characteristics = vec![Characteristic {
@@ -300,6 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity = Identity::load(&state_dir)
         .map_err(|error| format!("cannot read {}: {error}", state_dir.display()))?;
     let already = state_dir.join(PROVISIONED_FILE).exists();
+    let staged = identity.is_some();
     let provisioned = Arc::new(Notify::new());
     let context = match identity {
         Some(identity) if !already => Some(Arc::new(Context {
@@ -339,14 +373,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // shortcut: an hci0 removal (USB reset) leaves the process running unregistered;
     // exit on bluer adapter-removed events if systemd must recover that case.
     let mut app = serve(&adapter, &hello, context).await?;
-    let _adv = adapter
-        .advertise(Advertisement {
-            service_uuids: [Uuid::from_u128(SERVICE_UUID)].into(),
-            discoverable: Some(true),
-            local_name: Some(DEVICE_ID.to_string()),
-            ..Default::default()
-        })
-        .await?;
+    let mut state = sensor_state(staged, already, already && online().await);
+    let mut adv: AdvertisementHandle = adapter.advertise(advertisement(state)).await?;
     println!("{DEVICE_ID} advertising on {}; {mode}", adapter.name());
 
     let mut terminate = signal(SignalKind::terminate())?;
@@ -357,22 +385,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     tokio::pin!(shutdown);
-    tokio::select! {
-        _ = &mut shutdown => {}
-        _ = provisioned.notified() => {
-            // Single use: once the phone had time to read the result, provisioning disappears for good.
-            tokio::select! {
-                _ = &mut shutdown => {}
-                _ = tokio::time::sleep(GRACE) => {
-                    drop(app);
-                    app = serve(&adapter, &hello, None).await?;
-                    println!("provisioning closed; accepts only hello");
-                    shutdown.await;
+    if !already {
+        // Waits for a success (never comes when not staged).
+        tokio::select! {
+            _ = &mut shutdown => { println!("stopping"); return Ok(()); }
+            _ = provisioned.notified() => {}
+        }
+        // Cards show the new state at once; provisioning stays for GRACE so the phone can read or recover the result.
+        state = sensor_state(true, true, online().await);
+        drop(adv);
+        adv = adapter.advertise(advertisement(state)).await?;
+        tokio::select! {
+            _ = &mut shutdown => { println!("stopping"); return Ok(()); }
+            _ = tokio::time::sleep(GRACE) => {}
+        }
+        drop(app);
+        app = serve(&adapter, &hello, None).await?;
+        println!("provisioning closed; accepts only hello");
+    }
+    // Provisioned: the advertised state follows the Wi-Fi profile, so a technician sees it on the sensor's card.
+    let mut refresh = tokio::time::interval(STATE_REFRESH);
+    loop {
+        tokio::select! {
+            _ = &mut shutdown => break,
+            _ = refresh.tick() => {
+                let next = sensor_state(true, true, online().await);
+                if next != state {
+                    drop(adv);
+                    adv = adapter.advertise(advertisement(next)).await?;
+                    state = next;
+                    println!("advertised state: {}", if next == STATE_ONLINE { "online" } else { "Wi-Fi not connected" });
                 }
             }
         }
     }
-    drop(app);
+    drop((app, adv));
     println!("stopping");
     Ok(())
 }
@@ -526,6 +573,30 @@ mod tests {
             !p.peers.contains_key(&OTHER),
             "unproven sessions are dropped once a phone proves the label"
         );
+    }
+
+    #[test]
+    fn the_advertised_state_tells_a_technician_what_to_expect() {
+        assert_eq!(sensor_state(false, false, false), STATE_NOT_STAGED);
+        assert_eq!(
+            sensor_state(false, true, true),
+            STATE_NOT_STAGED,
+            "no key: nothing to set up"
+        );
+        assert_eq!(sensor_state(true, false, false), STATE_READY);
+        assert_eq!(sensor_state(true, true, true), STATE_ONLINE);
+        assert_eq!(sensor_state(true, true, false), STATE_OFFLINE);
+    }
+
+    #[test]
+    fn the_state_rides_in_manufacturer_data_beside_the_service_and_name() {
+        let adv = advertisement(STATE_ONLINE);
+        assert_eq!(
+            adv.manufacturer_data.get(&STATE_COMPANY_ID),
+            Some(&vec![STATE_ONLINE])
+        );
+        assert!(adv.service_uuids.contains(&Uuid::from_u128(SERVICE_UUID)));
+        assert_eq!(adv.local_name.as_deref(), Some(DEVICE_ID));
     }
 
     #[test]

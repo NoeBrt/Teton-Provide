@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWifiQr, removeSite, upsertSite, type Site } from './sites.ts';
+import { parseWifiQr, removeSite, stateText, upsertSite, type Site } from './sites.ts';
 
 const nord: Site = { id: 'a', name: 'Hôpital Nord – Bât. B', ssid: 'HN-B-Staff' };
 const sud: Site = { id: 'b', name: 'Clinique Sud', ssid: 'CS-IoT' };
@@ -68,4 +68,13 @@ test('Wi-Fi QR: the code ends at ";;", and nothing after it overrides a field', 
 test('Wi-Fi QR: a code without a network name is refused', () => {
   const result = parseWifiQr('WIFI:T:WPA;P:correct horse;;');
   assert.ok('error' in result && result.error.includes('network name'), JSON.stringify(result));
+});
+
+test('a sensor card names the site this phone set it up on, or says "its Wi-Fi" when unknown', () => {
+  assert.equal(stateText('online', 'St. Olav · Ward 3'), '✓ Set up · connected to St. Olav · Ward 3');
+  assert.equal(stateText('online', null), '✓ Set up · connected to its Wi‑Fi');
+  assert.equal(stateText('offline', 'St. Olav · Ward 3'), 'Set up · not connected to St. Olav · Ward 3');
+  assert.equal(stateText('offline', null), 'Set up · not connected to its Wi‑Fi');
+  assert.equal(stateText('ready', 'St. Olav · Ward 3'), 'Ready to set up');
+  assert.equal(stateText('not-staged', null), 'Not prepared for setup');
 });

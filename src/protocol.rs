@@ -7,6 +7,14 @@ pub const RESPONSE: &[u8] = b"world";
 pub const SERVICE_UUID: u128 = 0x3b0a90ce_9564_40d1_b96b_14cf8858aba3;
 pub const CHARACTERISTIC_UUID: u128 = 0x29b3765c_de49_4114_889e_89b05852c968;
 
+/// The sensor's state, one byte of advertised manufacturer data, so the app shows it before connecting.
+/// 0xFFFF is the company ID reserved for tests; a production sensor would use the own.
+pub const STATE_COMPANY_ID: u16 = 0xFFFF;
+pub const STATE_NOT_STAGED: u8 = 0;
+pub const STATE_READY: u8 = 1;
+pub const STATE_ONLINE: u8 = 2;
+pub const STATE_OFFLINE: u8 = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidRequest;
 

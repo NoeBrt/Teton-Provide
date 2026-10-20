@@ -50,6 +50,24 @@ pub fn failure_for(reason: u32) -> Failure {
     }
 }
 
+/// Whether the provisioning profile is the one up on a device right now (read-only; no polkit needed).
+pub fn profile_active() -> bool {
+    let check = || -> Result<bool, dbus::Error> {
+        let bus = Connection::new_system()?;
+        let active: Vec<Path<'static>> = bus
+            .with_proxy(NM, NM_PATH, CALL)
+            .get(NM, "ActiveConnections")?;
+        for path in active {
+            let connection = bus.with_proxy(NM, &path, CALL);
+            if connection.get::<String>(ACTIVE, "Uuid")? == PROFILE_UUID {
+                return Ok(connection.get::<u32>(ACTIVE, "State")? == ACTIVE_ACTIVATED);
+            }
+        }
+        Ok(false)
+    };
+    check().unwrap_or(false)
+}
+
 /// Deletes the provisioning profile if there is one: a failed attempt, or one left by a crash before
 /// success was recorded. Never touches other profiles.
 pub fn forget() -> Result<(), dbus::Error> {

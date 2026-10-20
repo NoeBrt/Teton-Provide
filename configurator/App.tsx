@@ -7,18 +7,18 @@ import { Onest_400Regular } from '@expo-google-fonts/onest/400Regular';
 import { Onest_500Medium } from '@expo-google-fonts/onest/500Medium';
 import { Onest_600SemiBold } from '@expo-google-fonts/onest/600SemiBold';
 import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
-import { probe, SERVICE_UUID, type ProbeResult, type Step } from './src/probe';
+import { changed, probe, SERVICE_UUID, sensorState, type ProbeResult, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
 import * as Crypto from 'expo-crypto';
 import { setup, type SetupResult, type SetupStep } from './src/setup';
 import type { Label } from './src/noise';
 import { SetupFlow, type Action } from './src/flow';
 import { LabelScanner } from './src/LabelScanner';
-import { loadSites, setActiveSite, SitesSheet, unlockPassword } from './src/SiteSheet';
-import type { Site, SiteNetwork } from './src/sites';
+import { loadSetups, loadSites, saveSetups, setActiveSite, SitesSheet, unlockPassword } from './src/SiteSheet';
+import { stateText, type Setups, type Site, type SiteNetwork } from './src/sites';
 import { C } from './src/theme';
 import Animated, {
-  cancelAnimation, Easing, FadeIn, interpolate, LinearTransition, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
+  cancelAnimation, Easing, FadeIn, FadeOut, interpolate, LinearTransition, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
   useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withDelay, withSpring, withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -41,6 +41,7 @@ const AUTO_FOLD_AFTER = 4; // sensors shown under the large radar before it fold
 const FOLD = { duration: 1200, easing: Easing.inOut(Easing.cubic) }; // first-discovery fold
 const LOCK_AFTER = 8; // pt into the list before compact mode holds
 const MIN_PROGRESS_MS = 700; // an instant failure still shows progress briefly instead of flashing
+const SUCCESS_SHOWN_MS = 8000; // then the card folds back; its state line and the log keep the result
 // The radar's resize, its move into the row and the list's arrival share one curve, on the UI thread.
 const layout = LinearTransition.duration(RESIZE.duration).easing(RESIZE.easing);
 const appear = FadeIn.duration(RESIZE.duration).delay(RESIZE.duration / 2);
@@ -93,25 +94,40 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [choosingSite, setChoosingSite] = useState(false);
   const [scanFor, setScanFor] = useState<Peripheral | null>(null);
+  const [setups, setSetups] = useState<Setups>({}); // sensor name → site this phone set it up on
   const flow = useRef(new SetupFlow(null)); // network → label → join; holds its own state (src/flow.ts)
   const busy = useRef(false); // synchronous guard: two taps in one frame never start two runs
   const measuredFirst = useRef(false);
   const focused = useRef<string | null>(null); // the card being tested or set up: kept fully on screen
 
-  useEffect(() => { loadSites().then(saved => { setSites(saved.sites); setActiveId(saved.activeId); }); }, []);
+  useEffect(() => {
+    loadSites().then(saved => { setSites(saved.sites); setActiveId(saved.activeId); });
+    loadSetups().then(setSetups);
+  }, []);
   // A saved password is unlocked once per session and kept in memory only: leaving the app locks it again.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => { if (state === 'background') flow.current.network = null; });
     return () => subscription.remove();
   }, []);
   const activeSite = sites.find(site => site.id === activeId) ?? null;
+  const activeRef = useRef(activeSite); // a setup finishes renders later: read the site in use then, not a stale one
+  activeRef.current = activeSite;
+  const remember = (sensorName: string) => {
+    const siteId = activeRef.current?.id;
+    if (!siteId) return;
+    setSetups(current => {
+      const next = { ...current, [sensorName]: siteId };
+      saveSetups(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const ble = BleManager;
     if (!ble || !bleStarted) return;
     const subscriptions = [
       ble.onDidUpdateState(({ state }) => setBle(state)),
-      ble.onDiscoverPeripheral(peripheral => setSensors(found => ({ ...found, [peripheral.id]: peripheral }))),
+      ble.onDiscoverPeripheral(peripheral => setSensors(found => (changed(found[peripheral.id], peripheral) ? { ...found, [peripheral.id]: peripheral } : found))),
     ];
     bleStarted.then(() => ble.checkState()).then(setBle).catch(() => setBle(BleState.Unsupported));
     return () => subscriptions.forEach(subscription => subscription.remove());
@@ -120,14 +136,15 @@ export default function App() {
   const ready = ble === BleState.On;
   const scanning = ready && !running && !paused; // the radio scan pauses during a test; the radar keeps moving
 
-  // Scan continuously while idle, in short rounds so iOS reports each sensor again (fresh signal).
+  // Scan continuously while idle, reporting every advertisement, so a card follows its sensor's state within a second
+  // (without duplicates iOS skips sensors for whole rounds); `changed` keeps re-renders to real changes.
   // Only devices advertising the IoT service UUID are listed.
   // ponytail: a sensor that stops advertising stays listed; prune by last-seen time if that confuses technicians.
   useEffect(() => {
     const ble = BleManager;
     if (!ble || !scanning) return;
     let live = true;
-    const round = () => { if (live) ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: SCAN_SECONDS, allowDuplicates: false }).catch(() => {}); };
+    const round = () => { if (live) ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: SCAN_SECONDS, allowDuplicates: true }).catch(() => {}); };
     const subscription = ble.onStopScan(round);
     round();
     return () => { live = false; subscription.remove(); ble.stopScan().catch(() => {}); };
@@ -147,6 +164,14 @@ export default function App() {
       const { outcome, detail } = await work(step => setRunning({ id: sensor.id, kind, step }));
       await new Promise(resolve => setTimeout(resolve, MIN_PROGRESS_MS - (Date.now() - started))); // UI only: durations stay real
       setOutcomes(map => ({ ...map, [sensor.id]: outcome }));
+      // A success folds away after a while; a failure stays, since it tells the technician what to do next.
+      if (outcome.ok) {
+        setTimeout(() => setOutcomes(map => {
+          if (map[sensor.id] !== outcome) return map; // a newer result replaced it
+          const { [sensor.id]: _shown, ...rest } = map;
+          return rest;
+        }), SUCCESS_SHOWN_MS);
+      }
       setAttempts(list => [{ key: Date.now(), at: new Date().toLocaleTimeString('en-GB'), name: nameOf(sensor), ok: outcome.ok, detail }, ...list].slice(0, 10));
       AccessibilityInfo.announceForAccessibility(`${outcome.title}. ${outcome.text}`);
     } finally {
@@ -169,6 +194,7 @@ export default function App() {
     } finally {
       flow.current.finished(sensor.id, result);
     }
+    if (result.ok) remember(nameOf(sensor));
     return result.ok
       ? { outcome: { ok: true, title: 'Device connected', text: `Joined ${site.ssid} · ${result.ipv4}` }, detail: `✓ wi-fi ${result.ipv4}` }
       : { outcome: { ok: false, title: 'Wi‑Fi setup failed', text: setupFailureText(result) }, detail: `! wi-fi ${result.step} · ${result.reason}` };
@@ -378,6 +404,8 @@ export default function App() {
           )}
           {Object.values(sensors).map((sensor, index) => {
             const active = running?.id === sensor.id;
+            const state = sensorState(sensor.advertising);
+            const settable = state === null || state === 'ready'; // unknown: older firmware, let Set up find out
             const outcome = active ? undefined : outcomes[sensor.id];
             const STEPS: [string, string][] = running?.kind === 'setup' ? SETUP_STEPS : TEST_STEPS;
             const step = Math.max(0, STEPS.findIndex(([key]) => key === running?.step));
@@ -392,6 +420,7 @@ export default function App() {
                 <View style={s.row}>
                   <View style={s.grow}>
                     <Text style={s.sensorName}>{nameOf(sensor)}</Text>
+                    {state && <Text style={[s.small, state === 'online' && s.stateOk, state === 'offline' && s.stateWarn]}>{stateText(state, sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null)}</Text>}
                     {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
                   </View>
                 </View>
@@ -399,14 +428,15 @@ export default function App() {
                   <Pressable style={[s.secondary, s.grow, !!running && !(active && running.kind === 'test') && s.disabled]} disabled={!!running} onPress={() => test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
                     {active && running.kind === 'test' ? <ActivityIndicator color={C.ink} accessibilityLabel="Testing" /> : <Text style={s.secondaryText}>Test</Text>}
                   </Pressable>
-                  <Pressable style={[s.primary, s.grow, !!running && !(active && running.kind === 'setup') && s.disabled]} disabled={!!running} onPress={() => setUp(sensor)} accessibilityRole="button" accessibilityLabel={`Set up the Wi-Fi of ${nameOf(sensor)}`}>
+                  <Pressable style={[s.primary, s.grow, ((!!running && !(active && running.kind === 'setup')) || !settable) && s.disabled]} disabled={!!running || !settable} onPress={() => setUp(sensor)} accessibilityRole="button" accessibilityLabel={`Set up the Wi-Fi of ${nameOf(sensor)}`}>
                     {active && running.kind === 'setup' ? <ActivityIndicator color="#ffffff" accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>Set up</Text>}
                   </Pressable>
                 </View>
                 {/* One drawer of steady height: it opens once, shows progress, then the result fades in place.
-                    The result stays in the tested card, so it is visible wherever that card sits in a long list. */}
+                    The result shows in the tested card, wherever it sits in a long list; a success folds away after
+                    SUCCESS_SHOWN_MS (the state line keeps it), a failure stays until the next action. */}
                 {(active || outcome) && (
-                  <View style={s.drawer}>
+                  <Animated.View style={s.drawer} exiting={FadeOut.duration(200)}>
                     {active ? (
                       <Animated.View key="progress" entering={FadeIn.duration(200)} style={[s.drawerBody, s.progressCard]} accessibilityLiveRegion="polite">
                         <Text style={s.drawerTitle}>{STEPS[step][1]}…</Text>
@@ -414,12 +444,12 @@ export default function App() {
                         <View style={s.bar}>{STEPS.map(([key], index) => <View key={key} style={[s.segment, index <= step && s.segmentOn]} />)}</View>
                       </Animated.View>
                     ) : outcome && (
-                      <Animated.View key="result" entering={FadeIn.duration(300)} style={[s.drawerBody, outcome.ok ? s.okCard : s.warnCard]} accessibilityRole="summary">
+                      <Animated.View key="result" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={[s.drawerBody, outcome.ok ? s.okCard : s.warnCard]} accessibilityRole="summary">
                         <Text style={s.drawerTitle}>{outcome.title}</Text>
                         <Text style={outcome.ok ? s.okText : s.warnText}>{outcome.text}</Text>
                       </Animated.View>
                     )}
-                  </View>
+                  </Animated.View>
                 )}
               </Animated.View>
             );
@@ -513,6 +543,8 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   grow: { flex: 1 },
   sensorName: { fontFamily: 'Onest_600SemiBold', fontSize: 16, color: C.ink },
+  stateOk: { fontFamily: 'Onest_500Medium', color: C.ink },
+  stateWarn: { color: C.warn },
   small: { fontFamily: 'Onest_400Regular', fontSize: 14, lineHeight: 20, color: C.muted },
   center: { textAlign: 'center' },
   secondary: { backgroundColor: C.bg, borderRadius: 999, minHeight: 44, minWidth: 92, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderWidth: 1, borderColor: C.line },

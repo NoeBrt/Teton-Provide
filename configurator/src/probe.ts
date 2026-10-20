@@ -2,6 +2,21 @@
 export const SERVICE_UUID = '3b0a90ce-9564-40d1-b96b-14cf8858aba3';
 export const CHARACTERISTIC_UUID = '29b3765c-de49-4114-889e-89b05852c968';
 export const REQUEST = bytes('hello');
+
+/** The sensor's state, advertised as one byte of manufacturer data under company 0xFFFF (src/protocol.rs STATE_*). */
+export type SensorState = 'not-staged' | 'ready' | 'online' | 'offline';
+const STATES: SensorState[] = ['not-staged', 'ready', 'online', 'offline'];
+type Advertising = { localName?: string; manufacturerData?: Record<string, { bytes: number[] }> };
+/** `null` when the sensor advertises no state (older firmware) or an unknown one. */
+export const sensorState = (advertising?: Advertising): SensorState | null =>
+  STATES[advertising?.manufacturerData?.ffff?.bytes[0] ?? -1] ?? null;
+
+/** The scan reports every advertisement: a card is redrawn only when its state, name or signal (≥ 5 dB) changed. */
+export const changed = (before: { rssi: number; advertising?: Advertising } | undefined, after: { rssi: number; advertising?: Advertising }) =>
+  !before
+  || sensorState(before.advertising) !== sensorState(after.advertising)
+  || before.advertising?.localName !== after.advertising?.localName
+  || Math.abs(before.rssi - after.rssi) >= 5;
 const RESPONSE = bytes('world');
 
 // The subset of react-native-ble-manager the probe needs, so tests can use a fake.
