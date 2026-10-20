@@ -1,19 +1,20 @@
-// Noise_NKpsk2_25519_ChaChaPoly_SHA256, initiator side (the phone). Mirrors src/provision.rs on the device,
-// which uses snow. Written from the Noise spec (rev. 34) on the audited @noble primitives; byte-for-byte
-// interop is checked against vectors produced by snow (noise-vectors.json, tests/noise_vectors.rs).
+// Noise_XX_25519_ChaChaPoly_SHA256, initiator side (the phone). Mirrors src/provision.rs on the device, which
+// uses snow. Written from the Noise spec (rev. 34) on the audited @noble primitives; byte-for-byte interop is
+// checked against vectors produced by snow (noise-vectors.json, tests/noise_vectors.rs).
+//   -> e
+//   <- e, ee, s, es   (payload: the device certificate)
+//   -> s, se          (payload: the technician token)
 import { x25519 } from '@noble/curves/ed25519.js';
 import { chacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
 
-export const NOISE_PARAMS = 'Noise_NKpsk2_25519_ChaChaPoly_SHA256';
+export const NOISE_PARAMS = 'Noise_XX_25519_ChaChaPoly_SHA256';
+export const PROLOGUE = new TextEncoder().encode('iot-provision/2');
 const KEY_LEN = 32;
 const TAG_LEN = 16;
-const encoder = new TextEncoder();
 
-export const prologue = (deviceId: string) => encoder.encode(`iot-provision/1:${deviceId}`);
-
-const concat = (...parts: Uint8Array[]) => {
+export const concat = (...parts: Uint8Array[]) => {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let offset = 0;
   for (const part of parts) { out.set(part, offset); offset += part.length; }
@@ -21,22 +22,16 @@ const concat = (...parts: Uint8Array[]) => {
 };
 
 // HKDF as the Noise spec defines it (HMAC-SHA256 chained outputs).
-function hkdf(chainingKey: Uint8Array, input: Uint8Array, outputs: 2 | 3): Uint8Array[] {
+function hkdf(chainingKey: Uint8Array, input: Uint8Array): [Uint8Array, Uint8Array] {
   const temp = hmac(sha256, chainingKey, input);
-  const out: Uint8Array[] = [];
-  let previous: Uint8Array = new Uint8Array(0);
-  for (let i = 1; i <= outputs; i++) {
-    previous = hmac(sha256, temp, concat(previous, Uint8Array.of(i)));
-    out.push(previous);
-  }
-  return out;
+  const first = hmac(sha256, temp, Uint8Array.of(1));
+  return [first, hmac(sha256, temp, concat(first, Uint8Array.of(2)))];
 }
 
 class CipherState {
   private nonce = 0n;
   private readonly key: Uint8Array | null;
   constructor(key: Uint8Array | null = null) { this.key = key; }
-  get hasKey() { return this.key !== null; }
 
   private iv() {
     const iv = new Uint8Array(12);
@@ -67,65 +62,63 @@ export interface Transport {
   open(ciphertext: Uint8Array): Uint8Array;
 }
 
-export interface Label {
-  deviceId: string;
-  devicePublic: Uint8Array; // the device's static X25519 key, printed on its label
-  secret: Uint8Array; // 32-byte label secret, the Noise PSK
-}
-
 /**
- * Starts a handshake. `first()` is the message to write; `finish(reply)` checks the device's answer and
- * returns the encrypted channel. It throws when the device does not hold the key or the label secret,
- * so no credential is ever encrypted for a device that failed the handshake.
+ * Starts a handshake with this phone's static key and a fresh ephemeral key. The three steps must run in order:
+ * `first()` to write, `second(reply)` to read the device's static key and certificate, and only once the caller
+ * has checked that certificate, `third(token)` to send the technician token and get the encrypted channel.
  */
-export function initiator(label: Label, ephemeralPrivate: Uint8Array) {
-  if (label.devicePublic.length !== KEY_LEN || label.secret.length !== KEY_LEN || ephemeralPrivate.length !== KEY_LEN) {
-    throw new Error('bad key length');
-  }
-  const name = encoder.encode(NOISE_PARAMS);
+export function initiator(staticPrivate: Uint8Array, ephemeralPrivate: Uint8Array) {
+  if (staticPrivate.length !== KEY_LEN || ephemeralPrivate.length !== KEY_LEN) throw new Error('bad key length');
+  const name = new TextEncoder().encode(NOISE_PARAMS);
   let h: Uint8Array = name.length <= 32 ? concat(name, new Uint8Array(32 - name.length)) : sha256(name);
   let ck: Uint8Array = h;
-  const cipher = { current: new CipherState() };
+  let cipher = new CipherState();
   const mixHash = (data: Uint8Array) => { h = sha256(concat(h, data)); };
-  const mixKey = (input: Uint8Array) => { const [nextCk, key] = hkdf(ck, input, 2); ck = nextCk; cipher.current = new CipherState(key); };
-  const mixKeyAndHash = (input: Uint8Array) => {
-    const [nextCk, hashInput, key] = hkdf(ck, input, 3);
-    ck = nextCk;
-    mixHash(hashInput);
-    cipher.current = new CipherState(key);
-  };
-  const encryptAndHash = (plain: Uint8Array) => { const out = cipher.current.encrypt(h, plain); mixHash(out); return out; };
-  const decryptAndHash = (data: Uint8Array) => { const out = cipher.current.decrypt(h, data); mixHash(data); return out; };
+  const mixKey = (input: Uint8Array) => { const [nextCk, key] = hkdf(ck, input); ck = nextCk; cipher = new CipherState(key); };
+  const encryptAndHash = (plain: Uint8Array) => { const out = cipher.encrypt(h, plain); mixHash(out); return out; };
+  const decryptAndHash = (data: Uint8Array) => { const out = cipher.decrypt(h, data); mixHash(data); return out; };
 
-  mixHash(prologue(label.deviceId));
-  mixHash(label.devicePublic); // <- s (pre-message)
+  mixHash(PROLOGUE);
   const ephemeralPublic = x25519.getPublicKey(ephemeralPrivate);
-  let started = false;
+  let deviceEphemeral: Uint8Array | null = null;
+  // Each step starts by poisoning `step`: if it throws (a forged reply), every later step refuses to run.
+  let step = 0;
+  const begin = (expected: number) => { if (step !== expected) throw new Error('handshake out of order'); step = -1; };
 
   return {
-    /** -> e, es */
+    /** -> e (no payload). */
     first(): Uint8Array {
-      if (started) throw new Error('handshake already started');
-      started = true;
+      begin(0);
       mixHash(ephemeralPublic);
-      mixKey(ephemeralPublic); // PSK handshakes also mix the ephemeral into the key
-      mixKey(x25519.getSharedSecret(ephemeralPrivate, label.devicePublic));
-      return concat(ephemeralPublic, encryptAndHash(new Uint8Array(0)));
+      const message = concat(ephemeralPublic, encryptAndHash(new Uint8Array(0)));
+      step = 1;
+      return message;
     },
-    /** <- e, ee, psk */
-    finish(reply: Uint8Array): Transport {
-      if (!started || reply.length !== KEY_LEN + TAG_LEN) throw new Error('bad handshake reply');
-      const deviceEphemeral = reply.slice(0, KEY_LEN);
+    /** <- e, ee, s, es: returns the device's proven static key and its payload (the certificate). */
+    second(reply: Uint8Array): { deviceStatic: Uint8Array; payload: Uint8Array } {
+      begin(1);
+      if (reply.length < KEY_LEN + KEY_LEN + TAG_LEN + TAG_LEN) throw new Error('bad handshake reply');
+      deviceEphemeral = reply.slice(0, KEY_LEN);
       mixHash(deviceEphemeral);
-      mixKey(deviceEphemeral);
       mixKey(x25519.getSharedSecret(ephemeralPrivate, deviceEphemeral));
-      mixKeyAndHash(label.secret);
-      if (decryptAndHash(reply.slice(KEY_LEN)).length !== 0) throw new Error('unexpected handshake payload');
-      const [send, receive] = hkdf(ck, new Uint8Array(0), 2);
+      const deviceStatic = decryptAndHash(reply.slice(KEY_LEN, KEY_LEN * 2 + TAG_LEN));
+      mixKey(x25519.getSharedSecret(ephemeralPrivate, deviceStatic));
+      const payload = decryptAndHash(reply.slice(KEY_LEN * 2 + TAG_LEN));
+      step = 2;
+      return { deviceStatic, payload };
+    },
+    /** -> s, se, carrying `payload` (the technician token); returns the message and the encrypted channel. */
+    third(payload: Uint8Array): { message: Uint8Array; transport: Transport } {
+      begin(2);
+      const encryptedStatic = encryptAndHash(x25519.getPublicKey(staticPrivate));
+      mixKey(x25519.getSharedSecret(staticPrivate, deviceEphemeral!));
+      const message = concat(encryptedStatic, encryptAndHash(payload));
+      const [send, receive] = hkdf(ck, new Uint8Array(0));
       const out = new CipherState(send);
       const inbound = new CipherState(receive);
       const none = new Uint8Array(0);
-      return { seal: plain => out.encrypt(none, plain), open: data => inbound.decrypt(none, data) };
+      step = 3;
+      return { message, transport: { seal: plain => out.encrypt(none, plain), open: data => inbound.decrypt(none, data) } };
     },
   };
 }

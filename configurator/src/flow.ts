@@ -1,77 +1,74 @@
 // The setup sequence for the technician, outside React so it holds its own state (no stale closures):
-// site Wi-Fi once per visit → this sensor's label once → join. It decides; App.tsx shows and runs.
-import type { Label } from './noise.ts';
+// technician token once → site Wi-Fi once per visit → join, for one sensor or several at once (a batch).
+// It decides; App.tsx shows and runs.
+import type { Token } from './authority.ts';
 import { isUnsettled, type SetupResult } from './setup.ts';
 import type { SiteNetwork } from './sites.ts';
 
 export type Action =
+  | { kind: 'ask-token' }
   | { kind: 'ask-network' }
-  | { kind: 'scan-label'; sensorId: string }
-  | { kind: 'join'; sensorId: string; label: Label; site: SiteNetwork; attempt: Uint8Array | undefined }
+  | { kind: 'join'; sensorId: string; site: SiteNetwork; attempt: Uint8Array | undefined }
   | { kind: 'busy' };
 
 export class SetupFlow {
   network: SiteNetwork | null;
-  private labels = new Map<string, Label>(); // scanned this visit, memory only
+  token: Token | null = null;
   private unsettled = new Map<string, { attempt: Uint8Array; site: SiteNetwork }>(); // results the phone lost
-  private waitingForNetwork: string | null = null;
-  private scanning: string | null = null;
-  private running: string | null = null;
+  private waiting: string | null = null; // a sensor whose Set up waits for the token or the site Wi-Fi
+  private running = new Set<string>();
 
   constructor(network: SiteNetwork | null) {
     this.network = network;
   }
 
-  /** The technician tapped Set up on this sensor. */
+  /** The technician tapped Set up on this sensor (or a batch reached it). */
   request(sensorId: string): Action {
-    if (this.running) return { kind: 'busy' };
+    if (this.running.has(sensorId)) return { kind: 'busy' };
+    if (!this.token) {
+      this.waiting = sensorId;
+      return { kind: 'ask-token' };
+    }
     if (!this.network) {
-      this.waitingForNetwork = sensorId;
+      this.waiting = sensorId;
       return { kind: 'ask-network' };
     }
-    const label = this.labels.get(sensorId);
-    if (!label) {
-      this.scanning = sensorId;
-      return { kind: 'scan-label', sensorId };
-    }
-    return this.join(sensorId, label, this.network);
+    return this.join(sensorId, this.network);
+  }
+
+  /** The technician token was imported or unlocked; resumes the sensor that asked for it, if any. */
+  tokenReady(token: Token): Action | null {
+    this.token = token;
+    return this.resume();
   }
 
   /** The site Wi-Fi was saved; resumes the sensor that asked for it, if any. */
   networkSaved(site: SiteNetwork): Action | null {
     this.network = site;
-    const sensorId = this.waitingForNetwork;
-    this.waitingForNetwork = null;
-    return sensorId ? this.request(sensorId) : null;
+    return this.resume();
   }
 
-  cancelNetwork() {
-    this.waitingForNetwork = null;
-  }
-
-  /** A QR label was read for this sensor. Repeated reports of the same scan are ignored. */
-  labelScanned(sensorId: string, label: Label): Action | null {
-    if (this.scanning !== sensorId || !this.network) return null;
-    this.scanning = null;
-    this.labels.set(sensorId, label);
-    return this.join(sensorId, label, this.network);
-  }
-
-  cancelScan() {
-    this.scanning = null;
+  /** The token or site sheet was closed without a choice. */
+  cancelWaiting() {
+    this.waiting = null;
   }
 
   finished(sensorId: string, result: SetupResult) {
-    this.running = null;
-    if (!result.ok && result.reason === 'not-authenticated') this.labels.delete(sensorId); // rescan next time
+    this.running.delete(sensorId);
     if (isUnsettled(result) && !result.ok && result.attempt) this.unsettled.set(sensorId, { attempt: result.attempt, site: this.network! });
     else this.unsettled.delete(sensorId);
   }
 
-  private join(sensorId: string, label: Label, site: SiteNetwork): Action {
+  private resume(): Action | null {
+    const sensorId = this.waiting;
+    this.waiting = null;
+    return sensorId ? this.request(sensorId) : null;
+  }
+
+  private join(sensorId: string, site: SiteNetwork): Action {
     const previous = this.unsettled.get(sensorId);
     const same = previous && previous.site.ssid === site.ssid && previous.site.password === site.password;
-    this.running = sensorId;
-    return { kind: 'join', sensorId, label, site, attempt: same ? previous.attempt : undefined };
+    this.running.add(sensorId);
+    return { kind: 'join', sensorId, site, attempt: same ? previous.attempt : undefined };
   }
 }

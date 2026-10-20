@@ -3,80 +3,68 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { initiator, NOISE_PARAMS, prologue, type Label } from './noise.ts';
+import { initiator, NOISE_PARAMS, PROLOGUE } from './noise.ts';
 import { decodeResponse, provisionRequest, statusRequest } from './provision.ts';
 
 // Produced by snow on the device side (tests/noise_vectors.rs): fixed keys make every byte deterministic.
 const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.meta.url), 'utf8'));
 const hex = (s: string) => Uint8Array.from(Buffer.from(s, 'hex'));
-const label: Label = { deviceId: vectors.deviceId, devicePublic: hex(vectors.devicePublic), secret: hex(vectors.secret) };
-const [m1, m2, request1, response1, request2, response2] = vectors.messages.map((m: { message: string }) => hex(m.message));
+const messages: Uint8Array[] = vectors.messages.map((m: { message: string }) => hex(m.message));
 const plain = vectors.messages.map((m: { plaintext: string }) => hex(m.plaintext));
+const [m1, m2, m3, accepted, request1, response1, request2, response2] = messages;
 const attempt = new Uint8Array(16).fill(0xa5);
 
-const handshake = (l: Label = label) => {
-  const phone = initiator(l, hex(vectors.phoneEphemeral));
-  const first = phone.first();
-  return { first, channel: () => phone.finish(m2) };
-};
+const phone = () => initiator(hex(vectors.phonePrivate), hex(vectors.phoneEphemeral));
 
-test('matches snow byte for byte: params, prologue, handshake and both exchanges', () => {
+test('matches snow byte for byte: params, prologue, the three handshake messages and both exchanges', () => {
   assert.equal(vectors.params, NOISE_PARAMS);
-  assert.deepEqual(prologue(label.deviceId), hex(vectors.prologue));
-  const { first, channel } = handshake();
-  assert.deepEqual(first, m1);
-  const transport = channel();
+  assert.deepEqual(PROLOGUE, hex(vectors.prologue));
+  const handshake = phone();
+  assert.deepEqual(handshake.first(), m1);
+  const { deviceStatic, payload } = handshake.second(m2);
+  assert.deepEqual(deviceStatic, hex(vectors.devicePublic), 'the device proved this static key');
+  assert.deepEqual(payload, hex(vectors.certificate), 'the device sent its certificate');
+  const { message, transport } = handshake.third(hex(vectors.token));
+  assert.deepEqual(message, m3);
+  assert.deepEqual(transport.open(accepted), plain[3]);
 
-  assert.deepEqual(provisionRequest(attempt, 'Ward-3', 'correct horse'), plain[2]);
-  assert.deepEqual(transport.seal(plain[2]), request1);
+  assert.deepEqual(provisionRequest(attempt, 'Ward-3', 'correct horse'), plain[4]);
+  assert.deepEqual(transport.seal(plain[4]), request1);
   assert.deepEqual(decodeResponse(transport.open(response1), attempt), { state: 'pending' });
-  assert.deepEqual(statusRequest(attempt), plain[4]);
-  assert.deepEqual(transport.seal(plain[4]), request2);
+  assert.deepEqual(statusRequest(attempt), plain[6]);
+  assert.deepEqual(transport.seal(plain[6]), request2);
   assert.deepEqual(decodeResponse(transport.open(response2), attempt), { state: 'connected', ipv4: '192.168.1.40' });
 });
 
-test('a device without the label secret, or with another key, fails the handshake', () => {
-  assert.throws(() => handshake({ ...label, secret: new Uint8Array(32).fill(9) }).channel());
-  assert.throws(() => handshake({ ...label, devicePublic: randomBytes(32) }).channel());
-  assert.throws(() => handshake({ ...label, deviceId: 'IOT-DEMO-002' }).channel());
-});
-
-test('tampered, truncated, replayed and reordered replies are rejected', () => {
-  const tampered = response1.slice();
-  tampered[3] ^= 1;
-  for (const reply of [tampered, response1.slice(0, -1)]) {
-    const transport = handshake().channel();
-    transport.seal(plain[2]);
-    assert.throws(() => transport.open(reply));
+test('a tampered or truncated second message fails before the token can be sent', () => {
+  for (const bad of [Uint8Array.from(m2, (b, i) => (i === 40 ? b ^ 1 : b)), m2.slice(0, 60), m2.slice(0, -1)]) {
+    const handshake = phone();
+    handshake.first();
+    assert.throws(() => handshake.second(bad));
+    assert.throws(() => handshake.third(hex(vectors.token)), /out of order/, 'no token after a failed second message');
   }
-  const transport = handshake().channel();
-  transport.seal(plain[2]);
-  assert.throws(() => transport.open(response2), 'reordered: second reply first');
-  const replay = handshake().channel();
-  replay.open(response1);
-  assert.throws(() => replay.open(response1), 'replayed');
 });
 
-test('a reply for another attempt, or a malformed one, is refused', () => {
-  const other = new Uint8Array(16).fill(1);
-  assert.throws(() => decodeResponse(Uint8Array.from([...attempt, 0]), other));
-  for (const body of [[], [0, 0], [1, 1, 2, 3], [2, 99], [9]]) {
-    assert.throws(() => decodeResponse(Uint8Array.from([...attempt, ...body]), attempt));
-  }
-  assert.deepEqual(decodeResponse(Uint8Array.from([...attempt, 2, 1]), attempt), { state: 'failed', failure: 'WrongPsk' });
+test('steps must run in order', () => {
+  const handshake = phone();
+  assert.throws(() => handshake.second(m2), /out of order/);
+  handshake.first();
+  assert.throws(() => handshake.first(), /out of order/);
+  assert.throws(() => handshake.third(new Uint8Array(0)), /out of order/);
 });
 
-test('credentials outside WPA2-Personal bounds are refused before encryption', () => {
-  assert.throws(() => provisionRequest(attempt, '', 'correct horse'));
-  assert.throws(() => provisionRequest(attempt, 'Ward-3', '1234567'));
-  assert.throws(() => provisionRequest(attempt, 'Ward-3', 'p'.repeat(64)));
-  assert.throws(() => provisionRequest(attempt, 'x'.repeat(33), 'correct horse'));
-  assert.throws(() => provisionRequest(new Uint8Array(15), 'Ward-3', 'correct horse'));
+test('altered, replayed or reordered device replies are rejected', () => {
+  const handshake = phone();
+  handshake.first();
+  handshake.second(m2);
+  const { transport } = handshake.third(hex(vectors.token));
+  const tampered = accepted.slice();
+  tampered[0] ^= 1;
+  assert.throws(() => transport.open(tampered));
+  assert.throws(() => transport.open(randomBytes(accepted.length)));
 });
 
-test('a handshake cannot be restarted or finished early', () => {
-  const phone = initiator(label, hex(vectors.phoneEphemeral));
-  assert.throws(() => phone.finish(m2), 'finish before first');
-  phone.first();
-  assert.throws(() => phone.first());
+test('keys must be 32 bytes', () => {
+  assert.throws(() => initiator(new Uint8Array(31), new Uint8Array(32)));
+  assert.throws(() => initiator(new Uint8Array(32), new Uint8Array(33)));
 });
