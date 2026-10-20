@@ -1,307 +1,136 @@
-# Teton Provisioning Challenge
+# Teton provisioning
 
-Current phase: the harmless `hello` probe runs on real hardware on the device
-side: the Rust BlueZ peripheral (`device/main.rs`) advertises and registers its
-GATT service on the Ubuntu host. The iPhone configurator (`configurator/`, Expo +
-React Native) is built and tested in software; no phone has completed the BLE
-exchange yet. **Credentials, security, and Wi-Fi provisioning are not implemented.**
+A technician's phone gives a headless Ubuntu device its Wi-Fi credentials over Bluetooth Low Energy, with no
+Internet and no shared network. The phone scans the QR label on the device, both sides run an authenticated
+Noise handshake keyed by that label, and only then does the password travel, encrypted. The device joins the
+network through NetworkManager and reports the IPv4 address it received for that attempt.
 
-To continue on a Mac (installing the configurator on an iPhone), follow
-[configurator/README.md](configurator/README.md#install-on-an-iphone-from-a-mac-free-apple-id)
-and the latest step of [the handoff](tasks/HANDOFF.md).
+- **Why BLE, how credentials are protected, 200 devices:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), with
+  diagrams, screens and a [33 s video](docs/architecture/demo-simulator.mp4).
+- **Security design and tests:** [docs/SECURITY.md](docs/SECURITY.md).
+- **Every decision and its alternatives:** [docs/DECISIONS.md](docs/DECISIONS.md).
+- **Requirement-by-requirement status:** [tasks/compliance.md](tasks/compliance.md).
 
-No Jetson is currently available. The local simulator discovers a synthetic
-device, connects through bounded memory channels, exchanges `hello`/`world`,
-and closes its worker. It supports fault injection and recoverable failures.
-The final demo requires Android and iPhone support, each used as configurator
-with a headless Ubuntu computer as the device; a Jetson can replace that
-computer later.
-The computer still needs a verified BLE peripheral and Wi-Fi adapter.
-BLE is the planned provisioning channel; the demo will not create a temporary
-Wi-Fi network. See [decision 18](docs/DECISIONS.md#18-exclude-softap-from-the-mvp).
+| Side | Code |
+| --- | --- |
+| Device service (Rust) | `device/main.rs` (BLE peripheral), `device/wifi.rs` (NetworkManager), `src/provision.rs` (Noise, protocol), `device/stage.rs` (label) |
+| Configurator app **provide.** (Expo, React Native) | `configurator/` |
 
-- [Selected stack and architecture](docs/ARCHITECTURE.md)
-- [Implementation plan](tasks/plan.md)
-- [Task checklist and acceptance criteria](tasks/todo.md)
-- [Step-by-step engineering handoff](tasks/HANDOFF.md)
-- [Counter-review and decision history](docs/DECISIONS.md)
-- [Benchmark methodology and results](docs/BENCHMARKS.md)
-- [Credential protection review](docs/SECURITY.md)
-- [Solution report (PDF, French)](docs/rapport-solution.pdf)
-- [Skill-based review and TDD verification](docs/REVIEW.md)
-- [Interactive architecture and technician mockup](docs/architecture-demo.html)
+**Status.** The phone and the device exchange messages over real BLE, and the encrypted protocol passes its tests
+on both sides. The full flow runs in the iOS Simulator against the device's own Noise transcript. A real Wi-Fi join
+from the phone has **not** run yet: the test machine has no second network link, and joining its Wi-Fi would cut
+the SSH session the test runs over. See [What is proven](docs/ARCHITECTURE.md#what-is-proven).
 
-Open `docs/architecture-demo.html` directly in a browser for the French visual
-walkthrough. One self-contained file includes the architecture, phone/desktop
-previews, and five simulated outcomes. No server, installation, or Internet is
-needed. This is an illustration of the planned interface; it does not access
-Bluetooth or configure Wi-Fi. Use fictitious form values only. Its palette follows
-teton.ai; the free Onest face (OFL, embedded) stands in for Teton's licensed Wallop.
-The flow enters the site network once, then provisions a room of several sensors
-per batch. A Playwright run covers PC, iPhone 13, and Pixel 7 layouts, all five outcomes,
-a second room without re-entering credentials, WCAG 2.1 AA (axe-core), and keyboard-only use: [results](demo/mockup-playwright.txt),
-script `demo/ui-playwright.mjs`. The PDF report and its screenshots are rebuilt with
-`PLAYWRIGHT=<dir>/node_modules/playwright/index.mjs node docs/report/build.mjs`.
+## Hardware and assumptions
 
-The real milestone still requires actual advertisements, GATT exchanges,
-reconnect, service restart, and reboot on two machines. The simulator accepts
-only `hello`; it never configures a network or accepts credentials.
+| Role | Requirement | Tested with |
+| --- | --- | --- |
+| Device | Ubuntu 22.04 or 24.04, x86-64; one adapter with **BLE peripheral** support and one **Wi-Fi** interface managed by NetworkManager | Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MediaTek MT7921 (Wi-Fi + Bluetooth) |
+| Device admin link | Ethernet or console if you administer over SSH: provisioning moves the Wi-Fi interface to the new network | none yet (see Status) |
+| Target network | WPA2-Personal (SSID and passphrase, 8 to 63 characters). Enterprise Wi-Fi (EAP) is out of scope. | |
+| Configurator | iPhone with the app installed beforehand; Android builds from the same code | iPhone 15 Pro, iOS 27.0; Android not run |
+| Label | A way to print the device's QR label (any printer, or a screen) | 48 mm thermal sticker printer |
 
-## Technician experience: required final behavior
+Ubuntu 24.04 is expected to work (the polkit rule for it is included) but has not been run.
 
-The original challenge PDF, reread on 2026-10-17, requires a flow usable by a
-non-developer. A graphical interface is required for the final submission.
-The existing command-line simulation is a development tool.
+## Set up the device (Ubuntu)
 
-From the phone, the technician will:
-
-1. Open the prepared configurator and identify the device using its physical label.
-2. Enter the Wi-Fi network name and password in a simple form.
-3. Tap **Connect** and follow plain-language progress messages.
-4. See **Device connected** after network activation and IP assignment, or an
-   actionable error with a retry button.
-
-The device runs its service automatically without a screen, keyboard, or an SSH
-session during provisioning. An Ubuntu computer used as configurator should
-offer the same guided workflow. App installation and device setup happen before
-the offline demo. Actual models/OS versions, mobile clients, build/distribution,
-and authenticated device bootstrap remain unverified on both platforms; a page
-served on the unprovisioned computer is not automatically
-reachable from the phone. See [the interface and platform plan](docs/ARCHITECTURE.md#technician-interface-and-demo-topology).
-
-## Run and test the simulation
-
-Install the Rust toolchain once, before offline work:
+Prepare once, with Internet:
 
 ```sh
-rustup toolchain install 1.88.0 --profile minimal --component rustfmt --component clippy
+sudo apt install build-essential pkg-config libdbus-1-dev bluez network-manager curl
+curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0 --profile minimal
+. ~/.cargo/env
+cargo build --release --features ble,stage --locked
 ```
 
-From this repository, no Cargo dependencies need downloading:
+Install the service, which starts at boot and needs no screen, keyboard or SSH afterwards:
 
 ```sh
-cargo run --example simulation --locked --offline
-cargo test --all-targets --locked --offline
-cargo fmt --all -- --check
-cargo clippy --all-targets --locked --offline -- -D warnings
-cargo build --release --examples --locked --offline
+rfkill list bluetooth                        # if "Soft blocked: yes": sudo rfkill unblock bluetooth
+sudo device/systemd/install.sh wlo1          # your Wi-Fi interface (nmcli device); omit to use the first one
 ```
 
-After building the release examples, run the public CLI regression on Ubuntu
-with Python 3 (standard library only):
+The script creates the system user `teton`, installs `teton-device` and `teton-stage` in `/usr/local/bin`, the
+unit [`teton-device.service`](device/systemd/teton-device.service), and a polkit rule that lets `teton` manage its
+own NetworkManager profile ([22.04](device/systemd/teton-device.pkla), [24.04](device/systemd/50-teton-device.rules)).
+
+Stage the device once. This creates its key and label secret, checks them with a real handshake, and prints the
+QR label:
 
 ```sh
-python3 tests/benchmark_cli.py target/release/examples/benchmark
+sudo -u teton teton-stage /var/lib/teton-device
+sudo systemctl restart teton-device
+journalctl -u teton-device -f                # "TETON-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning"
 ```
 
-The example prints `SIMULATION`, synthetic discovery, a local connection,
-`REQUEST hello -> RESPONSE world`, and confirmation that its worker was joined.
-The prepared binary `target/release/examples/simulation` runs without Cargo,
-Rustup, root access, Bluetooth, or Internet.
+The label holds the device's secret. Print `/var/lib/teton-device/label.svg` (readable only by `teton` and root), stick it on
+the device, and do not share a photo of it. Staging refuses to run twice, so a key is never replaced by accident.
 
-This session only has a toolchain named `stable`, reporting Rust 1.88.0; its
-Rustup directory is read-only. We run the same checks here with
-`RUSTUP_TOOLCHAIN=stable cargo ...`. This override selects the installed compiler
-and matches the committed pin. On another machine, prepare the named toolchain
-above. Cargo's `--offline` does not prevent Rustup from installing a missing toolchain.
+## Set up the configurator (phone)
 
-## Observed environment
+Install the app before the visit; it needs no network afterwards. Build and install steps for an iPhone, with a
+free Apple ID from a Mac or with EAS, are in [configurator/README.md](configurator/README.md). Android uses the same
+code through `npx expo run:android`; we have not run it on a device.
 
-The development session exposes Ubuntu 22.04.5 LTS, Rust/Cargo 1.88.0,
-BlueZ 5.64, and nmcli 1.36.6. Bluetooth `hci0` and Wi-Fi `wlo1` are visible
-through sysfs. Rustfmt and Clippy are installed. Access to host D-Bus and
-network sockets is restricted.
-Jetson model, software versions, radio capabilities, and connectivity remain
-unverified. Docker CLI 27.0.3 is present, but its daemon is inaccessible in this
-session. `pkg-config` detects libdbus 1.12.20. Only the x86-64 Rust target is
-installed. The simulation and host preflight build with no third-party crates;
-the optional `ble` feature resolves `bluer` 0.17.4 and Tokio 1.53 (see `Cargo.lock`).
+## Run the demo
 
-## Prepare the Ubuntu device
+1. Turn off Wi-Fi and mobile data on the phone if you want to show that no network is involved.
+2. Open **provide.**. It scans by itself and lists `TETON-DEMO-001`.
+3. Tap **Set up**. The first time, enter the site: a name, the Wi-Fi network and its password, typed or read
+   from the network's standard Wi-Fi QR code (`WIFI:T:WPA;S:…;P:…;;`, as Android shares it). The password stays
+   in the Keychain behind Face ID.
+4. Scan the device's QR label. The card shows the steps: connecting, securing the channel, sending the network,
+   joining the Wi-Fi.
+5. Expect **Device connected** with the network name and the device's new IPv4 address.
 
-The developer preflight is separate from the final technician interface:
+On the device, check the result:
 
 ```sh
-cargo run --bin audit-host --locked --offline
-cargo build --release --bin audit-host --locked --offline
-./target/release/audit-host
+nmcli -f NAME,UUID,DEVICE connection show --active    # teton-provisioned, 4a7db77c-6fda-47aa-95ca-d186c5096b32
+journalctl -u teton-device                            # "attempt <id> connected": no SSID, password or address
 ```
 
-Optionally pass an adapter, for example `./target/release/audit-host hci1`.
-It needs Ubuntu's `busctl` (systemd), `nmcli` (NetworkManager), GNU `timeout`
-(coreutils), `/bin/bash`, and `/bin/cat`. The prepared binary runs offline
-without Rustup, Cargo, or root.
-
-The audit checks the running BlueZ owner, adapter power, local GATT registration
-API, a free advertising instance, and a Wi-Fi device managed by NetworkManager.
-It does not require Wi-Fi to be connected. It never powers an adapter, starts
-BlueZ, registers a service, or changes network configuration. Each command gets
-a four-second process-group deadline. A draining Bash pipeline keeps supervision
-active while stdout remains open, including after the command parent exits;
-privileged shell mode ignores inherited startup code and functions. Captured
-stdout is limited to 8 KiB, stderr is discarded, and only constructed statuses
-are printed.
-
-Exit 0 means these prerequisites were observed; permissions for registration,
-radio exchange, the phone client, and Wi-Fi joining remain unverified. Exit 1
-means a check failed or was inconclusive; exit 2 means invalid arguments.
-`COMMAND_FAILED` can indicate missing service access, including this restricted
-session. Run from the actual Ubuntu host terminal when qualifying hardware.
-The [captured host result](demo/host-preflight.txt) remains blocked; fixture tests
-are separate from real evidence. The first unrestricted run passes 3 of 4 checks;
-Bluetooth is soft-blocked by rfkill ([evidence](demo/host-ble-endpoint.txt)).
-
-## Run the real BLE hello endpoint
-
-Build prerequisites (once, with Internet): `sudo apt install libdbus-1-dev pkg-config`,
-then `cargo fetch --locked` so later builds work with `--offline`.
+A wrong password, an absent network or a timeout shows an actionable message in the app, and the device deletes
+the failed profile. After a success the device closes provisioning for good. To repeat the demo on the same
+machine, remove the provisioned marker; at startup the service deletes its old profile:
 
 ```sh
-cargo build --release --features ble --bin device --locked --offline
-rfkill list bluetooth          # if "Soft blocked: yes": sudo rfkill unblock bluetooth
-./target/release/device        # Ctrl-C stops it; BlueZ then drops its registrations
+sudo systemctl stop teton-device
+sudo rm /var/lib/teton-device/provisioned
+sudo systemctl start teton-device
 ```
 
-It powers the default adapter, advertises `TETON-DEMO-001` with service
-`3b0a90ce-9564-40d1-b96b-14cf8858aba3`, and exposes characteristic
-`29b3765c-de49-4114-889e-89b05852c968` (write with response, read). Probe it
-from a phone with a generic BLE app such as nRF Connect: connect, write the text
-`hello`, then read `world`. The response is returned once, only to the client
-that wrote it; any other value is rejected. The log prints `hello exchanged` or
-`rejected request`, never payloads or client addresses. A generic app proves
-feasibility only; it is not the submitted configurator.
+Each sensor card also has **Test**, which writes `hello` and expects `world`: a radio check that carries no
+credentials.
 
-Run it as a service that starts at boot and restarts with BlueZ:
+## Tests
 
 ```sh
-sudo install -m 755 target/release/device /usr/local/bin/teton-device
-sudo install -m 644 device/systemd/teton-device.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now teton-device
-journalctl -u teton-device -f
+cargo test --all-targets --locked                         # protocol and simulation, no Bluetooth: 40 tests
+cargo test --features ble,stage --all-targets --locked    # adds the device, NetworkManager and Noise tests: 70 tests
+cargo clippy --features ble,stage --all-targets --locked -- -D warnings
+cd configurator && npm ci && npm test && npm run typecheck && npm run lint   # 29 tests
 ```
 
-## Development approach
+The Noise tests replay a transcript produced by the device's `snow` implementation against the phone's
+JavaScript one, byte for byte (`tests/noise_vectors.rs`, `configurator/src/noise.test.ts`). The phone tests also
+check that a device failing the handshake never receives the password (`configurator/src/setup.test.ts`).
 
-Use Rust with Cargo's built-in tests, following the user's report that Teton's
-fleet uses Rust. The simulator uses `std::sync::mpsc` and one worker thread per
-connection because Tokio is not cached and crate downloads are unavailable here.
-The real device endpoint uses Tokio and
-`bluer` for the BlueZ GATT role, and later `dbus`/`dbus-tokio` for
-NetworkManager. systemd will manage the real device binary. `Cargo.lock` and
-the Rust 1.88.0 pin are committed. See decision 12 for the simulation runtime change.
+Development tools, kept from the first milestone: a dependency-free simulation
+(`cargo run --example simulation --locked`), benchmarks ([docs/BENCHMARKS.md](docs/BENCHMARKS.md)), and a
+read-only host preflight (`cargo run --bin audit-host --locked`) that checks BlueZ, the adapter and
+NetworkManager without changing anything.
 
-One Cargo package contains `src/protocol.rs` (shared byte handler),
-`src/simulation.rs` (fake discovery and connection lifecycle),
-`examples/simulation.rs` (demo), and tests in `tests/simulation.rs` and beside
-library code. `src/simulation/batch.rs` adds bounded batches, tested through its
-public API in `tests/scaled.rs`. `device/main.rs` is the real BLE peripheral
-behind the optional `ble` feature; default builds never compile `bluer` or
-libdbus. The phone client lives in `configurator/` (Expo + React Native, BLE hello
-probe; see its README and decision 23).
+## Evidence
 
-Both channel queues hold at most one message; requests are capped at 20 bytes
-before allocation. A session accepts one request at a time. Invalid input is
-rejected without echoing it; the session remains usable. Timeout or disconnect
-closes the session and joins its worker before returning; retry uses fresh channels.
+| What | Where | Class |
+| --- | --- | --- |
+| iPhone to Ubuntu over real BLE: discovery, six exchanges, reconnect after a service restart | [demo/phone-hello.txt](demo/phone-hello.txt) | `ACTUAL_BLE` |
+| Encrypted protocol, test-first trace | [demo/tdd-provision.txt](demo/tdd-provision.txt) | `COMMAND_FIXTURE` |
+| Full technician flow, real app code, recorded device transcript, fake radio | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-technicians-flow) | `SIMULATION` |
+| Real Wi-Fi join, BLE capture without credential bytes, Android | | `NOT_RUN` |
 
-Stopping/dropping a fake device invalidates discovery, new connections, and
-subsequent requests on old sessions. In-flight requests retain their existing
-deadline. A replacement fake device is rediscovered. This is a model of restart,
-not evidence of a systemd restart or machine reboot. Docker remains optional.
-
-## Benchmarks and endurance
-
-```sh
-cargo run --release --example benchmark --locked --offline
-cargo run --release --example benchmark --locked --offline -- --scale
-cargo run --release --example benchmark --locked --offline -- --soak 300
-```
-
-The default command checks and times exchanges on a reused session separately
-from connect/exchange/close operations. `--scale` measures batches of 1, 20, 50,
-200, and 1,000 independent fake device jobs at 1, 4, and 8 concurrent clients.
-It checks every reply, exact job coverage, and the observed concurrency bound.
-Batch time includes queueing, client-pool setup, and worker cleanup; per-job
-service and completion percentiles distinguish processing from queue wait.
-
-`--soak` mixes valid requests,
-invalid input, timeout, disconnect, retry, and simulated restart for the requested
-duration (1-3600 seconds). Failures outside the expected injected outcomes cause
-a nonzero exit. Prepared binaries can run these checks without Cargo or Rustup.
-
-These are local thread/channel measurements. Commands, environment, raw output,
-and bounded-run evidence are retained in `demo/`; see the benchmark report for
-the measured scope and limitations. No wireless, credential protection, network
-activation, systemd, or 200-device throughput is measured.
-
-The current 40 Rust tests pass in debug/release, including 17 public host-preflight
-tests. Four additional black-box CLI cases check the actual release benchmark.
-Two independent review axes and a
-focused review of the scaling additions found no blocking defect. TDD verification
-also caught a response-test weakness using an isolated mutation; the hardened
-test now checks the literal wire contract. See the review report and raw traces.
-Host-audit follow-up review also caught argument-redaction and D-Bus activation
-defects; the final audit includes regressions for both and strict process cleanup.
-Continuation reviews fixed an exited-parent stdout deadline escape and a
-non-UTF-8 benchmark-argument panic. Matched measurements, accepted startup cost,
-and per-step handoffs are recorded in the linked reports.
-
-## Hardware audit
-
-Use the Ubuntu computer as the first real device; a Jetson is not a prerequisite.
-The current session still lacks the host access needed for radio validation.
-Run these read-only commands from a host terminal on the Linux device and,
-if used, the Linux configurator. Label the outputs by role. Audit the phone's
-OS, Bluetooth permissions, client installation, and offline startup separately.
-
-```sh
-uname -a
-cat /etc/os-release
-cat /etc/nv_tegra_release 2>/dev/null || true
-cat /proc/device-tree/model 2>/dev/null || true
-bluetoothd --version
-bluetoothctl list
-bluetoothctl show
-rfkill list
-systemctl status bluetooth --no-pager
-nmcli general status
-nmcli device status
-ip link
-busctl --system tree org.bluez
-busctl --system tree org.freedesktop.NetworkManager
-```
-
-Using the adapter path returned above (often `/org/bluez/hci0`), inspect:
-
-```sh
-busctl --system introspect org.bluez /org/bluez/hci0 org.bluez.LEAdvertisingManager1
-busctl --system introspect org.bluez /org/bluez/hci0 org.bluez.GattManager1
-```
-
-These checks identify APIs; they do not prove working advertising or GATT.
-Next verify an actual device advertisement and a configurator BLE scan,
-then implement the harmless round trip against the observed stack. Record
-adapter paths, setup steps, failures, and repeated successes. Avoid capturing
-nearby patients' or staff members' device identifiers in submission evidence.
-
-## Milestone acceptance
-
-- Device advertises a recognizable demo identity and service UUID.
-- Configurator discovers, connects, sends `hello`, and receives a response.
-- Disconnect/reconnect works without a manual Bluetooth reset.
-- Device service restart and reboot restore the endpoint.
-- Operation works with Internet disconnected and no shared LAN.
-- Journal evidence shows outcomes without secrets or arbitrary payload logging.
-
-The tested offline setup must include the toolchain, Cargo dependencies, and
-built binaries prepared beforehand; provisioning itself must not download
-packages or contact external services. `--locked` pins dependency resolution;
-offline builds also require a populated cache or vendored dependencies.
-
-## Next phases
-
-First validate phone-client feasibility and the real harmless transport against
-the headless Ubuntu device. After the real first milestone passes, select
-authenticated credential protection, integrate NetworkManager, test real Wi-Fi
-joining and failure paths, and deliver the required graphical technician flow.
-Include the scaling discussion and final evidence. The full challenge is not complete.
+Earlier material: [solution report (PDF, French)](docs/rapport-solution.pdf) and the
+[first interactive mockup](docs/architecture-demo.html); the step-by-step engineering log is in
+[tasks/HANDOFF.md](tasks/HANDOFF.md).

@@ -1,15 +1,26 @@
 [Unit]
-Description=Teton provisioning BLE endpoint (hello probe)
-After=bluetooth.service
+Description=Teton device: encrypted Wi-Fi provisioning over Bluetooth LE
+After=bluetooth.service NetworkManager.service
 # Stop/restart with BlueZ: registrations do not survive a bluetoothd restart.
 Requires=bluetooth.service
+Wants=NetworkManager.service
 
 [Service]
 ExecStart=/usr/local/bin/teton-device
+# NetworkManager lets this user manage its profile through polkit (teton-device.pkla / 50-teton-device.rules).
+User=teton
+# /var/lib/teton-device ($STATE_DIRECTORY): device key, label secret, provisioned marker.
+StateDirectory=teton-device
+StateDirectoryMode=0700
+# Optional TETON_WIFI_INTERFACE=wlo1 (default: the first Wi-Fi device).
+EnvironmentFile=-/etc/default/teton-device
 Restart=on-failure
 RestartSec=2
-DynamicUser=yes
 NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_BLUETOOTH
 
 [Install]
 WantedBy=multi-user.target

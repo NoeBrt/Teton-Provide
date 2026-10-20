@@ -1,0 +1,8 @@
+// polkit 121+ (Ubuntu 24.04): lets the teton service create, activate and delete its NetworkManager profile.
+polkit.addRule(function (action, subject) {
+  if (subject.user == "teton" &&
+      (action.id == "org.freedesktop.NetworkManager.settings.modify.system" ||
+       action.id == "org.freedesktop.NetworkManager.network-control")) {
+    return polkit.Result.YES;
+  }
+});
