@@ -4,7 +4,7 @@ Re-checked after every step against the challenge PDF (`Technical_Interview_Chal
 technician user stories (README, "Technician experience"). **PASS** is backed by evidence, **NOT_RUN** is built
 but unproven on hardware, **GAP** is missing. Evidence classes stay distinct (`tasks/HANDOFF.md`).
 
-Last check: 2026-10-20, after the Simulator ergonomics pass (iPhone 16 Pro, iPhone SE, accessibility-large text); device fixes from the review still open.
+Last check: 2026-10-20, after the device review fixes (findings 5-8, `COMMAND_FIXTURE`); real Wi-Fi still waits for the Ethernet cable.
 
 ## PDF constraints (all four required)
 
@@ -61,9 +61,9 @@ Last check: 2026-10-20, after the Simulator ergonomics pass (iPhone 16 Pro, iPho
 | 2 | A QR read twice started two setups on one sensor | FIXED: flow ignores repeated scans; `run()` guard |
 | 3 | A label that failed the handshake stayed cached | FIXED: forgotten on `not-authenticated`, test |
 | 4 | "Change" opened the site Wi-Fi form with an empty name | FIXED: form remounted on opening |
-| 5 | A replayed handshake message 1 holds the one-phone lock (DoS, no label needed) | OPEN: grant the lock after the first decrypted message |
-| 6 | Single use fails open if the marker write fails or the process dies mid-activation | OPEN: fsync the marker before reporting success; fail closed |
-| 7 | Failed or orphaned NetworkManager profile keeps autoconnect | OPEN: create with autoconnect off, enable on success, clean at start |
-| 8 | Wrong password may surface as a generic error (100 ms poll can miss FAILED) | OPEN: keep the last non-zero reason; confirm on hardware |
+| 5 | A replayed handshake message 1 holds the one-phone lock (DoS, no label needed) | FIXED: the claim starts when the phone's first transport message decrypts; unproven sessions are dropped then (2 tests) |
+| 6 | Single use fails open if the marker write fails or the process dies mid-activation | FIXED (code): marker and directory fsynced before success is reported; if that fails the profile is deleted and the phone gets an error. A crash before the marker leaves a profile that startup deletes (finding 7). NOT_RUN on hardware |
+| 7 | Failed or orphaned NetworkManager profile keeps autoconnect | FIXED (code): one fixed profile UUID, created with autoconnect off, enabled only after success; deleted before each attempt, on failure and at startup while unprovisioned. NOT_RUN on hardware |
+| 8 | Wrong password may surface as a generic error (100 ms poll can miss FAILED) | FIXED (code): the device `StateChanged` signal records every FAILED reason. NOT_RUN: wrong-password run; on a desktop Ubuntu a secret agent may also prompt for the password |
 | 9 | App flow untested; missing setup cases | PARTIAL: flow tested (7 tests), handshake refusal tested; device `Failed`/`Unknown` replies need extra snow vectors |
 | — | systemd unit, `label.svg` kept on device, QR printed to the terminal, log flooding, zeroization, unspecific busy/closed messages | OPEN (suggestions) |
