@@ -657,6 +657,9 @@ has run the app yet.
 
 ## 24. Authenticate the sensor with its QR label for the MVP
 
+**Superseded by [decision 27](#27-certified-sensors-and-technician-codes-for-200-devices)** (2026-10-20): labels do
+not scale to 200 sensors.
+
 **Decision:** The phone trusts a sensor only after a Noise `NKpsk2` handshake with the keys printed on that
 sensor's QR label (`T1:<device id>:<public key>:<label secret>`, written by `stage`). Credentials are encrypted
 only after that handshake succeeds.
@@ -726,3 +729,42 @@ profiles issued by Smith, or per-device credentials (EAP-TLS, PPSK) so no shared
 
 **Evidence / test:** `configurator/src/sites.test.ts`; simulator layout checks. Face ID itself is NOT_RUN (the
 Simulator does not prompt).
+
+## 27. Certified sensors and technician codes for 200 devices
+
+**Decision:** Replace the QR label (decision 24) with two IoT authorities (Ed25519). Each sensor holds a
+certificate for its static key, signed by the **device authority** for one customer; the phone checks it offline
+inside a Noise `XX` handshake before anything secret leaves. Each technician holds a **technician code**, a token
+signed by the **technician authority** that names them, lists the customers they may serve and expires after 30
+days; the sensor checks it before it accepts any request. "Set up all ready sensors in range" runs the setups three
+at a time.
+
+**Original proposal:** Question raised on 2026-10-20: what blocks 200 sensors with the label protocol, and how does
+a sensor get a unique ID on a channel that no malicious device can use to pass as a IoT sensor?
+
+**Final choice:** Decided in one requirements session (questions Q1 to Q24):
+
+| Question | Choice |
+| --- | --- |
+| Threat | A rogue device in radio range that advertises like a sensor (to collect the site password or mislead the technician). Labels are dropped: scanning 200 of them is the bottleneck. |
+| Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
+| Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as a link or QR (`provide://technician/<hex>`), kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. Not bound to one phone. The sensor's clock floor is its firmware build date. |
+| Reconfiguration | Allowed with a valid token. The device keeps two NetworkManager profiles and rolls back to the working one if the new network fails. |
+| Batch | Every ready sensor in range, three BLE links at a time. A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters (failures first) and **Retry failed**. |
+| Rooms | Later, in Smith; not in the app. |
+| Proof | A 200-sensor test with fakes, a Simulator video, one real run on noe-lab. |
+
+**Reason:** The certificate removes per-sensor secrets and per-sensor scans, which is what a 200-sensor wing needs.
+A rogue device cannot present a valid certificate for a key it can prove, and a copied certificate fails because the
+copier does not hold that key. The token keeps a stolen or borrowed app from configuring sensors.
+
+**Trade-off:** The device key sits in a 0600 file, not a secure element: whoever extracts it from one sensor can
+impersonate that one sensor until IoT revokes it (revocation lists are not built). A leaked token works for its
+customers until it expires; 30 days bounds that. The authorities' private keys must stay offline at IoT; the
+demo keeps them in `~/noe-ws/iot-authority` on noe-lab (0600, outside the repository).
+
+**Evidence / test:** `src/authority.rs` and `src/provision.rs` tests (impostor with a copied certificate, other
+authority, other customer, expired and forged tokens, reconfiguration, rollback profile order);
+`tests/noise_vectors.rs` with `configurator/src/noise.test.ts` (byte-for-byte interop); `configurator/src/setup.test.ts`
+(the token never leaves for a sensor that fails the checks); `configurator/src/batch.test.ts` (200 fake sensors);
+Simulator video `docs/architecture/demo-simulator.mp4`.

@@ -16,7 +16,7 @@ TypeScript type stripping.
 
 ```sh
 npm ci
-npm test            # probe logic against a fake BLE link
+npm test            # Noise, certificates, codes, setup and the 200-sensor batch against fakes
 npm run typecheck
 npm run lint
 ```
@@ -49,7 +49,7 @@ server and no network.
 ## Test with the device
 
 On the Ubuntu device: `./target/release/device` (see the root README). In the
-app (“provide.”): the search runs by itself (tap the centre dot to pause/resume), then **Test** on `IOT-DEMO-001`. Expect
+app (“provide.”): the search runs by itself (tap the centre dot to pause/resume), then **Test** on a sensor (`IOT-` and its ID). Expect
 “world” received. Repeat, and toggle Bluetooth or walk away to check reconnects.
 Screenshot the log for `demo/phone-hello.txt`.
 

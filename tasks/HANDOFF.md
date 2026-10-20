@@ -360,3 +360,28 @@ review, and a measurement of the affected path. Document measurement limits.
 - Not run: the password-bytes check (`demo/check_capture.py`, needs the user's password), wrong password and
   absent network on hardware, reboot (waits for the user's jobs), Android. Known leak: message sizes reveal the
   SSID and password lengths; pad the Provision request to a fixed size if that matters.
+
+## Step 16 — 200 sensors: certified sensors, technician codes, batch setup
+
+- Requirements settled in one session (Q1–Q24, decision 27): threat is a rogue device in range; labels dropped;
+  IoT device certificates checked offline by the app inside Noise `XX`; technician codes signed by a separate
+  authority, delivered as a `provide://technician/<hex>` link or QR, behind Face ID, 30 days, per customer, checked
+  by the sensor with the firmware build date as clock floor; reconfiguration with rollback; "Set up all ready
+  sensors in range", three at a time, stop on site-wide errors; counters, filters, Retry failed. Sensor ID is
+  `IOT-` + 10 hex digits (40 bits) instead of the 6 first proposed, to avoid collisions in large fleets.
+- Device: `src/authority.rs` (certificates, codes, Ed25519 via `ed25519-dalek` 2.2), `src/provision.rs` rewritten
+  (XX, identity files, token phase, encrypted refusal reasons), `device/wifi.rs` two alternating profile UUIDs with
+  rollback, `device/main.rs` reconfiguration and advertised state, `device/stage.rs` init/install,
+  `device/authority.rs` (init, public, certify, issue). Demo authorities in `~/noe-ws/iot-authority` on noe-lab
+  (0600, outside the repository).
+- App: `authority.ts`, `noise.ts` (XX initiator; a failed step poisons the later ones), `setup.ts` (certificate,
+  key, ID and customer checks before the code leaves), `batch.ts`, `flow.ts`, `TechnicianSheet.tsx`, deep link
+  scheme `provide`. `LabelScanner.tsx` removed.
+- Evidence: Rust 40 default and 80 with `ble,stage` tests, clippy clean (noe-lab); app 48 tests, typecheck, lint.
+  `SIMULATION`: iOS Simulator "IoT 16 Pro", Release build with a temporary harness (removed afterwards, not in
+  the repository): 20 fake sensors, each a Noise `XX` responder in JavaScript with its own key and a certificate
+  from a throwaway demo authority; one impostor (copied certificate) and one other-customer sensor; screens and
+  55 s video in `docs/architecture/`. The video exposed a bug: after a batch, **Set up all ready** offered the
+  refused sensors again; fixed (Retry failed covers them).
+- Pending: staging noe-lab with a certificate (`~/noe-ws/stage-lab.sh`, needs the user's sudo), a code on the
+  iPhone, and the real run; wrong password, absent network and rollback on hardware; reboot; Android.
