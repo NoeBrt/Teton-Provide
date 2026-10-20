@@ -9,7 +9,8 @@ Wants=NetworkManager.service
 ExecStart=/usr/local/bin/teton-device
 # NetworkManager lets this user manage its profile through polkit (teton-device.pkla / 50-teton-device.rules).
 User=teton
-# /var/lib/teton-device ($STATE_DIRECTORY): device key, label secret, provisioned marker.
+# /var/lib/teton-device ($STATE_DIRECTORY): device key, certificate, technician authority, provisioned marker,
+# clock floor.
 StateDirectory=teton-device
 StateDirectoryMode=0700
 # Optional TETON_WIFI_INTERFACE=wlo1 (default: the first Wi-Fi device).

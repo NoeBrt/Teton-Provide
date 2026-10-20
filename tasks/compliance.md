@@ -4,8 +4,9 @@ Re-checked after every step against the challenge PDF (`Technical_Interview_Chal
 technician user stories (README, "Technician experience"). **PASS** is backed by evidence, **NOT_RUN** is built
 but unproven on hardware, **GAP** is missing. Evidence classes stay distinct (`tasks/HANDOFF.md`).
 
-Last check: 2026-10-20, after the 200-sensor protocol (certificates, technician codes, batch; decision 27). Its
-real-hardware run is pending; the `ACTUAL` rows below come from the first protocol (QR label).
+Last check: 2026-10-20, after the review fixes, holder-bound technician codes and in-app-only code import (step 17
+in `tasks/HANDOFF.md`). Their real-hardware run is pending; the `ACTUAL` rows below come from the first protocol
+(QR label).
 
 ## PDF constraints (all four required)
 
@@ -14,7 +15,7 @@ real-hardware run is pending; the `ACTUAL` rows below come from the first protoc
 | 1 | **No internet**: local channel, no cloud relay, no shared local network at the start | PASS (design), PASS (offline hello, `ACTUAL_BLE`) | BLE only, no IP between phone and device; the app is a bundled Release build, crypto is pure JS (`@noble`). Phone network off, hello against the systemd service: `demo/service-offline-hello.txt`. Missing: the offline encrypted setup itself. |
 | 2 | **Real network connection** with the received credentials | PASS (`ACTUAL`) | iPhone to noe-lab over BLE; NetworkManager joined the site network with the received credentials in the service's own profile (`teton-provisioned` on wlo1, DHCP address), and the app showed **Device connected** (`demo/real-join.txt`, run 2). |
 | 3 | **No plaintext credentials over the air** | PASS (code), PASS (capture, SSID, first protocol) | Noise `XX`; the phone checks the sensor's certificate before sending its code, and the credentials go only after the sensor accepts the code (`src/provision.rs`, `setup.test.ts`). `btmon` captures of two real setups: the credentials travel in one encrypted 68-byte write; the SSID bytes appear nowhere (`demo/real-join.txt`). Pending: the password-bytes check (`demo/check_capture.py`, user-run). Known leak: message sizes reveal SSID and password lengths. |
-| 4 | **Usable by a non-developer** | PASS (app flow, `SIMULATION`), PASS (device start, `ACTUAL_HOST`) | Technician code once (link or QR), site Wi-Fi once (typed or Wi-Fi QR), **Set up all ready (N)** or **Set up** per sensor, plain-language progress and errors, counters, failures first, **Retry failed** (20-sensor Simulator video). Device start: installed with `device/systemd/install.sh`; runs as `teton` from systemd, no SSH (`demo/service-offline-hello.txt`). Pending: restart and reboot. |
+| 4 | **Usable by a non-developer** | PASS (app flow, `SIMULATION`), PASS (device start, `ACTUAL_HOST`) | Technician code once (QR scanned in the app, or pasted), site Wi-Fi once (typed or Wi-Fi QR), **Set up all ready (N)** or **Set up** per sensor, plain-language progress and errors, counters, failures first, **Retry failed** (20-sensor Simulator video). Device start: installed with `device/systemd/install.sh`; runs as `teton` from systemd, no SSH (`demo/service-offline-hello.txt`). Pending: restart and reboot. |
 
 ## Submission list
 
@@ -46,14 +47,16 @@ real-hardware run is pending; the `ACTUAL` rows below come from the first protoc
 |---|---|
 | Staging creates the key, never at runtime; no certificate, no provisioning | PASS (`stage init`/`install`; the hello probe still advertises without a key: deliberate deviation) |
 | Phone checks the certificate (authority, proven key, advertised ID, customer) before sending the code | PASS (`setup.test.ts`, `src/provision.rs`) |
-| Sensor checks the code (signature, customer, expiry with the firmware date as clock floor) before any request | PASS (`src/provision.rs`, `src/authority.rs`) |
+| Sensor checks the code (signature, customer, expiry against a clock floor: firmware date or recorded time, rising no faster than the uptime) before any request | PASS (`src/provision.rs`, `src/authority.rs`, `device/main.rs`) |
+| Holder-bound codes: the phone proves the code's holder key; a token recorded by a sensor is refused | PASS (code: `src/provision.rs`, `setup.test.ts`, snow vectors); NOT_RUN on hardware until the real run |
+| Code imported only inside the app (camera scan or paste): no `provide` scheme and no incoming URL read (only Expo's default bundle-ID and dev-client schemes remain), so no link can carry the code; the printed code is the one the app reads | PASS (code: `app.json`, `authority.test.ts` against the `code` vector; `ios/provide/Info.plist` in the local native project, gitignored); NOT_RUN on hardware until the real run |
 | Handshake binds the protocol version; credentials only after the code is accepted | PASS |
 | Attempt ID, payload hash, stored result on repeat, conflict on change | PASS |
 | One phone at a time (claim after the code is accepted), idle sessions dropped | PASS (60 s) |
 | Reconfiguration with a code; working profile persisted; rollback to the previous network on failure | PASS (code); NOT_RUN on hardware. Replaces the first protocol's single use (decision 27) |
-| Logs: outcomes and attempt IDs only | PASS |
+| Logs: outcomes, attempt IDs, the accepted technician's name, refusal reasons and the BLE MTU; never secrets | PASS |
 | Site passwords on the phone | PASS (code), NOT_RUN (Face ID on device) | Keychain, this device only; each password behind Face ID (`biometryCurrentSet`), unlocked once per session, dropped when the app leaves the foreground; refused if Face ID is off. Decision 22 said "one intervention only": superseded by saved sites at the user's request (2026-10-20); Smith-issued expiring profiles remain the production answer. |
-| Chunk layer for messages above the ATT MTU | DEVIATION: one Noise message per GATT write (≤ 512 B, longest is 131 B); `maxByteSize` stops the library from splitting it |
+| Chunk layer for messages above the ATT MTU | DEVIATION: one Noise message per GATT write (≤ 512 B, the largest message 3 is 499 B); `maxByteSize` stops the library from splitting it |
 | `btmon` capture without credential bytes; wrong password, unreachable and fallback networks never report success | PARTIAL: capture without SSID bytes (password check pending); failure networks NOT_RUN |
 
 ## Review findings (2026-10-20, two independent reviewers)

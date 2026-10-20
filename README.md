@@ -83,12 +83,14 @@ journalctl -u teton-device -f      # "TETON-XXXXXXXXXX advertising on hci0; acce
 Nothing on these command lines is secret. A key is never regenerated; `stage install` refuses a certificate for
 another key.
 
-Issue a technician code (valid 30 days by default, for one or more customers) and send its link to the technician
-over a channel you trust; it is a credential:
+Issue a technician code (valid 30 days by default and at most, for one or more customers) and give it to the
+technician only, printed or over a channel you trust; it is a credential:
 
 ```sh
-target/release/authority issue ~/teton-authority "Noé" DEMO 30      # prints a QR code and provide://technician/<hex>
+target/release/authority issue ~/teton-authority "Noé" DEMO 30      # prints a QR code and the code <token hex>.<holder key hex>
 ```
+
+The code has no link: the technician scans it, or pastes it, inside the app.
 
 ## Set up the configurator (phone)
 
@@ -98,10 +100,11 @@ code through `npx expo run:android`; we have not run it on a device.
 
 ## Run the demo
 
-1. On the phone, open the technician code link (or scan its QR code from **Technician code › Add**). The app checks
-   it and keeps it behind Face ID.
+1. Open **provide.**, tap **Technician code › Add** (or **Set up**, which asks for the code first) and scan the QR
+   code `authority issue` printed with the app's camera, or paste the code. The app checks it and keeps it behind
+   Face ID.
 2. Turn off Wi-Fi and mobile data on the phone if you want to show that no network is involved.
-3. Open **provide.**. It scans by itself and lists each sensor by ID with its state (ready, online…).
+3. **provide.** scans by itself and lists each sensor by ID with its state (ready, online…).
 4. Tap **Set up all ready (N)**, or **Set up** on one card. The first time, enter the site: a name, the Wi-Fi
    network and its password, typed or read from the network's standard Wi-Fi QR code (`WIFI:T:WPA;S:…;P:…;;`, as
    Android shares it). The password stays in the Keychain behind Face ID.
@@ -134,9 +137,9 @@ credentials.
 
 ```sh
 cargo test --all-targets --locked                         # protocol and simulation, no Bluetooth: 40 tests
-cargo test --features ble,stage --all-targets --locked    # adds the device, NetworkManager, Noise and authority tests: 80 tests
+cargo test --features ble,stage --all-targets --locked    # adds the device, NetworkManager, Noise and authority tests: 88 tests
 cargo clippy --features ble,stage --all-targets --locked -- -D warnings
-cd configurator && npm ci && npm test && npm run typecheck && npm run lint   # 48 tests
+cd configurator && npm ci && npm test && npm run typecheck && npm run lint   # 59 tests
 ```
 
 The Noise tests replay a transcript produced by the device's `snow` implementation against the phone's

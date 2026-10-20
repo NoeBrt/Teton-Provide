@@ -2,7 +2,6 @@
   "expo": {
     "name": "provide.",
     "slug": "teton-provisioning-configurator",
-    "scheme": "provide",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -52,13 +51,13 @@
       [
         "expo-secure-store",
         {
-          "faceIDPermission": "Face ID unlocks the saved Wi-Fi passwords of your sites."
+          "faceIDPermission": "Face ID unlocks your technician code and the saved Wi-Fi passwords of your sites."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "The camera reads the QR label on each sensor and the site's Wi-Fi QR code.",
+          "cameraPermission": "The camera reads your technician QR code and the site's Wi-Fi QR code.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 use teton_provisioning::authority::{DeviceCertificate, device_id};
-use teton_provisioning::provision::{Identity, KeyPair, hex};
+use teton_provisioning::provision::{Identity, KeyPair, hex, unhex};
 
 const USAGE: &str = "usage: stage init STATE_DIRECTORY | stage install STATE_DIRECTORY CERTIFICATE_HEX TECHNICIAN_AUTHORITY_HEX";
 
@@ -66,6 +66,10 @@ fn install(dir: &std::path::Path, certificate: &str, authority: &str) -> Result<
     let customer = DeviceCertificate::decode(&certificate)
         .map_err(|e| format!("certificate {e}"))?
         .customer;
+    // Earlier versions appended a label secret to the key pair, now unused: it leaves the disk.
+    if KeyPair::drop_label_secret(dir).map_err(|e| format!("cannot rewrite the key: {e}"))? {
+        println!("unused label secret removed from {}", dir.display());
+    }
     Identity::install(dir, &certificate, &authority).map_err(|e| e.to_string())?;
     let identity = Identity::load(dir)
         .map_err(|e| e.to_string())?
@@ -75,16 +79,4 @@ fn install(dir: &std::path::Path, certificate: &str, authority: &str) -> Result<
         identity.device_id()
     );
     Ok(())
-}
-
-fn unhex(text: &str) -> Option<Vec<u8>> {
-    let text = text.trim();
-    (text.len() % 2 == 0)
-        .then(|| {
-            (0..text.len())
-                .step_by(2)
-                .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
-                .collect()
-        })
-        .flatten()
 }

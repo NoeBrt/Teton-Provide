@@ -23,7 +23,7 @@ requirement check in [tasks/compliance.md](../tasks/compliance.md).
 flowchart LR
     subgraph teton["Teton workshop, offline"]
         da["Device authority<br/>Ed25519"] -->|"certificate: key, ID, customer"| stage["stage install<br/>on each sensor"]
-        ta["Technician authority<br/>Ed25519"] -->|"code: name, customers, expiry"| link["provide://technician/… link or QR"]
+        ta["Technician authority<br/>Ed25519"] -->|"code: name, customers, expiry"| code["code as QR or text,<br/>scanned or pasted in the app"]
     end
     subgraph device["Teton sensor, Ubuntu, headless"]
         svc["Device service, Rust<br/>BlueZ GATT, Noise responder"] -->|"D-Bus, password never in argv"| nm["NetworkManager"]
@@ -32,7 +32,7 @@ flowchart LR
         tech(["Technician"]) --> app["provide. app<br/>iPhone or Android"]
     end
     stage -.-> svc
-    link -.->|"once, kept behind Face ID"| app
+    code -.->|"once, kept behind Face ID"| app
     app <-->|"BLE GATT<br/>Noise XX, ChaCha20-Poly1305"| svc
     nm -->|"WPA2 join, DHCP"| ap[("Site Wi-Fi")]
     ap -.->|"once online"| smith["Smith"]
@@ -50,7 +50,7 @@ Wi-Fi not connected.
 <tr>
 <td align="center"><img src="architecture/01-searching.png" width="190"><br><sub>1. The app scans as soon as it opens</sub></td>
 <td align="center"><img src="architecture/02-sensors-found.png" width="190"><br><sub>2. 20 sensors; the code and the site Wi-Fi are missing</sub></td>
-<td align="center"><img src="architecture/03-technician-code.png" width="190"><br><sub>3. The technician code, opened from Teton's link</sub></td>
+<td align="center"><img src="architecture/03-technician-code.png" width="190"><br><sub>3. The technician code (earlier build, which opened a link)</sub></td>
 <td align="center"><img src="architecture/04-site-wifi.png" width="190"><br><sub>4. Site Wi-Fi, entered once per facility</sub></td>
 </tr>
 <tr>
@@ -63,9 +63,11 @@ Wi-Fi not connected.
 
 Video, 55 s: [architecture/demo-simulator.mp4](architecture/demo-simulator.mp4).
 
-The technician opens the link Teton sent once (or scans its QR code); the app checks the code and keeps it behind
-Face ID for its 30 days. The first time at a facility, the app asks for the site Wi-Fi (facility name, network,
-password), typed or scanned from the network's standard Wi-Fi QR code, and keeps it behind Face ID too. Then one tap,
+The technician scans the code Teton sent once, with the app's own camera, or pastes it; the app checks the code and
+keeps it behind Face ID until it expires (30 days at most). The app registers no `provide` scheme and reads no
+incoming URL (only Expo's default bundle-ID and dev-client schemes remain), so no link can carry the code. The first
+time at a facility, the app asks for the site Wi-Fi (facility name, network, password), typed or scanned from the
+network's standard Wi-Fi QR code, and keeps it behind Face ID too. Then one tap,
 **Set up all ready (N)**, sets up every ready sensor in range, three at a time. Each card runs the four steps
 (connecting, securing the channel, sending the network, joining the Wi-Fi); counters show done, failed and left;
 failures rise to the top with their reason and a **Retry failed** button. A single sensor can still be set up, or
@@ -94,7 +96,7 @@ sequenceDiagram
     D-->>P: read Noise message 2 (e, ee, s, es) with its certificate
     Note over P: Signed by Teton's device authority, for the key the sensor just proved,<br/>for the ID it advertises, for a customer this code covers.<br/>Otherwise stop: nothing but an ephemeral key was sent.
     P->>D: write frame 1, Noise message 3 (s, se) with the technician code
-    Note over D: Signed by the technician authority, lists this sensor's customer,<br/>not expired (clock, at least the firmware date).
+    Note over D: Signed by the technician authority, lists this sensor's customer,<br/>names the key the phone just proved, not expired (clock, at least its floor).
     D-->>P: encrypted Accepted (or Refused with a reason)
     P->>D: encrypted Provision(attempt ID, SSID, password)
     D-->>P: encrypted Pending
@@ -192,8 +194,10 @@ flowchart LR
   key and checks all three before it sends anything. A rogue device cannot forge the certificate, and one that copies
   a real sensor's certificate cannot prove the key inside it. The prologue binds the protocol version.
 - **Technician code.** The phone sends its code only to a sensor that passed those checks. The sensor checks the
-  technician authority's signature, its own customer in the code, and the expiry against its clock (never earlier
-  than its firmware build date), and refuses with a reason the app can show: other customer, expired, invalid.
+  technician authority's signature, its own customer in the code, that the phone proved the code's holder key, and
+  the expiry against its clock (never earlier than its firmware build date or the last time it recorded, a floor
+  that rises no faster than the sensor's uptime), and refuses with a reason the app can show: other customer,
+  expired, invalid.
 - **Payload.** The SSID and password leave the phone only inside a transport message, after the code is accepted.
   AEAD gives confidentiality and integrity; fresh ephemeral keys give each session new keys, so a recorded session
   cannot be replayed.
@@ -202,7 +206,8 @@ flowchart LR
 - **Reconfiguration.** A set-up sensor accepts a new network from any phone with a valid code, and falls back to its
   working network if the new one fails.
 - **No plaintext path.** The hello characteristic accepts only `hello`, and no build flag sends credentials any
-  other way. Logs hold outcomes and attempt IDs, never SSID, password, codes, keys or addresses.
+  other way. Logs hold outcomes, attempt IDs, the name on an accepted code, refusal reasons and the BLE MTU, never
+  SSID, password, codes, keys or addresses.
 - **Two implementations, one transcript.** The device uses `snow` and `ed25519-dalek`; the phone uses pure-JavaScript
   `@noble` primitives. The phone's tests replay the exact bytes the device produced; tests with a forged reply, a
   copied certificate, another authority and another ID check that neither the code nor the password reaches the air.
@@ -210,8 +215,9 @@ flowchart LR
   ID. The sensor keeps its key in a 0600 state directory, and NetworkManager keeps the PSK in a root-only file.
 
 **Risks we accept for the demo.** The sensor's key sits in a file, not a secure element, and there is no revocation
-list: a key extracted from one sensor impersonates that sensor. A leaked technician code works for its customers until
-it expires. With WPA2-Personal every sensor holds the same site password. `snow` has had no formal audit.
+list: a key extracted from one sensor impersonates that sensor. A leaked technician code works for its customers on
+any phone until it expires; a token a sensor records is useless without the code's holder key. With WPA2-Personal
+every sensor holds the same site password. `snow` has had no formal audit.
 ([decision 27](DECISIONS.md#27-certified-sensors-and-technician-codes-for-200-devices))
 
 ## 200 devices in a hospital wing
@@ -258,7 +264,7 @@ The [standalone mockup](architecture-demo.html) from step 4 shows the early desi
 | An iPhone finds the device by service UUID and exchanges `hello`/`world` over real BLE, again after a restart | [demo/phone-hello.txt](../demo/phone-hello.txt): iPhone 15 Pro, iOS 27.0; Ubuntu 22.04.5, BlueZ 5.64 | `ACTUAL_BLE` |
 | Phone and device speak the same Noise `XX`, certificates and codes, byte for byte | `tests/noise_vectors.rs`, `configurator/src/noise.test.ts`, `configurator/src/authority.test.ts` | `COMMAND_FIXTURE` |
 | A copied certificate, another authority, another ID or another customer never receives the code or the password; refused codes close the session | `configurator/src/setup.test.ts`, `src/provision.rs`, `src/authority.rs` tests | `COMMAND_FIXTURE` |
-| Device protocol: replay, conflicting attempts, reconfiguration, profile rotation, one phone at a time, durable record | `cargo test --features ble,stage --all-targets` (80 tests) | `COMMAND_FIXTURE` |
+| Device protocol: replay, conflicting attempts, reconfiguration, profile rotation, one phone at a time, durable record | `cargo test --features ble,stage --all-targets` (88 tests) | `COMMAND_FIXTURE` |
 | 200 sensors through the batch: three at a time, per-sensor failures continue, site-wide failures stop new starts, every sensor accounted for | `configurator/src/batch.test.ts` | `COMMAND_FIXTURE` |
 | Technician flow on screen with 20 sensors, including an impostor and another customer's sensor | Screens and video above | `SIMULATION` |
 | An iPhone sets up the device's Wi-Fi end to end: encrypted exchange, NetworkManager join, Device connected with the address | [demo/real-join.txt](../demo/real-join.txt) (first protocol, QR label) | `ACTUAL` |

@@ -20,6 +20,7 @@ use bluer::gatt::local::{
 use bluer::{Adapter, Address, Uuid};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use teton_provisioning::authority::{checked_now, device_id};
@@ -44,6 +45,13 @@ const STATE_REFRESH: Duration = Duration::from_secs(30);
 /// The firmware's build date (Unix seconds): technician tokens are never checked against an earlier clock.
 /// ponytail: set by hand at release; derive it from SOURCE_DATE_EPOCH in a release pipeline.
 const FIRMWARE_BUILT: u64 = 1_792_454_400; // 2026-10-20
+/// The latest time this sensor recorded (Unix seconds, decimal): a clock stepped back never goes before it, and a
+/// clock stepped forward (a spoofed NTP answer) moves it no faster than the uptime, so it cannot lock codes out.
+/// ponytail: after a long power-off the floor trails real time by the downtime, and each start may run FLOOR_STEP
+/// ahead; a signed time source (Roughtime) if either matters.
+const CLOCK_FLOOR_FILE: &str = "clock-floor";
+/// The floor is rewritten only once the clock passed it by this much, to spare the flash.
+const FLOOR_STEP: u64 = 3600;
 
 fn write(pending: &Pending, client: Address, offset: u16, value: &[u8]) -> Result<(), ReqError> {
     let mut slot = pending.lock().unwrap();
@@ -132,7 +140,15 @@ impl Provisioning {
         match peer.session.on_write(message, &mut self.provisioner) {
             Ok(reply) => {
                 peer.reply = Some(reply);
-                if !peer.proven && peer.session.technician().is_some() {
+                // Who set up, or why a code was refused (a replay shows as such): the code's name (escaped), never its
+                // bytes or keys.
+                if let Some(error) = peer.session.refused() {
+                    println!("technician code refused: {error}");
+                }
+                if !peer.proven
+                    && let Some(name) = peer.session.technician()
+                {
+                    println!("technician {name:?} accepted");
                     peer.proven = true;
                     self.peers.retain(|address, _| *address == client);
                 }
@@ -169,34 +185,78 @@ fn describe(outcome: Outcome) -> String {
     }
 }
 
-/// The current time for token expiry, never before the firmware date (a new sensor's clock may be unset).
-fn clock() -> u64 {
+/// The current time for token expiry, never before `floor`: the firmware date (a new sensor's clock may be unset)
+/// or the latest recorded time, whichever is later.
+fn clock(floor: u64) -> u64 {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
-    checked_now(now, FIRMWARE_BUILT)
+    checked_now(now, floor)
 }
 
-/// The working profile from the provisioned marker; an empty marker (earlier versions) means the first profile.
-fn current_profile(state_dir: &Path) -> Option<&'static str> {
-    let content = std::fs::read_to_string(state_dir.join(PROVISIONED_FILE)).ok()?;
-    let content = content.trim();
-    Some(
-        wifi::PROFILE_UUIDS
+/// The clock floor at startup: the recorded one, never before the firmware date (which also stands in for a missing
+/// or unreadable file).
+fn initial_floor(state_dir: &Path) -> u64 {
+    std::fs::read_to_string(state_dir.join(CLOCK_FLOOR_FILE))
+        .ok()
+        .and_then(|text| text.trim().parse().ok())
+        .unwrap_or(0)
+        .max(FIRMWARE_BUILT)
+}
+
+/// The floor to record, once the clock is at least FLOOR_STEP past the current one: the clock, but never beyond the
+/// startup floor plus the uptime (`start`, `uptime`, seconds) and one step.
+fn next_floor(now: u64, floor: u64, start: u64, uptime: u64) -> Option<u64> {
+    let now = now.min(start.saturating_add(uptime).saturating_add(FLOOR_STEP));
+    (now.saturating_sub(floor) >= FLOOR_STEP).then_some(now)
+}
+
+/// The working profile at startup, and whether the marker named it. An unreadable marker gives `false`: the active
+/// profile (`active`) stands in and no profile may be deleted.
+fn startup_profile(
+    state_dir: &Path,
+    active: impl Fn(&str) -> bool,
+) -> (Option<&'static str>, bool) {
+    match current_profile(state_dir) {
+        Ok(current) => (current, true),
+        // The active profile stands in, so the next attempt uses the other one and a failure brings this one back.
+        Err(_) => {
+            println!("provisioned marker unreadable; leaving Wi-Fi profiles alone");
+            (wifi::PROFILE_UUIDS.into_iter().find(|p| active(p)), false)
+        }
+    }
+}
+
+/// The working profile from the provisioned marker: `Ok(None)` when absent, the first profile for an empty marker
+/// (earlier versions). Any other content, or a failed read, is an error: the caller then deletes no profile.
+fn current_profile(state_dir: &Path) -> std::io::Result<Option<&'static str>> {
+    let content = match std::fs::read_to_string(state_dir.join(PROVISIONED_FILE)) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    match content.trim() {
+        "" => Ok(Some(wifi::PROFILE_UUIDS[0])),
+        content => wifi::PROFILE_UUIDS
             .into_iter()
             .find(|uuid| *uuid == content)
-            .unwrap_or(wifi::PROFILE_UUIDS[0]),
-    )
+            .map(Some)
+            .ok_or_else(|| std::io::Error::other("unknown profile")),
+    }
 }
 
-/// Records the working profile durably: written to a temporary file, synced, renamed, and the directory synced,
-/// so a power cut leaves either the old marker or the new one.
-fn persist(state_dir: &Path, profile: &str) -> std::io::Result<()> {
-    let temporary = state_dir.join(format!("{PROVISIONED_FILE}.new"));
-    std::fs::write(&temporary, profile)?;
+/// Writes a state file durably: to a temporary file, synced, renamed, and the directory synced, so a power cut
+/// leaves either the old content or the new one. An error means the file still holds the old content: once the
+/// rename is done, a failed directory sync is only logged (the next start reads whichever name survived).
+fn persist(state_dir: &Path, name: &str, content: &str) -> std::io::Result<()> {
+    let temporary = state_dir.join(format!("{name}.new"));
+    std::fs::write(&temporary, content)?;
     std::fs::File::open(&temporary)?.sync_all()?;
-    std::fs::rename(&temporary, state_dir.join(PROVISIONED_FILE))?;
-    std::fs::File::open(state_dir)?.sync_all()
+    std::fs::rename(&temporary, state_dir.join(name))?;
+    if let Err(error) = std::fs::File::open(state_dir).and_then(|dir| dir.sync_all()) {
+        println!("{name} recorded, directory not synced: {}", error.kind());
+    }
+    Ok(())
 }
 
 struct Context {
@@ -205,6 +265,10 @@ struct Context {
     interface: Option<String>,
     /// The profile of the working network, if any.
     current: Mutex<Option<&'static str>>,
+    /// Token expiry never goes before this: the firmware date or the recorded clock floor.
+    floor: AtomicU64,
+    /// The floor at startup, and when: the floor never rises faster than the uptime.
+    started: (u64, Instant),
     /// Woken after each attempt, so the advertised state follows at once.
     changed: Arc<Notify>,
 }
@@ -222,7 +286,7 @@ fn start(context: &Arc<Context>, activation: Activation) {
         drop(activation);
         // Success counts only once it survives a restart; otherwise undo it and keep the previous network.
         if matches!(outcome, Outcome::Connected { .. }) {
-            match persist(&context.state_dir, profile) {
+            match persist(&context.state_dir, PROVISIONED_FILE, profile) {
                 Ok(()) => {
                     *context.current.lock().unwrap() = Some(profile);
                     if current.is_some() && wifi::forget_except(Some(profile)).is_err() {
@@ -245,6 +309,18 @@ fn start(context: &Arc<Context>, activation: Activation) {
             .complete(attempt, outcome);
         context.changed.notify_one();
     });
+}
+
+/// Records the clock as the new floor once it moved FLOOR_STEP past it, as far as the uptime allows.
+fn raise_floor(context: &Context) {
+    let floor = context.floor.load(Ordering::Relaxed);
+    let (start, since) = context.started;
+    if let Some(next) = next_floor(clock(floor), floor, start, since.elapsed().as_secs()) {
+        match persist(&context.state_dir, CLOCK_FLOOR_FILE, &next.to_string()) {
+            Ok(()) => context.floor.store(next, Ordering::Relaxed),
+            Err(error) => println!("cannot record the clock floor: {}", error.kind()),
+        }
+    }
 }
 
 /// The advertised state byte (`protocol::STATE_*`).
@@ -313,13 +389,18 @@ fn application(hello: Arc<Pending>, provisioning: Option<Arc<Context>>) -> Appli
             write: Some(CharacteristicWrite {
                 write: true,
                 method: CharacteristicWriteMethod::Fun(Box::new(move |value, req| {
+                    let starts = value.first() == Some(&FRAME_HANDSHAKE);
                     let result = on_write.shared.lock().unwrap().write(
                         req.device_address,
                         req.offset,
                         &value,
                         Instant::now(),
-                        clock(),
+                        clock(on_write.floor.load(Ordering::Relaxed)),
                     );
+                    // The negotiated MTU, for hardware runs; nothing else about the link.
+                    if starts && result.is_ok() {
+                        println!("provisioning session started (mtu {})", req.mtu);
+                    }
                     let result = result.map(|activation| {
                         if let Some(activation) = activation {
                             start(&on_write, activation);
@@ -377,24 +458,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (None, Some(keys)) => device_id(&keys.public_key), // keyed, waiting for its certificate
         (None, None) => "TETON-UNSTAGED".to_string(),
     };
-    let current = current_profile(&state_dir);
+    let (current, known) = startup_profile(&state_dir, wifi::profile_active);
     let staged = identity.is_some();
     let changed = Arc::new(Notify::new());
+    let floor = initial_floor(&state_dir);
     let context = identity.map(|identity| {
         Arc::new(Context {
             shared: Arc::new(Mutex::new(Provisioning {
                 identity,
-                provisioner: Provisioner::new(current.is_some()),
+                provisioner: Provisioner::default(),
                 peers: HashMap::new(),
             })),
             state_dir: state_dir.clone(),
             interface: std::env::var("TETON_WIFI_INTERFACE").ok(),
             current: Mutex::new(current),
+            floor: AtomicU64::new(floor),
+            started: (floor, Instant::now()),
             changed: changed.clone(),
         })
     });
     // Only the working profile may autoconnect; one left by an attempt that never recorded success goes.
-    if context.is_some() && wifi::forget_except(current).is_err() {
+    if known && context.is_some() && wifi::forget_except(current).is_err() {
         println!("cannot check NetworkManager for a leftover profile");
     }
 
@@ -436,12 +520,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     tokio::pin!(shutdown);
     // The advertised state follows the Wi-Fi profile, so a technician sees it on the sensor's card: at once after
-    // an attempt, and every STATE_REFRESH in case the network drops.
+    // an attempt, and every STATE_REFRESH in case the network drops; that tick also records the clock floor.
     let mut refresh = tokio::time::interval(STATE_REFRESH);
     loop {
         tokio::select! {
             _ = &mut shutdown => break,
-            _ = refresh.tick() => {}
+            _ = refresh.tick() => {
+                if let Some(context) = &context {
+                    let context = context.clone();
+                    tokio::task::spawn_blocking(move || raise_floor(&context)); // fsyncs: off the GATT runtime
+                }
+            }
             _ = changed.notified() => {}
         }
         let profile = working();
@@ -546,22 +635,31 @@ mod tests {
         };
         Provisioning {
             identity,
-            provisioner: Provisioner::new(false),
+            provisioner: Provisioner::default(),
             peers: HashMap::new(),
         }
     }
 
+    /// The holder private key of the test phone's technician code.
+    const HOLDER: [u8; 32] = [3; 32];
+
     fn token(customer: &str) -> Vec<u8> {
-        TechnicianToken::issue(&technicians(), "Noé", &[customer.to_string()], CLOCK + 3600)
-            .unwrap()
-            .encode()
+        let holder = curve25519_dalek::MontgomeryPoint::mul_base_clamped(HOLDER).to_bytes();
+        TechnicianToken::issue(
+            &technicians(),
+            "Noé",
+            &[customer.to_string()],
+            CLOCK + 3600,
+            holder,
+        )
+        .unwrap()
+        .encode()
     }
 
     /// A first handshake message as a real phone would send it, and the phone's handshake state.
     fn first_message() -> (snow::HandshakeState, Vec<u8>) {
-        let keys = KeyPair::generate().unwrap();
         let mut phone = snow::Builder::new(NOISE_PARAMS.parse().unwrap())
-            .local_private_key(&keys.private_key)
+            .local_private_key(&HOLDER)
             .and_then(|b| b.prologue(PROLOGUE))
             .and_then(|b| b.build_initiator())
             .unwrap();
@@ -669,19 +767,99 @@ mod tests {
     fn the_working_profile_is_recorded_durably_and_read_back() {
         let dir = std::env::temp_dir().join(format!("teton-persist-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        assert_eq!(current_profile(&dir), None, "never provisioned");
-        persist(&dir, wifi::PROFILE_UUIDS[1]).unwrap();
-        assert_eq!(current_profile(&dir), Some(wifi::PROFILE_UUIDS[1]));
+        let [first, second] = wifi::PROFILE_UUIDS;
+        assert_eq!(current_profile(&dir).unwrap(), None, "never provisioned");
+        persist(&dir, PROVISIONED_FILE, second).unwrap();
+        assert_eq!(current_profile(&dir).unwrap(), Some(second));
         std::fs::write(dir.join(PROVISIONED_FILE), b"").unwrap();
         assert_eq!(
-            current_profile(&dir),
-            Some(wifi::PROFILE_UUIDS[0]),
+            current_profile(&dir).unwrap(),
+            Some(first),
             "earlier versions wrote an empty marker"
         );
+        for garbled in [&b"4a7db77c-6fda"[..], &[0xff, 0xfe][..]] {
+            std::fs::write(dir.join(PROVISIONED_FILE), garbled).unwrap();
+            assert!(
+                current_profile(&dir).is_err(),
+                "an unreadable marker leaves the profiles alone"
+            );
+        }
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(
-            persist(&dir, wifi::PROFILE_UUIDS[0]).is_err(),
+            persist(&dir, PROVISIONED_FILE, first).is_err(),
             "a missing state directory fails instead of passing silently"
+        );
+    }
+
+    #[test]
+    fn a_garbled_marker_leaves_the_profiles_alone() {
+        let dir = std::env::temp_dir().join(format!("teton-startup-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let [_, second] = wifi::PROFILE_UUIDS;
+        let active = |p: &str| p == second;
+        assert_eq!(
+            startup_profile(&dir, active),
+            (None, true),
+            "never provisioned"
+        );
+        std::fs::write(dir.join(PROVISIONED_FILE), b"4a7db77c-6fda").unwrap();
+        assert_eq!(
+            startup_profile(&dir, active),
+            (Some(second), false),
+            "the active profile stands in; known is false, so forget_except is skipped"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_floor_never_starts_before_the_firmware_date() {
+        let dir = std::env::temp_dir().join(format!("teton-floor-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(initial_floor(&dir), FIRMWARE_BUILT, "no floor recorded yet");
+        for (recorded, floor) in [
+            ("junk", FIRMWARE_BUILT),
+            ("1000", FIRMWARE_BUILT),
+            ("1900000000\n", 1_900_000_000),
+        ] {
+            persist(&dir, CLOCK_FLOOR_FILE, recorded).unwrap();
+            assert_eq!(initial_floor(&dir), floor, "{recorded:?}");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_clock_floor_rises_by_the_hour_and_never_falls() {
+        assert_eq!(
+            next_floor(CLOCK + FLOOR_STEP - 1, CLOCK, CLOCK, 0),
+            None,
+            "spares the flash"
+        );
+        assert_eq!(
+            next_floor(CLOCK + FLOOR_STEP, CLOCK, CLOCK, 0),
+            Some(CLOCK + FLOOR_STEP)
+        );
+        assert_eq!(
+            next_floor(CLOCK - 86_400, CLOCK, CLOCK, 0),
+            None,
+            "a clock stepped back"
+        );
+        assert_eq!(next_floor(u64::MAX, u64::MAX, u64::MAX, u64::MAX), None);
+        // A clock stepped years ahead (one spoofed NTP answer): the floor follows the uptime, not the clock.
+        let ahead = CLOCK + 10 * 365 * 86_400;
+        assert_eq!(
+            next_floor(ahead, CLOCK, CLOCK, 60),
+            Some(CLOCK + 60 + FLOOR_STEP),
+            "at most the startup floor, the uptime and one step"
+        );
+        assert_eq!(next_floor(ahead, CLOCK + 60 + FLOOR_STEP, CLOCK, 120), None);
+        assert_eq!(
+            next_floor(ahead, CLOCK + 60 + FLOOR_STEP, CLOCK, 60 + FLOOR_STEP),
+            Some(CLOCK + 60 + 2 * FLOOR_STEP)
+        );
+        assert_eq!(
+            clock(u64::MAX),
+            u64::MAX,
+            "the floor holds over the system clock"
         );
     }
 

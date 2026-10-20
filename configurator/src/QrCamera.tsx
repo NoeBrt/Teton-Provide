@@ -4,7 +4,7 @@ import { C, F } from './theme.ts';
 
 type Props = { hint: string; onData?: (data: string) => void; style?: StyleProp<ViewStyle> };
 
-/** The camera reading QR codes (sensor labels, Wi-Fi codes), or what it takes to get camera access first. */
+/** The camera reading QR codes (the technician code, site Wi-Fi codes), or what it takes to get camera access first. */
 export function QrCamera({ hint, onData, style }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   if (permission?.granted) {

@@ -14,11 +14,13 @@ function fleet(failure: (index: number) => SetupFailure | null) {
   const started: string[] = [];
   const setupOne = async (id: string): Promise<SetupResult> => {
     started.push(id);
+    const reason = failure(sensors.indexOf(id));
+    // A refusal answers at once, so sensors in flight cannot overtake it and the stop tests are not timing-dependent.
+    if (reason) return { ok: false, step: 'join', reason };
     peak = Math.max(peak, ++running);
     await tick();
     running--;
-    const reason = failure(sensors.indexOf(id));
-    return reason ? { ok: false, step: 'join', reason } : { ok: true, ipv4: '10.0.0.2', attempt: new Uint8Array(16) };
+    return { ok: true, ipv4: '10.0.0.2', attempt: new Uint8Array(16) };
   };
   return { setupOne, started, peak: () => peak };
 }
@@ -69,4 +71,36 @@ test('an expired token stops the batch at the first sensor', async () => {
 test('a setup that throws counts as a failed sensor, not a broken batch', async () => {
   const summary = await runBatch(['a', 'b'], async id => { if (id === 'a') throw new Error('boom'); return { ok: true, ipv4: '10.0.0.3', attempt: new Uint8Array(16) }; }, () => {});
   assert.deepEqual(summary, { ok: 1, failed: 1, stopped: 0 });
+});
+
+test('a setup that throws before returning a promise is one failed sensor, and the batch still ends', async () => {
+  const { last, onChange } = record();
+  const setupOne = (id: string): Promise<SetupResult> => {
+    if (id === 'a') throw new Error('boom');
+    return Promise.resolve({ ok: true, ipv4: '10.0.0.3', attempt: new Uint8Array(16) });
+  };
+  const summary = await runBatch(['a', 'b'], setupOne, onChange);
+  assert.deepEqual(summary, { ok: 1, failed: 1, stopped: 0 });
+  assert.equal(last.get('a')?.state, 'failed', 'not left running');
+});
+
+test('code and site password locked mid-batch (app left): the batch stops instead of failing every sensor', async () => {
+  const { setupOne, started } = fleet(i => (i >= 10 ? 'locked' : null));
+  const { last, onChange } = record();
+  const summary = await runBatch(sensors, setupOne, onChange);
+  assert.equal(summary.stopReason, 'locked');
+  assert.ok(summary.failed <= BATCH_CONCURRENCY, `${summary.failed} failed: only the ones taken before the stop`);
+  assert.ok(started.length <= 10 + BATCH_CONCURRENCY);
+  assert.equal(summary.ok + summary.failed + summary.stopped, 200);
+  assert.deepEqual(last.get(sensors[199]), { state: 'stopped', reason: 'locked' });
+});
+
+test('the first failure that stops a batch is the one reported', async () => {
+  const setupOne = async (id: string): Promise<SetupResult> => {
+    if (id === 'b') return { ok: false, step: 'join', reason: 'WrongPsk' };
+    await new Promise(resolve => setTimeout(resolve, 5));
+    return { ok: false, step: 'connect', reason: 'locked' };
+  };
+  const summary = await runBatch(['a', 'b'], setupOne, () => {}, 2);
+  assert.equal(summary.stopReason, 'WrongPsk');
 });

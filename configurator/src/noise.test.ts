@@ -14,7 +14,8 @@ const plain = vectors.messages.map((m: { plaintext: string }) => hex(m.plaintext
 const [m1, m2, m3, accepted, request1, response1, request2, response2] = messages;
 const attempt = new Uint8Array(16).fill(0xa5);
 
-const phone = () => initiator(hex(vectors.phonePrivate), hex(vectors.phoneEphemeral));
+// The phone's static key is the holder key of its technician code.
+const phone = () => initiator(hex(vectors.holderPrivate), hex(vectors.phoneEphemeral));
 
 test('matches snow byte for byte: params, prologue, the three handshake messages and both exchanges', () => {
   assert.equal(vectors.params, NOISE_PARAMS);

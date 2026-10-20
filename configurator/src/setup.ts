@@ -2,6 +2,7 @@
 // connect → Noise XX → the sensor proves it is genuine (a certificate from Teton's device authority, for the key it
 // just proved, matching the ID it advertises) → only then the technician token → encrypted credentials → the
 // sensor's own result. Nothing secret leaves the phone for a sensor that is not genuine or not this customer's.
+import { x25519 } from '@noble/curves/ed25519.js';
 import { initiator } from './noise.ts';
 import { DEVICE_AUTHORITY, deviceId, verifyCertificate, type Token } from './authority.ts';
 import { ATTEMPT_ID_LEN, decodeResponse, PROVISION_CHARACTERISTIC_UUID, provisionRequest, statusRequest, type Failure, type Outcome } from './provision.ts';
@@ -20,10 +21,12 @@ export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
 /**
  * `not-genuine`: no valid Teton certificate for the key and ID it shows (nothing secret was sent);
  * `other-customer`: a genuine sensor of a customer this token does not cover;
- * `token-invalid` / `token-expired`: the sensor refused the token; `closed`: the sensor is not staged.
+ * `token-invalid` / `token-expired`: the sensor refused the token (or the app holds the wrong key for it, nothing sent);
+ * `closed`: the sensor is not staged;
+ * `locked`: not tried, the app had locked the token or the site password again.
  */
 export type SetupFailure =
-  | Failure | 'timeout' | 'rejected' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed';
+  | Failure | 'timeout' | 'rejected' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed' | 'locked';
 /** The phone cannot tell what happened: retrying must reuse this attempt so the device can answer it. */
 export const isUnsettled = (result: SetupResult) =>
   !result.ok && result.attempt !== undefined && (result.reason === 'timeout' || result.reason === 'rejected');
@@ -74,6 +77,8 @@ export async function setup(
   };
 
   try {
+    // The sensor only accepts the code from its holder key: with another key, every sensor would refuse it.
+    if (!same(x25519.getPublicKey(token.holderPrivate), token.holder)) return { ok: false, step, reason: 'token-invalid' };
     at('connect');
     await withTimeout(ble.connect(id), timeoutMs);
     // Sensors are never bonded, so the phone discovers their services afresh at each connection: no stale cache.
@@ -83,7 +88,7 @@ export async function setup(
     }
 
     at('secure');
-    const handshake = initiator(random(32), random(32)); // this session's static key, then its ephemeral key
+    const handshake = initiator(token.holderPrivate, random(32)); // the code's holder key, then this session's ephemeral key
     const reply = await exchange(FRAME_HANDSHAKE, handshake.first()); // a busy or silent sensor fails here, as a link error
     let device;
     try {

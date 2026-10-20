@@ -1,7 +1,8 @@
 // The setup sequence for the technician, outside React so it holds its own state (no stale closures):
 // technician token once → site Wi-Fi once per visit → join, for one sensor or several at once (a batch).
 // It decides; App.tsx shows and runs.
-import type { Token } from './authority.ts';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { toHex, type Token } from './authority.ts';
 import { isUnsettled, type SetupResult } from './setup.ts';
 import type { SiteNetwork } from './sites.ts';
 
@@ -11,12 +12,18 @@ export type Action =
   | { kind: 'join'; sensorId: string; site: SiteNetwork; attempt: Uint8Array | undefined }
   | { kind: 'busy' };
 
+/** A code past its expiry counts as missing: the sensor would refuse it anyway. */
+export const expired = (code: { expires: number }) => code.expires <= Date.now() / 1000;
+// Which network an attempt was sent with, as a digest: the password stays here no longer than the app holds it.
+const networkKey = (site: SiteNetwork) => toHex(sha256(new TextEncoder().encode(JSON.stringify([site.ssid, site.password]))));
+
 export class SetupFlow {
   network: SiteNetwork | null;
   token: Token | null = null;
-  private unsettled = new Map<string, { attempt: Uint8Array; site: SiteNetwork }>(); // results the phone lost
+  private unsettled = new Map<string, { attempt: Uint8Array; key: string }>(); // results the phone lost
   private waiting: string | null = null; // a sensor whose Set up waits for the token or the site Wi-Fi
-  private running = new Set<string>();
+  // Sensor → network key its join started with: the app may drop the network (left, site forgotten) before it ends.
+  private running = new Map<string, string>();
 
   constructor(network: SiteNetwork | null) {
     this.network = network;
@@ -25,7 +32,7 @@ export class SetupFlow {
   /** The technician tapped Set up on this sensor (or a batch reached it). */
   request(sensorId: string): Action {
     if (this.running.has(sensorId)) return { kind: 'busy' };
-    if (!this.token) {
+    if (!this.token || expired(this.token)) {
       this.waiting = sensorId;
       return { kind: 'ask-token' };
     }
@@ -34,6 +41,16 @@ export class SetupFlow {
       return { kind: 'ask-network' };
     }
     return this.join(sensorId, this.network);
+  }
+
+  /**
+   * A batch reached this sensor. A batch never asks: locked credentials (app left, site forgotten) or an expired code
+   * stop it instead, and nothing is left waiting.
+   */
+  batchRequest(sensorId: string): Action | { kind: 'stop'; reason: 'locked' | 'token-expired' } {
+    if (!this.token || !this.network) return { kind: 'stop', reason: 'locked' };
+    if (expired(this.token)) return { kind: 'stop', reason: 'token-expired' };
+    return this.request(sensorId);
   }
 
   /** The technician token was imported or unlocked; resumes the sensor that asked for it, if any. */
@@ -54,8 +71,9 @@ export class SetupFlow {
   }
 
   finished(sensorId: string, result: SetupResult) {
+    const key = this.running.get(sensorId);
     this.running.delete(sensorId);
-    if (isUnsettled(result) && !result.ok && result.attempt) this.unsettled.set(sensorId, { attempt: result.attempt, site: this.network! });
+    if (isUnsettled(result) && !result.ok && result.attempt && key) this.unsettled.set(sensorId, { attempt: result.attempt, key });
     else this.unsettled.delete(sensorId);
   }
 
@@ -66,9 +84,9 @@ export class SetupFlow {
   }
 
   private join(sensorId: string, site: SiteNetwork): Action {
+    const key = networkKey(site);
     const previous = this.unsettled.get(sensorId);
-    const same = previous && previous.site.ssid === site.ssid && previous.site.password === site.password;
-    this.running.add(sensorId);
-    return { kind: 'join', sensorId, site, attempt: same ? previous.attempt : undefined };
+    this.running.set(sensorId, key);
+    return { kind: 'join', sensorId, site, attempt: previous?.key === key ? previous.attempt : undefined };
   }
 }
