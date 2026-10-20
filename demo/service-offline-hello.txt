@@ -1,0 +1,20 @@
+Evidence class: ACTUAL_BLE (offline hello against the systemd service)
+Date: 2026-10-20
+
+Configurator: iPhone 15 Pro, iOS 27.0, app "provide." built from commit 327edf0 (Release, free Apple ID).
+              Phone network off (Wi-Fi and mobile data), Bluetooth on: reported by the user.
+Device:       noe-lab, Ubuntu 22.04.5, BlueZ 5.64; service teton-device installed with
+              device/systemd/install.sh, running as user teton, started by systemd, no SSH session involved
+              in the exchange. Identity copied from the staged state, so the printed label stays valid.
+
+systemctl show teton-device:
+MainPID=1925723
+NRestarts=0
+User=teton
+ActiveEnterTimestamp=Tue 2026-10-20 17:01:40 CEST
+
+journalctl -u teton-device (outcomes only; the service never logs payloads or addresses):
+2026-10-20T17:01:40+0200 noe-lab teton-device[1925723]: TETON-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning
+2026-10-20T17:33:01+0200 noe-lab teton-device[1925723]: hello exchanged
+
+Not covered here: service restart and machine reboot (pending), the encrypted Wi-Fi setup itself.

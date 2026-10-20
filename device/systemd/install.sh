@@ -17,8 +17,16 @@ install -d /etc/polkit-1/localauthority/50-local.d /etc/polkit-1/rules.d
 install -m 644 device/systemd/teton-device.pkla /etc/polkit-1/localauthority/50-local.d/
 install -m 644 device/systemd/50-teton-device.rules /etc/polkit-1/rules.d/
 if [ -n "${1:-}" ]; then echo "TETON_WIFI_INTERFACE=$1" > /etc/default/teton-device; fi
+# A Teton device is a BLE peripheral only. BlueZ's battery plugin reads the battery level of each connected phone;
+# iOS requires an encrypted link for it, so BlueZ asks the phone to pair, pairing fails, and BlueZ stops answering
+# the phone's reads until it disconnects (seen in a btmon capture of a real setup). Run bluetoothd without it.
+bluetoothd=$(ls /usr/libexec/bluetooth/bluetoothd /usr/lib/bluetooth/bluetoothd 2>/dev/null | head -n 1)
+install -d /etc/systemd/system/bluetooth.service.d
+printf '[Service]\nExecStart=\nExecStart=%s --noplugin=battery\n' "$bluetoothd" > /etc/systemd/system/bluetooth.service.d/teton-device.conf
 install -d -o teton -g teton -m 700 /var/lib/teton-device
 
 systemctl daemon-reload
-systemctl enable --now teton-device
+systemctl restart bluetooth
+systemctl enable teton-device
+systemctl restart teton-device   # also picks up a new binary on reinstall
 systemctl --no-pager --lines=5 status teton-device

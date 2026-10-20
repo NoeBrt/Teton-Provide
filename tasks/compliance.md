@@ -4,37 +4,37 @@ Re-checked after every step against the challenge PDF (`Technical_Interview_Chal
 technician user stories (README, "Technician experience"). **PASS** is backed by evidence, **NOT_RUN** is built
 but unproven on hardware, **GAP** is missing. Evidence classes stay distinct (`tasks/HANDOFF.md`).
 
-Last check: 2026-10-20, after the Wi-Fi QR scan, the "sensor not open for setup" message and their review; real Wi-Fi still waits for the Ethernet cable.
+Last check: 2026-10-20, after the first real setups from the iPhone (`demo/real-join.txt`).
 
 ## PDF constraints (all four required)
 
 | # | Constraint | Status | Evidence / what is missing |
 |---|---|---|---|
-| 1 | **No internet**: local channel, no cloud relay, no shared local network at the start | PASS (design), NOT_RUN (offline run) | BLE only, no IP between phone and device; the app is a bundled Release build, crypto is pure JS (`@noble`). Missing: a run with Internet off and no shared LAN. |
-| 2 | **Real network connection** with the received credentials | NOT_RUN | `device/wifi.rs` creates and activates a NetworkManager profile over D-Bus and checks that exact profile holds an IPv4. Waiting for the Ethernet cable so `wlo1` can be provisioned without cutting SSH. |
-| 3 | **No plaintext credentials over the air** | PASS (code, `COMMAND_FIXTURE`), NOT_RUN (capture) | Noise `NKpsk2`, keys from the label; credentials only after the handshake (`demo/tdd-provision.txt`, `setup.test.ts`: a device failing the handshake never receives them). Missing: `btmon` capture with no SSID/password bytes. |
-| 4 | **Usable by a non-developer** | PASS (app flow, `SIMULATION`), NOT_RUN (device start) | Site Wi-Fi once, **Set up**, scan the label, plain-language progress and errors, retry. Device start: systemd unit with its own user, state directory and polkit rule, plus `device/systemd/install.sh`; written and verified with `systemd-analyze`, not yet installed (needs sudo on noe-lab). |
+| 1 | **No internet**: local channel, no cloud relay, no shared local network at the start | PASS (design), PASS (offline hello, `ACTUAL_BLE`) | BLE only, no IP between phone and device; the app is a bundled Release build, crypto is pure JS (`@noble`). Phone network off, hello against the systemd service: `demo/service-offline-hello.txt`. Missing: the offline encrypted setup itself. |
+| 2 | **Real network connection** with the received credentials | PASS (`ACTUAL`) | iPhone to noe-lab over BLE; NetworkManager joined the site network with the received credentials in the service's own profile (`teton-provisioned` on wlo1, DHCP address), and the app showed **Device connected** (`demo/real-join.txt`, run 2). |
+| 3 | **No plaintext credentials over the air** | PASS (code), PASS (capture, SSID) | Noise `NKpsk2`, keys from the label; credentials only after the handshake (`demo/tdd-provision.txt`, `setup.test.ts`). `btmon` captures of two real setups: the credentials travel in one encrypted 68-byte write; the SSID bytes appear nowhere (`demo/real-join.txt`). Pending: the password-bytes check (`demo/check_capture.py`, user-run). Known leak: message sizes reveal SSID and password lengths. |
+| 4 | **Usable by a non-developer** | PASS (app flow, `SIMULATION`), PASS (device start, `ACTUAL_HOST`) | Site Wi-Fi once (typed or Wi-Fi QR), **Set up**, scan the label, plain-language progress and errors, retry. Device start: installed with `device/systemd/install.sh`; runs as `teton` from systemd, no SSH (`demo/service-offline-hello.txt`). Pending: restart and reboot. |
 
 ## Submission list
 
 | Item | Status | Notes |
 |---|---|---|
 | Working code, configurator and device | PASS | `configurator/` (Expo, iPhone), `device/` + `src/` (Rust, BlueZ, NetworkManager). |
-| README reproducible on a standard Ubuntu machine, hardware assumptions | PARTIAL | Rewritten: hardware table, Ubuntu packages, build, install script, staging, demo, reset, tests (40 / 70 / 29 pass), evidence. NOT_RUN: the install script, and any run on a clean machine or on Ubuntu 24.04. |
+| README reproducible on a standard Ubuntu machine, hardware assumptions | PARTIAL | Hardware table, Ubuntu packages, build, install script, staging, demo, reset, tests, evidence. `install.sh` ran on noe-lab (Ubuntu 22.04). NOT_RUN: a clean machine, Ubuntu 24.04. GAP: the configurator build needs a Mac for iPhone; no Android build has been produced or run. |
 | Architecture: channel choice and trade-offs | PASS | `docs/ARCHITECTURE.md` "Why Bluetooth Low Energy": decision tree, alternatives table (SoftAP, DPP, Web Bluetooth, camera QR, USB), costs of BLE, Teton hardware assumption. |
 | Architecture: credentials in transit | PASS | `docs/ARCHITECTURE.md` "How credentials are protected"; `docs/SECURITY.md` now states the implemented protocol and its deviations (no chunk layer, peers not disconnected). |
 | Architecture: 200 devices, non-technical team | PASS (design) | `docs/ARCHITECTURE.md` "200 devices in a hospital wing": Smith work order, per-device credentials, room batches, stop on first wrong password, staggered joins, result sync. Not implemented. |
-| Evidence: credentials transmitted and connection established | PARTIAL | `SIMULATION`: Simulator screens and video in `docs/ARCHITECTURE.md` (real app code, snow transcript, fake radio). `ACTUAL_BLE`: hello probe only. NOT_RUN: real join and btmon capture. |
+| Evidence: credentials transmitted and connection established | PASS (`ACTUAL`) | `demo/real-join.txt`: device and NetworkManager journals, over-the-air timeline, app result; `demo/service-offline-hello.txt`; Simulator screens and video (`SIMULATION`). |
 
 ## Technician user stories
 
 | Story | Status | Notes |
 |---|---|---|
-| Open the prepared app and identify the device by its physical label | PASS (code) | QR label scan; a label for another sensor is refused. Camera not testable in the Simulator. |
+| Open the prepared app and identify the device by its physical label | PASS (`ACTUAL`) | The printed QR label scanned on the iPhone 15 Pro (`demo/real-join.txt`); a label for another sensor is refused. |
 | Enter the Wi-Fi name and password in a simple form | PASS (code, iPhone) | Saved **sites** (a technician serves several facilities): name, network, password; pick one per visit. Network and password can also come from the standard Wi-Fi QR code (`WIFI:T:WPA;…`): scanned from the user's real network on the iPhone 15 Pro (2026-10-20). |
-| Tap one button and follow plain-language progress | PASS (`SIMULATION`) | **Set up**: Connecting → Securing the channel → Sending the network → Joining the Wi-Fi. |
-| See **Device connected** with the IP, or an actionable error with retry | PASS (code), NOT_RUN (real) | Success only from the device's report for this attempt. A retry after a lost result reuses the attempt, so the device answers with its stored result. |
-| Device needs no screen, keyboard or SSH during provisioning | NOT_RUN | Unit written (`User=teton`, `StateDirectory=`, polkit for NetworkManager); install, restart and reboot tests pending. |
+| Tap one button and follow plain-language progress | PASS (`ACTUAL`) | **Set up**: Connecting → Securing the channel → Sending the network → Joining the Wi-Fi. |
+| See **Device connected** with the IP, or an actionable error with retry | PASS (`ACTUAL`) | Device connected with the IP on the iPhone (run 2). Run 1 showed the actionable timeout; its cause (BlueZ battery plugin) is fixed, and the provisioning service now stays 2 min after success so a retry recovers a lost result. Wrong password and absent network: NOT_RUN on hardware. |
+| Device needs no screen, keyboard or SSH during provisioning | PASS (start), NOT_RUN (reboot) | Installed on noe-lab; the systemd service answered the iPhone offline. Restart and reboot pending (reboot waits for the user's jobs). |
 | Several sensors per room without re-entering credentials | PASS (code) | Site Wi-Fi reused for every sensor; labels kept in memory for retries. |
 | Readable on small screens and with large text (non-developer, hospital hallway) | PASS (`SIMULATION`) | iPhone SE: the large radar shrinks so the first sensor stays visible; accessibility-large: header, title and captions capped at ×1.2–1.3, body text and buttons scale; network name on 2 lines; no hyphen breaks in Wi‑Fi or sensor IDs; password Show/Hide; keyboard never hides Save. |
 | Android | NOT_RUN | Same code; no Android device available (user decision, 2026-10-18). |
@@ -51,7 +51,7 @@ Last check: 2026-10-20, after the Wi-Fi QR scan, the "sensor not open for setup"
 | Logs: outcomes and attempt IDs only | PASS |
 | Site passwords on the phone | PASS (code), NOT_RUN (Face ID on device) | Keychain, this device only; each password behind Face ID (`biometryCurrentSet`), unlocked once per session, dropped when the app leaves the foreground; refused if Face ID is off. Decision 22 said "one intervention only": superseded by saved sites at the user's request (2026-10-20); Smith-issued expiring profiles remain the production answer. |
 | Chunk layer for messages above the ATT MTU | DEVIATION: one Noise message per GATT write (≤ 512 B, longest is 131 B); `maxByteSize` stops the library from splitting it |
-| `btmon` capture without credential bytes; wrong password, unreachable and fallback networks never report success | NOT_RUN |
+| `btmon` capture without credential bytes; wrong password, unreachable and fallback networks never report success | PARTIAL: capture without SSID bytes (password check pending); failure networks NOT_RUN |
 
 ## Review findings (2026-10-20, two independent reviewers)
 

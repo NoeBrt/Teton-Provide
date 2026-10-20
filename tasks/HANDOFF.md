@@ -345,3 +345,18 @@ review, and a measurement of the affected path. Document measurement limits.
   sensor to show; stop it before installing the service.
 - Next owner: the user runs `sudo device/systemd/install.sh wlo1` and copies `state/identity` (README); then
   restart/reboot and offline hello evidence; then the cable and the real join with `btmon`.
+
+## Step 15 — First real setups from the iPhone; BlueZ battery plugin stall fixed
+
+- noe-lab: Ethernet (`eno1`, 192.168.1.13) is now the admin link; the NetworkManager sharing profile that ran a
+  DHCP server on the home LAN no longer autoconnects. Service installed (`teton-device`, user `teton`).
+- Evidence (`ACTUAL`): offline hello against the systemd service (`demo/service-offline-hello.txt`); service
+  restart restores hello; two real setups with `btmon` recording (`demo/real-join.txt`). Run 1: the device joined
+  the site network but the phone never got the result: BlueZ's battery plugin read the iPhone's Battery Level,
+  iOS required encryption, BlueZ sent an SMP Security Request, pairing failed, and BlueZ never answered the
+  phone's next read. Fix: `bluetoothd --noplugin=battery` (drop-in written by `install.sh`) and a 2 min grace
+  so Try again recovers a lost result. Run 2: **Device connected** with the address on the iPhone; the capture
+  holds the credentials only in an encrypted 68-byte write and no SMP traffic; SSID bytes absent.
+- Not run: the password-bytes check (`demo/check_capture.py`, needs the user's password), wrong password and
+  absent network on hardware, reboot (waits for the user's jobs), Android. Known leak: message sizes reveal the
+  SSID and password lengths; pad the Provision request to a fixed size if that matters.
