@@ -16,13 +16,13 @@ use bluer::gatt::local::{
 };
 use bluer::{Adapter, Address, Uuid};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use iot_provisioning::protocol::{self, CHARACTERISTIC_UUID, DEVICE_ID, SERVICE_UUID};
 use iot_provisioning::provision::{
-    Activation, FRAME_HANDSHAKE, FRAME_TRANSPORT, Identity, Outcome, PROVISION_CHARACTERISTIC_UUID,
-    PROVISIONED_FILE, Provisioner, Session, hex,
+    Activation, FRAME_HANDSHAKE, FRAME_TRANSPORT, Failure, Identity, Outcome,
+    PROVISION_CHARACTERISTIC_UUID, PROVISIONED_FILE, Provisioner, Session, hex,
 };
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
@@ -65,6 +65,8 @@ struct Peer {
     session: Session,
     reply: Option<Vec<u8>>,
     last: Instant,
+    /// Its first transport message decrypted: it holds the label secret.
+    proven: bool,
 }
 
 /// Provisioning state shared by the GATT callbacks and the activation task.
@@ -76,6 +78,8 @@ struct Provisioning {
 
 impl Provisioning {
     /// One Noise message from `client`. Only one phone at a time; a second one is refused, not queued.
+    /// The claim starts when a phone proves the label, not at the first message, which anyone can
+    /// send or replay.
     fn write(
         &mut self,
         client: Address,
@@ -86,9 +90,14 @@ impl Provisioning {
         if offset != 0 {
             return Err(ReqError::InvalidOffset);
         }
+        // ponytail: unproven sessions are bounded only by BLE links and IDLE; cap them if a controller allows many links.
         self.peers
             .retain(|_, peer| now.duration_since(peer.last) < IDLE);
-        if self.peers.keys().any(|address| *address != client) {
+        if self
+            .peers
+            .iter()
+            .any(|(address, peer)| *address != client && peer.proven)
+        {
             return Err(ReqError::InProgress);
         }
         let (&kind, message) = value.split_first().ok_or(ReqError::InvalidValueLength)?;
@@ -100,6 +109,7 @@ impl Provisioning {
                     session,
                     reply: None,
                     last: now,
+                    proven: false,
                 },
             );
         } else if kind != FRAME_TRANSPORT {
@@ -111,6 +121,10 @@ impl Provisioning {
         match peer.session.on_write(message, &mut self.provisioner) {
             Ok(reply) => {
                 peer.reply = Some(reply);
+                if kind == FRAME_TRANSPORT && !peer.proven {
+                    peer.proven = true;
+                    self.peers.retain(|address, _| *address == client);
+                }
                 Ok(self.provisioner.take_activation())
             }
             Err(error) => {
@@ -144,6 +158,12 @@ fn describe(outcome: Outcome) -> String {
     }
 }
 
+/// Records the provisioned state durably: file and directory entry are on disk before success is reported.
+fn persist(state_dir: &Path) -> std::io::Result<()> {
+    std::fs::File::create(state_dir.join(PROVISIONED_FILE))?.sync_all()?;
+    std::fs::File::open(state_dir)?.sync_all()
+}
+
 struct Context {
     shared: Shared,
     state_dir: PathBuf,
@@ -156,13 +176,23 @@ fn start(context: &Arc<Context>, activation: Activation) {
     println!("attempt {} pending", hex(&activation.attempt));
     let context = context.clone();
     tokio::task::spawn_blocking(move || {
-        let outcome = wifi::activate(
+        let mut outcome = wifi::activate(
             &activation.ssid,
             &activation.password,
             context.interface.as_deref(),
         );
         let attempt = activation.attempt;
         drop(activation);
+        // Success counts only once it survives a restart; otherwise undo it so the device stays open.
+        if matches!(outcome, Outcome::Connected { .. }) {
+            if let Err(error) = persist(&context.state_dir) {
+                println!("cannot record the provisioned state: {}", error.kind());
+                if wifi::forget().is_err() {
+                    println!("profile could not be deleted");
+                }
+                outcome = Outcome::Failed(Failure::NmcliError);
+            }
+        }
         println!("attempt {} {}", hex(&attempt), describe(outcome));
         context
             .shared
@@ -171,9 +201,6 @@ fn start(context: &Arc<Context>, activation: Activation) {
             .provisioner
             .complete(attempt, outcome);
         if matches!(outcome, Outcome::Connected { .. }) {
-            if let Err(error) = std::fs::write(context.state_dir.join(PROVISIONED_FILE), b"") {
-                println!("cannot record the provisioned state: {}", error.kind());
-            }
             context.provisioned.notify_one();
         }
     });
@@ -287,6 +314,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })),
         _ => None,
     };
+    // Not provisioned: a profile from an attempt that never recorded success must not autoconnect.
+    if context.is_some() && wifi::forget().is_err() {
+        println!("cannot check NetworkManager for a leftover profile");
+    }
 
     let session = bluer::Session::new().await?;
     let adapter = session.default_adapter().await?;
@@ -349,6 +380,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iot_provisioning::provision::{ATTEMPT_ID_LEN, Request};
 
     const PHONE: Address = Address::new([1, 2, 3, 4, 5, 6]);
     const OTHER: Address = Address::new([6, 5, 4, 3, 2, 1]);
@@ -415,8 +447,8 @@ mod tests {
         }
     }
 
-    /// A first handshake message as a real phone would send it.
-    fn handshake(identity: &Identity) -> Vec<u8> {
+    /// A first handshake message as a real phone would send it, and the phone's handshake state.
+    fn first_message(identity: &Identity) -> (snow::HandshakeState, Vec<u8>) {
         let prologue = iot_provisioning::provision::prologue(DEVICE_ID);
         let mut phone =
             snow::Builder::new(iot_provisioning::provision::NOISE_PARAMS.parse().unwrap())
@@ -427,7 +459,28 @@ mod tests {
                 .unwrap();
         let mut out = [0u8; 128];
         let len = phone.write_message(&[], &mut out).unwrap();
-        [&[FRAME_HANDSHAKE][..], &out[..len]].concat()
+        (phone, [&[FRAME_HANDSHAKE][..], &out[..len]].concat())
+    }
+
+    fn handshake(identity: &Identity) -> Vec<u8> {
+        first_message(identity).1
+    }
+
+    /// Full handshake plus one status request: the phone has proved it holds the label.
+    fn authenticate(p: &mut Provisioning, client: Address, now: Instant) {
+        let (mut phone, first) = first_message(&p.identity);
+        p.write(client, 0, &first, now).unwrap();
+        let mut buffer = [0u8; 128];
+        phone
+            .read_message(&p.read(client, 0).unwrap(), &mut buffer)
+            .unwrap();
+        let mut phone = phone.into_transport_mode().unwrap();
+        let status = Request::Status {
+            attempt: [0; ATTEMPT_ID_LEN],
+        };
+        let len = phone.write_message(&status.encode(), &mut buffer).unwrap();
+        let second = [&[FRAME_TRANSPORT][..], &buffer[..len]].concat();
+        assert!(matches!(p.write(client, 0, &second, now), Ok(None)));
     }
 
     #[test]
@@ -446,11 +499,11 @@ mod tests {
     }
 
     #[test]
-    fn a_second_phone_is_refused_until_the_first_goes_idle() {
+    fn a_second_phone_is_refused_once_the_first_proved_the_label() {
         let mut p = provisioning();
         let now = Instant::now();
+        authenticate(&mut p, PHONE, now);
         let first = handshake(&p.identity);
-        p.write(PHONE, 0, &first, now).unwrap();
         assert!(matches!(
             p.write(OTHER, 0, &first, now),
             Err(ReqError::InProgress)
@@ -458,6 +511,33 @@ mod tests {
         assert!(
             matches!(p.write(OTHER, 0, &first, now + IDLE), Ok(None)),
             "idle session dropped"
+        );
+    }
+
+    #[test]
+    fn a_replayed_first_message_does_not_lock_out_the_real_phone() {
+        let mut p = provisioning();
+        let now = Instant::now();
+        // The first message needs no label secret: anyone can send (or replay) one.
+        let (_, replayed) = first_message(&p.identity);
+        assert!(matches!(p.write(OTHER, 0, &replayed, now), Ok(None)));
+        authenticate(&mut p, PHONE, now);
+        assert!(
+            !p.peers.contains_key(&OTHER),
+            "unproven sessions are dropped once a phone proves the label"
+        );
+    }
+
+    #[test]
+    fn the_provisioned_marker_is_written_or_reported_missing() {
+        let dir = std::env::temp_dir().join(format!("iot-persist-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(persist(&dir).is_ok());
+        assert!(dir.join(PROVISIONED_FILE).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(
+            persist(&dir).is_err(),
+            "a missing state directory fails instead of passing silently"
         );
     }
 

@@ -290,3 +290,27 @@ review, and a measurement of the affected path. Document measurement limits.
   2. Install the systemd unit and test restart/reboot (task 7).
   3. Commit the configurator changes after review (nothing committed in this step).
   4. Then the Noise channel per `docs/SECURITY.md`, then NetworkManager activation.
+
+## Step 12 — Provisioning committed; device review fixes 5-8
+
+- Revision: `f2f6363` (Noise NKpsk2 provisioning, `stage`, NetworkManager activation, configurator sites and
+  label scan) plus this step's device fixes. Branch `feat/ble-device-and-configurator`, not pushed.
+- Fixes (`tasks/compliance.md`, review findings): the one-phone claim starts when the phone proves the label
+  (first transport message decrypts), so a replayed first message no longer locks the device out; the
+  provisioned marker and its directory are fsynced before success is reported, and a failed write deletes the
+  profile and reports an error; the NetworkManager profile has a fixed UUID, starts without autoconnect, gets it
+  only after success, and is deleted before each attempt, on failure and at startup while unprovisioned; join
+  failures come from the device `StateChanged` signal instead of a 100 ms poll.
+- Evidence class: `COMMAND_FIXTURE` **PASS** on noe-lab: `cargo test --features ble --bin device` 14/14 (the
+  replay test failed first with `InProgress`), `cargo test --features stage` all pass, Clippy
+  `--features ble,stage --all-targets` clean. Not run on hardware: none of the NetworkManager changes.
+- noe-lab state: the running `device` (pid 3343956) is the Oct 17 hello-only build from
+  `~/noe-ws/iot-provisioning`; the provisioning build and the staged identity live in `~/noe-ws/iot-dev`
+  (`state/`, label `IOT-DEMO-001` printed on the YHK sticker printer). `eno1` has no cable yet.
+- Next owner: implementation, once the Ethernet cable is in `eno1`.
+  1. Stop the old binary; `cargo build --release --features ble` in `~/noe-ws/iot-dev`; run it with
+     `STATE_DIRECTORY=state IOT_WIFI_INTERFACE=wlo1` while `btmon` records.
+  2. From the iPhone: scan the printed label, **Set up**, expect **Device connected** with the IP; check the
+     `iot-provisioned` profile holds it. Then wrong password, absent network, and the btmon grep for SSID and
+     password bytes (constraints 2 and 3).
+  3. systemd unit with `StateDirectory=` and NetworkManager permission (constraint 4), README, docs.
