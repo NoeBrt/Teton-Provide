@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secureStore';
 import { credentialError } from './provision.ts';
 import { parseWifiQr, removeSite, upsertSite, type Setups, type Site } from './sites.ts';
 import { QrCamera } from './QrCamera';

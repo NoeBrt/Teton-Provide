@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Alert, AppState, Image, Platform, Pressable, Settings, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, Image, Platform, Pressable, Settings, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -10,6 +10,7 @@ import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
 import { changed, probe, SERVICE_UUID, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
 import { startDemo, type Demo } from './src/demo';
+import { ask } from './src/ask';
 import * as Crypto from 'expo-crypto';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setup, type SetupFailure, type SetupResult, type SetupStep } from './src/setup';
@@ -531,8 +532,8 @@ function Provide({ demo, onDemo }: Mode) {
   // Not while a test or a batch runs: their sensors belong to the mode being left.
   const askDemo = () => {
     if (Object.keys(running).length > 0 || batchActive.current) return;
-    if (demo) Alert.alert('Leave the demo?', 'Back to the sensors around you.', [{ text: 'Stay', style: 'cancel' }, { text: 'Leave', onPress: () => onDemo(false) }]);
-    else Alert.alert('Demo with simulated sensors', '200 simulated sensors, with a demo technician code and site. Nothing goes over Bluetooth, and your saved code and sites are not used.',
+    if (demo) ask('Leave the demo?', 'Back to the sensors around you.', [{ text: 'Stay', style: 'cancel' }, { text: 'Leave', onPress: () => onDemo(false) }]);
+    else ask('Demo with simulated sensors', '200 simulated sensors, with a demo technician code and site. Nothing goes over Bluetooth, and your saved code and sites are not used.',
       [{ text: 'Cancel', style: 'cancel' }, { text: 'Start the demo', onPress: () => onDemo(true) }]);
   };
   // Cards get one unchanging actions object (so memo holds); it calls this render's functions.
@@ -998,10 +999,16 @@ const s = StyleSheet.create({
 });
 
 // The app, or its demo: 200 simulated sensors instead of the radio (src/demo.ts). Switching remounts the screen, so no
-// sensor, result, scan or credential crosses from one mode to the other. Launched with `-demo 1` (simctl), it opens in
-// the demo.
+// sensor, result, scan or credential crosses from one mode to the other. Launched with `-demo 1` (simctl) on iOS, or
+// `?demo=1` on the web build, it opens in the demo.
 export default function App() {
-  const [demo, setDemo] = useState<Demo | null>(() => (Platform.OS === 'ios' && String(Settings.get('demo')) === '1' ? startDemo(Crypto.getRandomBytes) : null));
+  const [demo, setDemo] = useState<Demo | null>(() => (launchedInDemo() ? startDemo(Crypto.getRandomBytes) : null));
   useEffect(() => () => demo?.stop(), [demo]);
   return <Provide key={demo ? 'demo' : 'real'} demo={demo} onDemo={on => setDemo(on ? startDemo(Crypto.getRandomBytes) : null)} />;
+}
+
+function launchedInDemo() {
+  if (Platform.OS === 'ios') return String(Settings.get('demo')) === '1';
+  if (Platform.OS === 'web') return new URLSearchParams(globalThis.location?.search).get('demo') === '1';
+  return false;
 }

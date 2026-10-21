@@ -1,8 +1,8 @@
 # Desktop todo (tasks/desktop-plan.md)
 
-- [ ] T1 Web build of the app, demo mode (react-native-web, web seams, browser screenshots)
-- [ ] T2 Seams on iOS, nothing changed (Simulator screenshots side by side)
-- [ ] Checkpoint A: same code on iOS and in a browser
+- [x] T1 Web build of the app, demo mode (react-native-web, web seams, browser screenshots)
+- [x] T2 Seams on iOS, nothing changed (Simulator screenshots side by side)
+- [x] Checkpoint A: same code on iOS and in a browser
 - [ ] T3 Tauri 2 shell on macOS (window, desktop:dev/build, --demo)
 - [ ] T4 Bluetooth bridge (btleplug): discovery and Test against noe-lab
 - [ ] T5 Keychain bridge (keyring): sites and code survive a restart
