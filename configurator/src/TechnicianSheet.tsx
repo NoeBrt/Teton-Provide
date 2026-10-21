@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from './secureStore';
 import { checkToken, parseTokenText, toHex, type Token } from './authority.ts';
 import { QrCamera } from './QrCamera';
 import { C, F } from './theme.ts';
