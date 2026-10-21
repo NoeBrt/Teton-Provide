@@ -917,9 +917,9 @@ function Provide({ demo, onDemo }: Mode) {
             </View>
           </Animated.View>
         </View>
-        <SitesSheet key={choosingSite ? 'open' : 'closed'} visible={siteShown} sites={sites} activeId={activeId} newId={Crypto.randomUUID}
+        <SitesSheet key={choosingSite ? 'sites-open' : 'sites-closed'} visible={siteShown} sites={sites} activeId={activeId} newId={Crypto.randomUUID}
           onClose={closeSites} onPick={pick} onSaved={saved} onForgotten={forgotten} />
-        <TechnicianSheet key={tokenSheet.open ? `open-${tokenSheet.n}` : 'closed'} visible={codeShown}
+        <TechnicianSheet key={tokenSheet.open ? `code-open-${tokenSheet.n}` : 'code-closed'} visible={codeShown}
           info={tokenInfo} onClose={closeToken} onSaved={tokenSaved} />
       </SafeAreaView>
     </SafeAreaProvider>

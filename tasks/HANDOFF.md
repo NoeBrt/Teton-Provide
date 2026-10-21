@@ -568,3 +568,19 @@ review, and a measurement of the affected path. Document measurement limits.
 - Next owner: run a batch on the bench with real timing logs, then with real sensors; commit `Summary.tsx`, `wing.ts`,
   `wing.test.ts`, `demo.ts`, `demo.test.ts`, `lab/` and the media in `docs/architecture/` (all untracked). Do not add
   the challenge PDF at the repository root.
+
+## Desktop T3 — Tauri shell resumed in Codex, 2026-10-21
+
+- Preserved Claude's uncommitted Tauri 2 shell, CLI lockfile and the two sheet-key fixes in App.tsx. T1/T2 and
+  checkpoint A (`7eb3d2a`) were not repeated. npm desktop scripts now enter `desktop/`, where Tauri finds its config.
+- `ACTUAL_HOST` PASS: existing `provide-desktop --demo` process, native Provide window 1280×800; window-only
+  [capture](../docs/desktop/t3-native-before.png). `--demo` reaches the shared React app. The native window exposes
+  the stretched mobile layout and a large empty radar area; these are T7 work, not evidence of a usable desktop UI.
+- Checks: 70 JS tests, typecheck, Expo lint, `cargo clippy --all-targets -- -D warnings` PASS. iPhone baseline captured
+  locally before layout changes (real mode, no BLE on Simulator); the demo comparison follows at T7.
+- The already running dev process was reused. Launch from configurator with cargo on PATH:
+  `npm run desktop:dev -- -- -- --demo` (npm, Tauri runner, then app arguments). From desktop directly:
+  `../node_modules/.bin/tauri dev -- -- --demo`. Release export/bundle is T8.
+- NOT_RUN: real desktop BLE, keychain persistence, webcam QR, native batch playtest. Browser radio is still unavailable
+  and browser secret storage still volatile at this step. No noe-lab service was stopped. Challenge PDF excluded.
+- Next: T7 first, as now requested, then T4/T5/T6, checkpoint B where hardware/authorization allow, T8 and checkpoint C.

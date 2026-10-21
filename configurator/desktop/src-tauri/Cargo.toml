@@ -1,0 +1,15 @@
+[package]
+name = "provide-desktop"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
