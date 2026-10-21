@@ -712,8 +712,9 @@ transport changes.
 ## 26. Saved sites behind Face ID
 
 **Decision:** The configurator keeps several named sites (facility name, network, password). Each password is a
-separate Keychain entry protected by Face ID (`biometryCurrentSet`), unlocked once per session, kept in memory
-only and dropped when the app leaves the foreground.
+separate Keychain entry protected by Face ID (`biometryCurrentSet`), unlocked once per session and kept in memory
+only. Since decision 29 it is locked again when the app comes back after more than 2 minutes away (`LOCK_AFTER_MS`),
+not as soon as the app leaves the foreground.
 
 **Original proposal:** Decision 22: one site profile per intervention, forgotten at the end.
 
@@ -736,8 +737,8 @@ Simulator does not prompt).
 certificate for its static key, signed by the **device authority** for one customer; the phone checks it offline
 inside a Noise `XX` handshake before anything secret leaves. Each technician holds a **technician code**, a token
 signed by the **technician authority** that names them, lists the customers they may serve and expires after 30
-days; the sensor checks it before it accepts any request. "Set up all ready sensors in range" runs the setups three
-at a time.
+days; the sensor checks it before it accepts any request. "Set up all ready sensors in range" runs the setups six at
+a time (three until decision 29).
 
 **Original proposal:** Question raised on 2026-10-20: what blocks 200 sensors with the label protocol, and how does
 a sensor get a unique ID on a channel that no malicious device can use to pass as a IoT sensor?
@@ -750,7 +751,7 @@ a sensor get a unique ID on a channel that no malicious device can use to pass a
 | Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
 | Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as the code `<token hex>.<holder key hex>`, a QR code scanned inside the app or pasted text, kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. The first build delivered it as a `provide://technician/` link; the link was removed after the security review, since another app could claim the scheme and receive the code. Not bound to one phone, but bound to a holder key the code carries (added after review). The sensor's clock floor is the later of its firmware build date and the time it last recorded, and rises no faster than its uptime. |
 | Reconfiguration | Allowed with a valid token. The device keeps two NetworkManager profiles and rolls back to the working one if the new network fails. |
-| Batch | Every ready sensor in range, three BLE links at a time. A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters (failures first) and **Retry failed**. |
+| Batch | Every ready sensor in range, six BLE links at a time (three before 2026-10-21). A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters and **Retry failed** (the overall card of decision 28 replaced the filters and their failures-first sort). |
 | Rooms | Later, in Smith; not in the app. |
 | Proof | A 200-sensor test with fakes, a Simulator video, one real run on noe-lab. |
 
@@ -772,3 +773,154 @@ authority, other customer, expired and forged tokens, reconfiguration, rollback 
 `tests/noise_vectors.rs` with `configurator/src/noise.test.ts` (byte-for-byte interop); `configurator/src/setup.test.ts`
 (the token never leaves for a sensor that fails the checks); `configurator/src/batch.test.ts` (200 fake sensors);
 Simulator video `docs/architecture/demo-simulator.mp4`.
+
+## 28. Overall of the sensors in range
+
+**Decision:** Keep the card list as the only view of the sensors and put one overall card above it, in the same
+style, once more than four sensors are in range. It counts the sensors set up out of those in
+range, says what is running or what is left, and gives three tabs, **Set up**, **Errors** and **Not set up**, that
+filter the cards below. The tabs replace the old filter pills (All, a tick, a cross and an hourglass emoji).
+
+**Original proposal:** The card list with counters, filters and **Retry failed** (decision 27) reads well with 20
+sensors; with 200 it is 200 cards. Five approaches were drawn on a design canvas in the real **provide.** layout, at
+the same instant of one batch (142 connected, 5 to handle, 3 running, 46 waiting, 4 not prepared), then compared by a
+judge panel:
+
+| Approach | Limit | Cost |
+| --- | --- | --- |
+| A. Summary and failures by cause | Does not show where the sensors are. | S (the same components) |
+| B. The whole wing as a grid of tiles | The order has no physical meaning until Smith maps rooms. | M |
+| C. Dense list, search by the end of the ID | A long list with little overview. | S |
+| D. Find a failed sensor by its signal (radar, warmer or colder) | RSSI is noisy (walls, bodies) and gives no direction. | M |
+| E. End-of-visit report for a supervisor (totals, pace, PDF or CSV) | Useful after the batch, not during it. | M |
+
+The panel's pick was built: A as an **overview** (a progress card with a check line that added up to every sensor
+seen, failures grouped by cause with the fix and **Retry N** only where a retry helps, the sensors working now, the
+rest folded), B as a **wall** (one tile per sensor in batch order, problems pinned above it), and a switch at the
+corner of the sensor list to go back to the cards. It ran with 200 fake sensors in the Simulator and was never
+committed.
+
+**Technician's feedback:** The original card list is the view they like best. They want an overall with the same
+ergonomics, easy access to the sensors not set up, set up and with errors, no emoji, and the original design
+philosophy kept.
+
+**Final choice:** Drop the overview, the wall and the switch. One card above the cards:
+
+| Part | What it shows |
+| --- | --- |
+| Title | "188 set up of 200 in range", in two tones like the screen title. |
+| Line | During a batch: "6 in progress · 83 waiting · about 1 min left", the time once ten sensors of this batch have finished. Otherwise: "N ready to set up · N not prepared", ending with "· N state unknown" when older firmware advertises no state. |
+| Bar | Set up in ink, errors in red, the rest blank. |
+| Tabs | **Set up**, **Errors**, **Not set up**, each with its count and a shape: filled ink, filled red, hollow. A tap filters the list, a second tap shows all; a tab at 0 is disabled unless it is selected. A selected tab stays on: it keeps every sensor it has shown, updated in place, and adds at the end the sensors that join its group. |
+| Rows | Past four sensors, each sensor is a one-line row: its group's shape, one status line, its signal. A tap opens it in place into the full card; a second tap folds it. |
+| List header | "SENSORS · N", "NOT SET UP · N", "SET UP · N" or "ERRORS · N", with a refresh icon (hidden while anything runs) that drops the sensors not heard for 15 s, never one in the batch; while the search is paused it only resumes it. |
+| In progress | The **Not set up** tab puts the sensors being set up in an **IN PROGRESS** block on top, one fixed slot per running sensor; a freed slot stays empty until reused. The list below is what is left to do; a finished sensor belongs to Set up or Errors. A row opened while in progress stays in the block with its result until closed. |
+
+Each sensor sits in one group (`groupOf` in `configurator/src/wing.ts`): this session's result first, from a batch or
+a setup by hand; otherwise a sensor online is set up, one offline (set up, but not on its Wi-Fi) is an error, and
+anything else is not set up. A sensor that joined this session but now advertises offline is an error. What a sensor
+advertises never turns a failure into set up: an impostor can advertise online. The list keeps the scan order, so
+nothing moves under the thumb; only the **Errors** tab, when tapped, groups the failures by cause. **Retry failed**
+also appears after a setup by hand fails, with no batch needed. A sensor that failed by hand leaves **Set up all
+ready** and counts under Errors, so a sensor that is not genuine is no longer retried by that button (**Retry
+failed** leaves it out too).
+
+**Reason:** The technician keeps the cards they know, with their per-sensor actions (Test, Set up, Reconfigure)
+where they were. The overall answers "how far along?" and gives one tap to each group, which is what they asked for.
+One view instead of three: nothing to switch and nothing new to learn. Words and shapes carry the groups, so no
+emoji and no color alone.
+
+**Trade-off:** No cause cards and no **Retry N** per cause any more: the Errors tab lists the failures grouped by
+cause, each card with its reason, and **Retry failed** covers them (it leaves out a sensor that is not genuine). A
+sensor set up before but offline counts as an error, though this session did not touch it. The overall and the
+compact rows show only from five sensors in range; with one to four, the cards say enough. Without a sort, a failure
+in the full list sits where the scan found it: the Errors tab is the way to the failures. Where a sensor is waits for
+rooms from Smith. The time left assumes the pace so far holds. The code is about 95 lines (`wing.ts`,
+`Summary.tsx`) instead of about 470 for the three views.
+
+**Evidence / test:** `configurator/src/wing.test.ts` (each sensor in one group, this session's result first, a
+sensor that joined then advertises offline an error; the time left only after ten have finished); app 68 tests,
+`npx tsc --noEmit` and `npx expo lint` clean. iOS Simulator in demo mode (`SIMULATION`, decision 30), 200 simulated
+sensors, each with a real Noise `XX` responder, iPhone 16 Pro and iPhone SE with accessibility-large text: screens
+`docs/architecture/08-overall-running.png` to `11-overall-se-large-text.png` and the 42 s video
+`docs/architecture/overall-200-sensors.mp4` (2x speed: discovery, a batch with sensors added, the Not set up tab, the
+Errors tab). The design canvas and the first build are kept
+outside the repository. NOT_RUN: the overall with many real sensors; the app is installed on the technician's
+iPhone, where it has not yet been used at scale.
+
+## 29. Batch at the pace of a wing
+
+**Decision:** Six BLE links at a time instead of three. A link failure goes back to the queue, up to two more times.
+Sensors found during a batch can join it. The scan keeps running during setups, and the status poll runs every
+500 ms. The technician code and the site password are locked again only when the app comes back after more than 2
+minutes away.
+
+**Original proposal:** Decision 27: three links, every failure final, the batch fixed when it starts, the scan
+stopped for each run, a poll every second. Decision 26 dropped the code and the password as soon as the app left the
+foreground, so any app switch stopped a running batch.
+
+**Final choice:**
+
+| Part | Choice |
+| --- | --- |
+| Links | `BATCH_CONCURRENCY` 6 (`configurator/src/batch.ts`). A sensor holds a link about 7.5 s; 200 sensors take about 8 minutes at 3 links and about 4 at 6. Set from that arithmetic and iOS's limits, not measured on hardware. |
+| Retries | Timeout, rejected, `Busy` and a lost result (`unknown`) send the sensor to the end of the queue, up to `RETRIES` (2) more times, with the same attempt ID when the request may have reached it. Wi-Fi failures and refusals are final. Never after a stop. |
+| Stop | A site-wide failure marks the rest of the queue "not tried" at once, not after the sensors in progress finish. |
+| Add during a batch | **Add N to the batch** puts the ready sensors found meanwhile at the end of the queue (`BatchControl.add`, de-duplicated, ignored after a stop); the time left counts them. |
+| Scan | Keeps running during setups and tests: the stop before each run was removed. |
+| Poll | `Status` every 500 ms (`configurator/src/setup.ts`), so a finished join frees its link sooner. |
+| Credential lock | `LOCK_AFTER_MS`, 2 minutes (`configurator/App.tsx`): checked when the app comes back. A short switch no longer stops a batch. |
+| Buttons | During a batch, **Test** stays available on the sensors the batch is not working on; **Set up** by hand stays disabled. |
+
+**Reason:** A wing is 200 sensors and the join (about 5.5 s) dominates, so the phone mostly waits. More links and
+fewer sensors lost to a dropped link shorten the visit. A technician who answers a message mid-batch should not lose
+the batch.
+
+**Trade-off:** Six links share one radio, so connects may slow down or fail more often; retries absorb part of it,
+but a dead sensor now costs up to three tries. Scanning while connecting is a risk: iOS connects were thought more
+reliable without a concurrent scan. Both are to measure on the bench and with real sensors. The code and the password
+stay in the app's memory while it is in the background: someone who opens the unlocked phone within 2 minutes reaches
+them without Face ID. Not built: releasing the link during the join, and a concurrency that adapts to failures
+(see "200 devices in a hospital wing" in `docs/ARCHITECTURE.md`).
+
+**Evidence / test:** `configurator/src/batch.test.ts` (12 tests: retries, sensors added during a run, the queue marked
+at once on a stop, a link failure after a stop is final); app 68 tests. Test bench (`ACTUAL_BLE`, simulated sensors,
+decision 30): one run with 14 advertising sets and a 3 s cycle had 84 provisioning sessions and 79 joins, against 20
+sessions in the run before the retries and the faster cycle; the bench's sensors are on air part of the time, so its
+connects are slower than real sensors'. The 2-minute lock has no test. NOT_RUN: six links and scanning during runs
+with real sensors.
+
+## 30. Demo mode in the app, and the lab bench
+
+**Decision:** Demo mode ships inside the app: 200 simulated sensors on a fake radio, trusted through a second, public
+demo authority that only the fake radio uses. A separate bench in `lab/`, outside the app, shows 200 simulated
+sensors over real Bluetooth from noe-lab, with identities certified by the real device authority for a lab customer.
+
+**Original proposal:** The Simulator screens and videos of decisions 27 and 28 came from a temporary harness, not in
+the repository. Nothing let a reviewer see a wing, and nothing loaded the phone's radio with many sensors.
+
+**Final choice:**
+
+| Part | Choice |
+| --- | --- |
+| Entry | Tap the logo and confirm; the chip reads **DEMO**; the logo or the chip leaves (not while a test or a batch runs). The launch argument `-demo 1` (simctl) starts in it. |
+| Isolation | Switching remounts the screen: no sensor, result, scan or credential crosses modes. The demo authority (seeds filled with 0x51 and 0x52, public) is passed to `setup()` only in demo mode; real sensors are always checked against `DEVICE_AUTHORITY`. The demo's code and site live in memory; nothing saved is read or written, and the code and site sheets never open. |
+| Demo wing | `configurator/src/demo.ts`: each sensor runs the sensor side of Noise `XX` with its own key. 6 set up before, 4 not prepared, 3 out of Wi-Fi range, 3 impostors (a copied certificate without its key), 2 of another customer, some slow joins. About half is heard within 4 s, the rest over a minute. |
+| Bench | `lab/iot_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `lab/mint-lab.sh` (`stage init`, `authority certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `lab/sim-lab.sh` stops `iot-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
+
+**Reason:** One app for both: the demo runs the real code paths (handshake, checks, batch, overall), so what a
+reviewer sees is what a technician gets. The bench measures what the Simulator cannot: the radio, iOS's links, the
+advertising load. Certifying its identities with the real authority lets the unmodified app trust them.
+
+**Trade-off:** The shipped app holds a second trust anchor whose seeds are public. A path that paired it with the
+real radio would let anyone pass as a sensor: audited, none does, and `demo.test.ts` shows demo sensors refused under
+the real authority. The bench's identities are real certificates whose keys sit on noe-lab: any phone whose code
+covers `LAB` sends them the site password, and the simulator, running as root, holds it in memory. Use a throwaway
+site; the simulator never joins Wi-Fi. A technician code for `LAB` and `DEMO` was issued for 30 days. The bench's
+sensors are on air part of the time, so its connect latency is worse than real sensors'; the demo's timings are not
+measured ones.
+
+**Evidence / test:** `configurator/src/demo.test.ts` (3 tests: the expected outcome for each simulated sensor through
+the real `setup()`, demo sensors refused under the real authority, Test on a demo sensor); screens 8 to 11 and
+`docs/architecture/overall-200-sensors.mp4` (`SIMULATION`); bench runs (`ACTUAL_BLE`, run log on noe-lab, not in the
+repository).

@@ -57,7 +57,7 @@ export async function setup(
   random: (length: number) => Uint8Array,
   onStep: (step: SetupStep) => void = () => {},
   {
-    attempt: resume, timeoutMs = 10_000, joinMs = 60_000, pollMs = 1_000,
+    attempt: resume, timeoutMs = 10_000, joinMs = 60_000, pollMs = 500,
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), deviceAuthority = DEVICE_AUTHORITY,
   }: SetupOptions = {},
 ): Promise<SetupResult> {

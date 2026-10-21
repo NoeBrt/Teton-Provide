@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, AppState, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Alert, AppState, Image, Platform, Pressable, Settings, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -7,13 +7,14 @@ import { Onest_400Regular } from '@expo-google-fonts/onest/400Regular';
 import { Onest_500Medium } from '@expo-google-fonts/onest/500Medium';
 import { Onest_600SemiBold } from '@expo-google-fonts/onest/600SemiBold';
 import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
-import { changed, probe, SERVICE_UUID, sensorState, type ProbeResult, type Step } from './src/probe';
+import { changed, probe, SERVICE_UUID, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
+import { startDemo, type Demo } from './src/demo';
 import * as Crypto from 'expo-crypto';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { setup, type SetupFailure, type SetupResult, type SetupStep } from './src/setup';
 import { expired, SetupFlow, type Action } from './src/flow';
-import { runBatch, type BatchEntry, type BatchSummary } from './src/batch';
+import { runBatch, type BatchControl, type BatchEntry, type BatchSummary } from './src/batch';
 import type { Token } from './src/authority';
 import { expiryText, loadTokenInfo, TechnicianSheet, tokenProblem, unlockToken, type TokenInfo } from './src/TechnicianSheet';
 import { loadSetups, loadSites, saveSetups, setActiveSite, SitesSheet, unlockPassword } from './src/SiteSheet';
@@ -25,6 +26,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { Radar, RESIZE, SIZES } from './src/Radar';
+import { Summary, Swatch } from './src/Summary';
+import { groupOf, minutesLeft, type Group } from './src/wing';
 
 const TEST_STEPS: [Step, string][] = [['connect', 'Connecting'], ['services', 'provide service'], ['write', 'Writing “hello”'], ['read', 'Reading the reply']];
 const SETUP_STEPS: [SetupStep, string][] = [['connect', 'Connecting'], ['secure', 'Securing the channel'], ['send', 'Sending the network'], ['join', 'Joining the Wi‑Fi']];
@@ -43,16 +46,26 @@ const INTRO_TITLE = { duration: 450, easing: Easing.out(Easing.cubic) };
 const INTRO_SPRING = { damping: 12, stiffness: 140, mass: 0.9 }; // a small overshoot as the dot appears
 const AUTO_FOLD_AFTER = 4; // sensors shown under the large radar before it folds by itself
 const FOLD = { duration: 1200, easing: Easing.inOut(Easing.cubic) }; // first-discovery fold
+const FRESH_MS = 1000; // a row this new fades in; one shown again by a tab does not
 const LOCK_AFTER = 8; // pt into the list before compact mode holds
 const MIN_PROGRESS_MS = 700; // an instant failure still shows progress briefly instead of flashing
 const SUCCESS_SHOWN_MS = 8000; // then the card folds back; its state line and the log keep the result
 // The radar's resize, its move into the row and the list's arrival share one curve, on the UI thread.
 const layout = LinearTransition.duration(RESIZE.duration).easing(RESIZE.easing);
 const appear = FadeIn.duration(RESIZE.duration).delay(RESIZE.duration / 2);
-// During and after a batch, the list puts failures first and can show one group at a time.
-const ORDER: Record<string, number> = { failed: 0, stopped: 1, running: 2, queued: 3, ok: 5 };
+// Launch order: the title and the dot, then the code and site Wi-Fi rows (they can be set before any sensor is found),
+// then the sensors heard meanwhile.
+const afterDot = FadeIn.duration(RESIZE.duration).delay(700);
+const INTRO_MS = 1400;
+// A card opened or started by hand is scrolled into view while it grows, then let go: a later layout change elsewhere
+// in the list never scrolls to it again.
+const FOCUS_MS = 1500;
+const LIST_LABELS = { all: 'SENSORS', done: 'SET UP', failed: 'ERRORS', left: 'NOT SET UP' } as const;
 let logKey = 0; // log lines finished in the same millisecond still get distinct keys
-const SHEET_GONE_MS = 600; // an iOS sheet's dismissal, with a margin
+const SHEET_GONE_MS = 600;
+// Leaving the app this long locks the code and the site password again (Face ID); a shorter switch keeps a batch going.
+const LOCK_AFTER_MS = 2 * 60_000;
+const STALE_MS = 15_000; // Refresh drops the sensors not heard for this long
 
 /** True once `shown` has been false for SHEET_GONE_MS. RN's Modal on iOS drops, and never retries, a sheet presented
  *  while another one is still sliding away. ponytail: a fixed delay; open from Modal onDismiss if it proves short. */
@@ -94,7 +107,7 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
     case 'token-expired': return 'Your technician code has expired. Ask IoT for a new one.';
     case 'closed': return 'This sensor is not prepared for setup yet. Test still checks that it answers.';
     case 'unknown': return 'The sensor restarted and lost the result. Try again.';
-    case 'locked': return 'The technician code or the site Wi‑Fi is no longer unlocked (the app was left, or the site was changed). Tap Retry failed to unlock them.';
+    case 'locked': return 'The technician code or the site Wi‑Fi is no longer unlocked (the app was left for more than 2 minutes, or the site was changed). Tap Retry failed to unlock them.';
     case 'Timeout':
     case 'timeout': return step === 'join' ? 'The sensor did not join in time. Try again.' : 'The sensor is not responding. Move closer, then try again.';
     default: return 'The Bluetooth link failed. Try again.';
@@ -106,37 +119,72 @@ type CardOutcome = { ok: boolean; title: string; text: string };
 type Attempt = { key: number; at: string; name: string; ok: boolean; detail: string };
 const nameOf = (p: Peripheral) => p.advertising?.localName ?? p.name ?? 'Unnamed sensor';
 
-type CardActions = { test: (sensor: Peripheral) => void; setUp: (sensor: Peripheral) => void; placed: (id: string, first: boolean, bottom: number, height: number) => void };
+type CardActions = {
+  test: (sensor: Peripheral) => void; setUp: (sensor: Peripheral) => void; toggle: (id: string) => void;
+  placed: (id: string, first: boolean, bottom: number, height: number) => void;
+};
 type CardProps = {
   sensor: Peripheral; mine?: { kind: Kind; step: string }; entry?: BatchEntry; outcome?: CardOutcome;
   siteName: string | null; batching: boolean; first: boolean; actions: CardActions;
+  compact?: boolean; open?: boolean; group?: Group;
+  seen?: number; // when the sensor was first listed (Date.now)
+  tight?: boolean; // a folded row after another one: rows sit closer than cards
 };
 
 // One sensor. Memoized: with 200 sensors, a scan update or one sensor's progress redraws only the cards it changed.
-const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, siteName, batching, first, actions }: CardProps) {
+// Past a few sensors (`compact`) it is a one-line row, its group's shape, its state and its signal; a tap opens it in
+// place into the full card (the same view grows, as the result drawer does), another tap folds it back.
+const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, siteName, batching, first, actions, compact = false, open = false, tight = false, group = 'left', seen = 0 }: CardProps) {
   const active = !!mine;
   const state = sensorState(sensor.advertising);
   const settable = state !== 'not-staged'; // a set-up sensor can be reconfigured with a technician code
   const STEPS: [string, string][] = mine?.kind === 'setup' ? SETUP_STEPS : TEST_STEPS;
   const step = Math.max(0, STEPS.findIndex(([key]) => key === mine?.step));
+  const folded = compact && !open;
+  // A sensor the batch stopped on before trying it (code locked or expired) has no result to say why.
+  const failure = entry?.state === 'stopped' || (entry?.state === 'failed' && (folded || (!outcome && !active))) ? entry : null;
+  const why = failure && `${failure.state === 'stopped' ? 'Not tried: ' : ''}${reasonText(failure.reason, failure.step ?? 'join')}`;
+  // The row's line: what happens now, or the first sentence of why it failed (the card has the rest).
+  const line = mine ? `${STEPS[step][1]}… ${step + 1}/${STEPS.length}`
+    : entry?.state === 'queued' ? 'Waiting in the batch'
+    : why ? why.split('.')[0]
+    : entry?.state === 'ok' && state !== 'offline' ? `Joined the Wi‑Fi · ${entry.ipv4 ?? ''}`
+    : state ? stateText(state, siteName) : 'State unknown';
+  const head = folded ? (
+    <View style={s.rowBody}>
+      <Swatch group={group} />
+      <View style={s.grow}>
+        <Text style={s.rowName}>{nameOf(sensor)}</Text>
+        <Text style={[s.rowLine, group === 'failed' && !mine && s.stateWarn, !!mine && s.stateOk]} numberOfLines={1}>{line}</Text>
+      </View>
+      {sensor.rssi !== 127 && <Text style={s.rowSignal} maxFontSizeMultiplier={1.3}>{sensor.rssi} dBm</Text>}
+    </View>
+  ) : (
+    <View>
+      <Text style={s.sensorName}>{nameOf(sensor)}</Text>
+      {state && <Text style={[s.small, state === 'online' && s.stateOk, state === 'offline' && s.stateWarn]}>{stateText(state, siteName)}</Text>}
+      {entry?.state === 'queued' && <Text style={s.small}>Waiting in the batch</Text>}
+      {why && <Text style={s.stateWarnLine}>{why}</Text>}
+      {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
+    </View>
+  );
   return (
-    <Animated.View entering={appear} layout={layout} style={[s.card, s.clip]}
+    <Animated.View entering={!compact || Date.now() - seen < FRESH_MS ? appear : undefined} layout={layout}
+      style={[folded ? s.sensorRow : s.card, s.clip, folded && group === 'failed' && s.requirementTodo, tight && s.tight]}
       // Measured once, before any result drawer opens, so a result never resizes the radar.
       onLayout={event => { const box = event.nativeEvent.layout; actions.placed(sensor.id, first, box.y + box.height, box.height); }}>
+      {/* The same pressable folded and open, so VoiceOver keeps its place. */}
+      {compact ? (
+        <Pressable onPress={() => actions.toggle(sensor.id)} accessibilityRole="button" accessibilityState={{ expanded: open }}
+          accessibilityLabel={folded ? `${nameOf(sensor)}, ${line}${sensor.rssi !== 127 ? `, signal ${sensor.rssi} dBm` : ''}` : undefined}
+          accessibilityHint={open ? 'Folds it back into the list' : 'Opens it to test or set it up'}>
+          {head}
+        </Pressable>
+      ) : head}
+      {!folded && (
+        <>
             <View style={s.row}>
-              <View style={s.grow}>
-                <Text style={s.sensorName}>{nameOf(sensor)}</Text>
-                {state && <Text style={[s.small, state === 'online' && s.stateOk, state === 'offline' && s.stateWarn]}>{stateText(state, siteName)}</Text>}
-                {entry?.state === 'queued' && <Text style={s.small}>Waiting in the batch</Text>}
-                {/* A sensor the batch stopped on before trying it (code locked or expired) has no result to say why. */}
-                {(entry?.state === 'stopped' || (entry?.state === 'failed' && !outcome && !active)) && (
-                  <Text style={s.stateWarnLine}>{entry.state === 'stopped' && 'Not tried: '}{reasonText(entry.reason, 'join')}</Text>
-                )}
-                {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
-              </View>
-            </View>
-            <View style={s.row}>
-              <Pressable style={[s.secondary, s.grow, (batching || (active && mine.kind !== 'test')) && s.disabled]} disabled={active || batching} onPress={() => actions.test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
+              <Pressable style={[s.secondary, s.grow, active && mine.kind !== 'test' && s.disabled]} disabled={active} onPress={() => actions.test(sensor)} accessibilityRole="button" accessibilityLabel={`Test ${nameOf(sensor)}`}>
                 {mine?.kind === 'test' ? <ActivityIndicator color={C.ink} accessibilityLabel="Testing" /> : <Text style={s.secondaryText}>Test</Text>}
               </Pressable>
               <Pressable style={[s.primary, s.grow, ((active && mine.kind !== 'setup') || !settable || batching) && s.disabled]} disabled={active || !settable || batching} onPress={() => actions.setUp(sensor)} accessibilityRole="button"
@@ -163,11 +211,28 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
                 )}
               </Animated.View>
             )}
+        </>
+      )}
     </Animated.View>
   );
 });
 
-export default function App() {
+// A clockwise arrow drawn with views (the app has no icon library): an open ring and its arrowhead.
+function RefreshIcon() {
+  return (
+    <View style={s.refreshIcon} importantForAccessibility="no-hide-descendants">
+      <View style={s.refreshRing} />
+      <View style={s.refreshHead} />
+    </View>
+  );
+}
+
+type Mode = { demo: Demo | null; onDemo: (on: boolean) => void };
+
+function Provide({ demo, onDemo }: Mode) {
+  // The demo's simulated wing stands in for the radio; everything else is the same app.
+  const radio = demo ? (demo.radio as unknown as NonNullable<typeof BleManager>) : BleManager;
+  const radioStarted = demo ? Promise.resolve() : bleStarted;
   const [fontsLoaded, fontError] = useFonts({ Onest_400Regular, Onest_500Medium, Onest_600SemiBold });
   const [ble, setBle] = useState<BleState>(BleState.Unknown);
   const [sensors, setSensors] = useState<Record<string, Peripheral>>({});
@@ -184,29 +249,52 @@ export default function App() {
   const [tokenSheet, setTokenSheet] = useState({ open: false, asked: false, n: 0 });
   const [batch, setBatch] = useState<Record<string, BatchEntry>>({});
   const [summary, setSummary] = useState<BatchSummary | null>(null);
-  const [filter, setFilter] = useState<'all' | 'failed' | 'done' | 'left'>('all');
+  const [filter, setFilter] = useState<Group | 'all'>('all');
   const flow = useRef(new SetupFlow(null)); // token → site Wi-Fi → join; holds its own state (src/flow.ts)
   const busy = useRef(new Set<string>()); // synchronous guard: two taps in one frame never start two runs on a sensor
   const batchActive = useRef(false);
+  const batchControl = useRef<BatchControl>({}); // adds sensors to the running batch
+  const [batchStarted, setBatchStarted] = useState<{ ms: number; size: number } | null>(null); // for the time left
   const afterCredentials = useRef<(() => void) | null>(null); // a batch waiting for the token or the site Wi-Fi
   const sensorsRef = useRef(sensors);
   sensorsRef.current = sensors;
   const measuredFirst = useRef(false);
-  const focused = useRef<string | null>(null); // the card being tested or set up: kept fully on screen
+  const focused = useRef<{ id: string; until: number } | null>(null); // the card opened or started by hand, for FOCUS_MS
+  const [openId, setOpenId] = useState<string | null>(null); // the compact row opened into its card, one at a time
+  // What a tab has shown since it was tapped: those sensors stay listed, updated in place, until the next tap.
+  const kept = useRef({ list: [] as string[], set: new Set<string>() });
+  const stickyOpen = useRef<string | null>(null); // a row opened while in progress, kept in the block until closed
+  const slotOf = useRef(new Map<string, number>()); // IN PROGRESS: sensor → its row
+  const seenAt = useRef(new Map<string, number>()); // when each sensor was first listed
+  const heardAt = useRef(new Map<string, number>()); // its last advertisement, for Refresh
 
   useEffect(() => {
+    if (demo) { // the demo's code and site, in memory: nothing saved is read or written
+      setTokenInfo({ name: demo.token.name, customers: demo.token.customers, expires: demo.token.expires });
+      setSites([demo.site]);
+      setActiveId(demo.site.id);
+      act(flow.current.tokenReady(demo.token));
+      act(flow.current.networkSaved({ ssid: demo.site.ssid, password: demo.password }));
+      return;
+    }
     loadSites().then(saved => { setSites(saved.sites); setActiveId(saved.activeId); });
     loadSetups().then(setSetups);
     loadTokenInfo().then(setTokenInfo);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once per mode: switching remounts
   // The site password and the technician code are unlocked once per session and kept in memory only: leaving the
-  // app locks them again.
+  // app for more than LOCK_AFTER_MS locks them again (the demo's cannot be re-entered, so they stay).
+  const leftAt = useRef<number | null>(null);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
-      if (state === 'background') { flow.current.network = null; flow.current.token = null; }
+      if (demo) return;
+      if (state === 'background') leftAt.current = Date.now();
+      if (state === 'active' && leftAt.current !== null) {
+        if (Date.now() - leftAt.current > LOCK_AFTER_MS) { flow.current.network = null; flow.current.token = null; }
+        leftAt.current = null;
+      }
     });
     return () => subscription.remove();
-  }, []);
+  }, [demo]);
   const activeSite = sites.find(site => site.id === activeId) ?? null;
   const liveToken = tokenInfo && !expired(tokenInfo) ? tokenInfo : null; // an expired code counts as missing
   const activeRef = useRef(activeSite); // a setup finishes renders later: read the site in use then, not a stale one
@@ -216,14 +304,14 @@ export default function App() {
     if (!siteId) return;
     setSetups(current => {
       const next = { ...current, [sensorName]: siteId };
-      saveSetups(next);
+      if (!demo) saveSetups(next);
       return next;
     });
   };
 
   useEffect(() => {
-    const ble = BleManager;
-    if (!ble || !bleStarted) return;
+    const ble = radio;
+    if (!ble || !radioStarted) return;
     // The latest advertisement of each sensor waits here; one state update applies them all (docs/BENCHMARKS.md).
     const latest = new Map<string, Peripheral>();
     const flush = setInterval(() => {
@@ -237,22 +325,23 @@ export default function App() {
     }, SCAN_FLUSH_MS);
     const subscriptions = [
       ble.onDidUpdateState(({ state }) => setBle(state)),
-      ble.onDiscoverPeripheral(peripheral => { latest.set(peripheral.id, peripheral); }),
+      ble.onDiscoverPeripheral(peripheral => { latest.set(peripheral.id, peripheral); heardAt.current.set(peripheral.id, Date.now()); }),
     ];
-    bleStarted.then(() => ble.checkState()).then(setBle).catch(() => setBle(BleState.Unsupported));
+    radioStarted.then(() => ble.checkState()).then(setBle).catch(() => setBle(BleState.Unsupported));
     return () => { clearInterval(flush); subscriptions.forEach(subscription => subscription.remove()); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- the radio is fixed for this mode
 
   const ready = ble === BleState.On;
   const anyRunning = Object.keys(running).length > 0;
-  const scanning = ready && !anyRunning && !paused; // the radio scan pauses during a test; the radar keeps moving
+  // The scan goes on during a batch and a test: sensors found meanwhile can join the running batch.
+  const scanning = ready && !paused;
 
-  // Scan continuously while idle, reporting every advertisement, so a card follows its sensor's state within a second
+  // Scan continuously, during batches too, reporting every advertisement, so a card follows its sensor's state within a second
   // (without duplicates iOS skips sensors for whole rounds); `changed` keeps re-renders to real changes.
   // Only devices advertising the IoT service UUID are listed.
-  // ponytail: a sensor that stops advertising stays listed; prune by last-seen time if that confuses technicians.
+  // A sensor that stops advertising stays listed until Refresh (STALE_MS).
   useEffect(() => {
-    const ble = BleManager;
+    const ble = radio;
     if (!ble || !scanning) return;
     let live = true;
     const round = () => { if (live) ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: SCAN_SECONDS, allowDuplicates: true }).catch(() => {}); };
@@ -265,12 +354,15 @@ export default function App() {
   const run = async <R,>(sensor: Peripheral, kind: Kind, work: (onStep: (step: string) => void) => Promise<{ outcome: CardOutcome; detail: string; result: R }>): Promise<R | undefined> => {
     if (busy.current.has(sensor.id)) return undefined;
     busy.current.add(sensor.id);
-    if (!batchActive.current) focused.current = sensor.id; // a batch moves through the list: no scrolling to each card
-    // Testing or setting up folds the radar: the card gets the room, far from the screen's rounded bottom edge.
-    if (y.get() < travel - 1) fold(RESIZE);
+    // Testing or setting up folds the radar: the card gets the room, far from the screen's rounded bottom edge. A batch
+    // folds it once when it starts, and never scrolls to each card: the technician may be reading elsewhere.
+    if (!batchActive.current) {
+      focused.current = { id: sensor.id, until: Date.now() + FOCUS_MS };
+      setOpenId(sensor.id); // stays open if the list turns compact during the run
+      if (y.get() < travel - 1) fold(RESIZE);
+    }
     setRunning(map => ({ ...map, [sensor.id]: { kind, step: 'connect' } }));
     try {
-      await BleManager?.stopScan().catch(() => {}); // iOS connects more reliably without a concurrent scan
       const started = Date.now();
       const { outcome, detail, result } = await work(step => setRunning(map => ({ ...map, [sensor.id]: { kind, step } })));
       await new Promise(resolve => setTimeout(resolve, MIN_PROGRESS_MS - (Date.now() - started))); // UI only: durations stay real
@@ -293,8 +385,8 @@ export default function App() {
     }
   };
 
-  const test = (sensor: Peripheral) => BleManager && run<ProbeResult>(sensor, 'test', async onStep => {
-    const result = await probe(BleManager!, sensor.id, onStep);
+  const test = (sensor: Peripheral) => radio && run<ProbeResult>(sensor, 'test', async onStep => {
+    const result = await probe(radio, sensor.id, onStep);
     return result.ok
       ? { outcome: { ok: true, title: '“world” received', text: `Replied in ${result.ms} ms.` }, detail: `✓ hello ${result.ms} ms`, result }
       : { outcome: { ok: false, title: 'Test failed', text: failureText(result) }, detail: `! hello ${result.step} · ${result.reason}`, result };
@@ -304,16 +396,16 @@ export default function App() {
     let result: SetupResult = { ok: false, step: 'connect', reason: 'rejected' };
     const token = flow.current.token;
     const single = !batchActive.current; // decided at the start: a batch may begin while this run lasts
-    const done = BleManager && token && await run<SetupResult>(sensor, 'setup', async onStep => {
+    const done = radio && token && await run<SetupResult>(sensor, 'setup', async onStep => {
       try {
-        result = await setup(BleManager!, sensor.id, nameOf(sensor), token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt });
+        result = await setup(radio, sensor.id, nameOf(sensor), token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority });
       } finally {
         flow.current.finished(sensor.id, result);
       }
       if (result.ok) remember(nameOf(sensor));
-      // A single run after a batch keeps that batch's counters, order and Retry failed true.
-      const entry: BatchEntry = result.ok ? { state: 'ok', ipv4: result.ipv4 } : { state: 'failed', reason: result.reason };
-      if (single) setBatch(map => (map[sensor.id] ? { ...map, [sensor.id]: entry } : map));
+      // A setup by hand is kept like a batch result: the overall counts it, a failure sorts first and Retry failed has it.
+      const entry: BatchEntry = result.ok ? { state: 'ok', ipv4: result.ipv4 } : { state: 'failed', reason: result.reason, step: result.step };
+      if (single) setBatch(map => ({ ...map, [sensor.id]: entry }));
       return result.ok
         ? { outcome: { ok: true, title: 'Device connected', text: `Joined ${site.ssid} · ${result.ipv4}` }, detail: `✓ wi-fi ${result.ipv4}`, result }
         : { outcome: { ok: false, title: 'Wi‑Fi setup failed', text: reasonText(result.reason, result.step) }, detail: `! wi-fi ${result.step} · ${result.reason}`, result };
@@ -343,7 +435,10 @@ export default function App() {
   };
   const resumeCredentials = () => { const next = afterCredentials.current; if (next) withCredentials(next); };
   // The technician code: Face ID unlocks the saved one, unless it has expired; otherwise the code sheet asks for it.
+  // The demo has its own code and site, in memory: it never opens the code or site sheets, which use the saved ones.
+  const demoOnly = () => { flow.current.cancelWaiting(); afterCredentials.current = null; };
   const askToken = async () => {
+    if (demo) return demoOnly();
     if (liveToken) {
       const token = await unlockToken();
       if (token && !tokenProblem(token)) return tokenReady(token);
@@ -362,21 +457,25 @@ export default function App() {
     if (tokenSheet.asked) { flow.current.cancelWaiting(); afterCredentials.current = null; }
     shutTokenSheet();
   };
-  const askNetwork = () => { if (activeSite) unlock(activeSite); else setChoosingSite(true); };
+  const askNetwork = () => {
+    if (demo) return demoOnly();
+    if (activeSite) unlock(activeSite); else setChoosingSite(true);
+  };
   // Sites: Face ID unlocks the active site's password, then any sensor waiting for it carries on.
   const use = (site: Site, password: string) => {
     setActiveId(site.id);
-    setActiveSite(site.id);
+    if (!demo) setActiveSite(site.id);
     act(flow.current.networkSaved({ ssid: site.ssid, password } satisfies SiteNetwork));
     resumeCredentials();
   };
 
-  // One tap for every ready sensor in range: three at a time (src/batch.ts), each card showing its own progress.
+  // One tap for every ready sensor in range: six at a time (src/batch.ts), each card showing its own progress.
   const startBatch = (ids: string[]) => withCredentials(async () => {
     if (batchActive.current || ids.length === 0) return;
     batchActive.current = true;
+    if (y.get() < travel - 1) fold(FOLD); // slowly, as at discovery: nothing waits on it
     setSummary(null);
-    setFilter('all');
+    setBatchStarted({ ms: Date.now(), size: ids.length });
     try {
       // Auto-lock would leave the app, which locks the code and the site password: the screen stays on until the end.
       await activateKeepAwakeAsync('batch').catch(() => {});
@@ -389,7 +488,7 @@ export default function App() {
           return Promise.resolve<SetupResult>({ ok: false, step: 'connect', reason: 'rejected' });
         }
         return join(sensor, action.site, action.attempt);
-      }, (id, entry) => setBatch(map => ({ ...map, [id]: entry })));
+      }, (id, entry) => setBatch(map => ({ ...map, [id]: entry })), undefined, batchControl.current);
       setSummary(result);
       AccessibilityInfo.announceForAccessibility(`${result.ok} set up, ${result.failed} failed${result.stopped ? `, ${result.stopped} not tried` : ''}.`);
     } finally {
@@ -397,6 +496,11 @@ export default function App() {
       deactivateKeepAwake('batch').catch(() => {});
     }
   });
+  // Sensors found while a batch runs join its queue; the time left counts them.
+  const addToBatch = (ids: string[]) => {
+    batchControl.current.add?.(ids);
+    setBatchStarted(started => started && { ...started, size: started.size + ids.length });
+  };
   const unlock = async (site: Site) => {
     const password = await unlockPassword(site);
     if (password) use(site, password);
@@ -414,16 +518,38 @@ export default function App() {
   const closeSites = () => { flow.current.cancelWaiting(); afterCredentials.current = null; setChoosingSite(false); };
 
   const togglePause = () => setPaused(value => !value);
+  // Refresh: sensors gone quiet leave the list (not one in a batch), and the search resumes.
+  const refresh = () => {
+    if (paused) { setPaused(false); return; } // nothing was heard while paused: resume before judging who is gone
+    const now = Date.now();
+    const gone = Object.keys(sensors).filter(id => !running[id] && !batch[id] && now - (heardAt.current.get(id) ?? 0) > STALE_MS);
+    gone.forEach(id => seenAt.current.delete(id)); // back later, it fades in again
+    if (gone.length) setSensors(found => Object.fromEntries(Object.entries(found).filter(([id]) => !gone.includes(id))));
+    setPaused(false);
+    AccessibilityInfo.announceForAccessibility(gone.length ? `${gone.length} sensors no longer heard were removed` : 'Search resumed');
+  };
+  // Not while a test or a batch runs: their sensors belong to the mode being left.
+  const askDemo = () => {
+    if (Object.keys(running).length > 0 || batchActive.current) return;
+    if (demo) Alert.alert('Leave the demo?', 'Back to the sensors around you.', [{ text: 'Stay', style: 'cancel' }, { text: 'Leave', onPress: () => onDemo(false) }]);
+    else Alert.alert('Demo with simulated sensors', '200 simulated sensors, with a demo technician code and site. Nothing goes over Bluetooth, and your saved code and sites are not used.',
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Start the demo', onPress: () => onDemo(true) }]);
+  };
   // Cards get one unchanging actions object (so memo holds); it calls this render's functions.
   const placed = (id: string, first: boolean, bottom: number, height: number) => {
     if (first && !measuredFirst.current) { measuredFirst.current = true; setFirstH(height); }
-    if (id === focused.current) reveal(bottom);
+    if (id === focused.current?.id && Date.now() < focused.current.until) reveal(bottom, height);
   };
-  const current = useRef({ test, setUp, placed });
-  current.current = { test, setUp, placed };
+  const toggle = (id: string) => {
+    setOpenId(open => (open === id ? null : id));
+    focused.current = { id, until: Date.now() + FOCUS_MS };
+  };
+  const current = useRef({ test, setUp, toggle, placed });
+  current.current = { test, setUp, toggle, placed };
   const [cardActions] = useState<CardActions>(() => ({
     test: sensor => { current.current.test(sensor); },
     setUp: sensor => current.current.setUp(sensor),
+    toggle: id => current.current.toggle(id),
     placed: (id, first, bottom, height) => current.current.placed(id, first, bottom, height),
   }));
 
@@ -436,29 +562,33 @@ export default function App() {
   const [firstH, setFirstH] = useState(130); // first sensor card without its result drawer
   const [collapsed, setCollapsed] = useState(false);
   const [locked, setLocked] = useState(false); // compact mode holds: the list's top is the scroll edge
-  const found = Object.keys(sensors).length;
+  const [introDone, setIntroDone] = useState(false);
+  const found = introDone ? Object.keys(sensors).length : 0; // sensors heard during the intro join after it
   // The large radar shrinks on small screens or with large text, so the first sensor stays above the fold.
-  // Room kept under the large radar: the Site Wi-Fi card and the whole first sensor card (buttons included).
-  const peek = siteH + GAP + firstH + GAP;
-  const room = bodyH - titleH - 2 * LARGE_GAP - CAPTION_H - (found > 0 ? peek : 0);
+  // Room kept under the large radar: the requirement rows from launch, then the whole first sensor card (buttons
+  // included) once there is one.
+  const peek = siteH + GAP + (found > 0 ? firstH + GAP : 0);
+  const room = bodyH - titleH - 2 * LARGE_GAP - CAPTION_H - peek;
   const large = Math.round(Math.min(SIZES[1], Math.max(MIN_LARGE, room)));
   const largeH = titleH + LARGE_GAP + large + LARGE_GAP + CAPTION_H; // panel height in large mode
   const travel = Math.max(largeH - COMPACT_H, 1); // scroll distance from large to compact
   const panelW = width - 2 * PAD;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const y = useSharedValue(0);
-  const base = useSharedValue(0); // large panel height: the whole screen while nothing is found
-
-  // Only a change in the sensor count animates the panel; layout measurements (safe area, title height)
-  // apply instantly, so the radar never drifts on launch.
-  const shownFor = useRef(found);
-  useEffect(() => {
-    const target = found === 0 ? bodyH : largeH;
-    const countChanged = (shownFor.current === 0) !== (found === 0);
-    shownFor.current = found;
-    base.value = countChanged ? withTiming(target, RESIZE) : target;
-  }, [found, bodyH, largeH, base]);
+  const base = useSharedValue(0); // large panel height
+  const largeV = useSharedValue(SIZES[1]); // large radar size
+  // The first layout applies at once, so the radar never drifts on launch. Every later change (sensors found, a row
+  // measured, large text) animates from where the panel is, on the curve of the list's layout transitions: nothing
+  // jumps, even when a measurement lands in the middle of an animation.
+  const panelTo = useRef<{ height: number; size: number } | null>(null);
   const measured = bodyH > 0 && titleH > 0;
+  useEffect(() => {
+    if (!measured) return;
+    const was = panelTo.current;
+    if (was?.height !== largeH) base.value = was ? withTiming(largeH, RESIZE) : largeH;
+    if (was?.size !== large) largeV.value = was ? withTiming(large, RESIZE) : large;
+    panelTo.current = { height: largeH, size: large };
+  }, [measured, largeH, large, base, largeV]);
 
   // Launch: the title rises in, then the dot springs out and the waves start; skipped with Reduce Motion.
   const reduceMotion = useReducedMotion();
@@ -467,10 +597,12 @@ export default function App() {
   const captionIn = useSharedValue(0);
   useEffect(() => {
     if (!measured) return;
-    if (reduceMotion) { titleIn.value = 1; radarIn.value = 1; captionIn.value = 1; return; }
+    const timer = setTimeout(() => setIntroDone(true), reduceMotion ? 0 : INTRO_MS);
+    if (reduceMotion) { titleIn.value = 1; radarIn.value = 1; captionIn.value = 1; return () => clearTimeout(timer); }
     titleIn.value = withTiming(1, INTRO_TITLE);
     radarIn.value = withDelay(150, withSpring(1, INTRO_SPRING));
     captionIn.value = withDelay(450, withTiming(1, INTRO_TITLE));
+    return () => clearTimeout(timer);
   }, [measured]); // eslint-disable-line react-hooks/exhaustive-deps -- once, on the first layout
 
   // A few sensors fit under the large radar, which stays put; only the finger folds it. Past AUTO_FOLD_AFTER the list
@@ -486,6 +618,7 @@ export default function App() {
       if (finished) setLock(true); // compact mode holds, as after a manual fold
     }));
   };
+  // Crowded is also when the overall card and the compact rows appear: folding at once shows the card whole.
   useEffect(() => { if (crowded) fold(FOLD); }, [crowded]); // eslint-disable-line react-hooks/exhaustive-deps -- once, when the list gets crowded
 
   // Compact mode is sticky: scrolling back up the list stops at its top (native rubber band, radar unchanged).
@@ -498,9 +631,12 @@ export default function App() {
     scheduleOnRN(setLocked, value);
   };
   // When a card opens its drawer below the fold, scroll just enough to show it whole; the radar follows the scroll.
-  const reveal = (bottom: number) => {
-    const target = bottom + GAP + BOTTOM_INSET - bodyH; // clear of the home indicator and the rounded corners
-    if (target > y.get() + 1) scrollRef.current?.scrollTo({ y: target, animated: true });
+  // Up as well: a card opened while another one above it folds back can land under the folded radar.
+  const reveal = (bottom: number, height: number) => {
+    const top = bottom - height - COMPACT_H - GAP; // its top, clear of the folded radar
+    const target = bottom + GAP + BOTTOM_INSET - bodyH; // its bottom, clear of the home indicator and the rounded corners
+    if (top < y.get() - 1) scrollRef.current?.scrollTo({ y: Math.max(top, travel), animated: true });
+    else if (target > y.get() + 1) scrollRef.current?.scrollTo({ y: target, animated: true });
   };
 
   const onScroll = useAnimatedScrollHandler({
@@ -524,7 +660,7 @@ export default function App() {
     const progress = Math.min(Math.max(offset / travel, 0), 1); // 0 large, 1 compact
     const pull = Math.max(-offset, 0); // finger dragging past the top
     const top = base.value + pull; // the large panel stretches with the pull
-    const size = interpolate(progress, [0, 1], [large * (1 + pull / 1500), SIZES[0]]);
+    const size = interpolate(progress, [0, 1], [largeV.value * (1 + pull / 1500), SIZES[0]]);
     return {
       progress, pull, size,
       height: interpolate(progress, [0, 1], [top, COMPACT_H]),
@@ -551,22 +687,57 @@ export default function App() {
   }));
   const compactCaption = useAnimatedStyle(() => ({ opacity: interpolate(geometry.value.progress, [0.7, 1], [0, 1], 'clamp') }));
 
-  const groupOf = (id: string) => batch[id]?.state;
-  const shown = Object.values(sensors)
-    .filter(sensor => {
-      const group = groupOf(sensor.id);
-      if (filter === 'failed') return group === 'failed' || group === 'stopped';
-      if (filter === 'done') return group === 'ok';
-      if (filter === 'left') return group === 'queued' || group === 'running';
-      return true;
-    })
-    .sort((a, b) => (ORDER[groupOf(a.id) ?? ''] ?? 4) - (ORDER[groupOf(b.id) ?? ''] ?? 4));
-  const counts = Object.values(batch).reduce((n, entry) => ({ ...n, [entry.state]: (n[entry.state] ?? 0) + 1 }), {} as Record<string, number>);
-  const tally = {
-    all: Object.keys(batch).length, done: counts.ok ?? 0,
-    failed: (counts.failed ?? 0) + (counts.stopped ?? 0), left: (counts.queued ?? 0) + (counts.running ?? 0),
+  // The overall: every sensor in one of three groups (src/wing.ts); a tapped group filters the cards.
+  const groups: Record<string, Group> = {};
+  const counts: Record<Group, number> = { done: 0, failed: 0, left: 0 };
+  for (const sensor of Object.values(sensors)) {
+    const group = groupOf(sensorState(sensor.advertising), batch[sensor.id]);
+    groups[sensor.id] = group;
+    counts[group]++;
+  }
+  const overall = crowded; // a few sensors are all on screen: no overall, no tabs
+  const shownGroup = overall ? filter : 'all';
+  // Nothing moves or vanishes under the thumb: the list keeps the scan order, and a tab keeps every sensor it has shown
+  // (a retry or a batch changes their state in place) until it is tapped again; sensors joining its group are added
+  // at the end. The Errors tab starts grouped by cause, so the same fix reads once down the list.
+  const cause = (id: string) => batch[id]?.reason ?? '';
+  const pickFilter = (next: Group | 'all') => {
+    const list = Object.keys(groups).filter(id => groups[id] === next);
+    if (next === 'failed') list.sort((a, b) => cause(a).localeCompare(cause(b)));
+    kept.current = { list, set: new Set(list) };
+    setFilter(next);
+    setOpenId(null);
   };
-  // Sensors this batch already tried are offered again through Retry failed, not here.
+  if (shownGroup !== 'all') {
+    for (const id of Object.keys(groups)) {
+      if (groups[id] === shownGroup && !kept.current.set.has(id)) { kept.current.list.push(id); kept.current.set.add(id); }
+    }
+  }
+  const listed = !introDone ? [] : shownGroup === 'all' ? Object.values(sensors) : kept.current.list.map(id => sensors[id]).filter(Boolean);
+  // Not set up: the sensors being set up right now move to the IN PROGRESS block on top and leave the list below, which
+  // is what is left to do; once done they belong to Set up or Errors. A row opened while in progress stays in the block
+  // with its result until it is closed.
+  if (running[openId ?? '']) stickyOpen.current = openId;
+  else if (stickyOpen.current !== openId) stickyOpen.current = null; // closed, or another row opened
+  const inBlock = (id: string) => (groups[id] === 'left' && !!running[id]) || id === stickyOpen.current;
+  // Each sensor keeps its slot while it is in the block (a finished one does not shift the others under the thumb).
+  const inProgress: Peripheral[] = [];
+  if (shownGroup === 'left') {
+    const slots = slotOf.current;
+    for (const id of [...slots.keys()]) if (!inBlock(id) || !sensors[id]) slots.delete(id);
+    for (const sensor of Object.values(sensors)) {
+      if (!inBlock(sensor.id) || slots.has(sensor.id)) continue;
+      let free = 0;
+      while ([...slots.values()].includes(free)) free++;
+      slots.set(sensor.id, free);
+    }
+    for (const [id, slot] of [...slots.entries()].sort((a, b) => a[1] - b[1])) inProgress[slot] = sensors[id];
+  }
+  const shown = shownGroup === 'left' ? Object.values(sensors).filter(sensor => groups[sensor.id] === 'left' && !inBlock(sensor.id)) : listed;
+  const now = Date.now();
+  for (const id of Object.keys(sensors)) if (!seenAt.current.has(id)) seenAt.current.set(id, now);
+  const compact = crowded; // past a few sensors, one row each; a tap opens it in place
+  // Sensors already tried this session, in a batch or by hand, are offered again through Retry failed, not here.
   const readyIds = Object.values(sensors).filter(sensor => sensorState(sensor.advertising) === 'ready' && !running[sensor.id] && !batch[sensor.id]).map(sensor => sensor.id);
   // Not a sensor that failed to prove it is genuine (retrying would only hand an impostor more time), nor one being set
   // up by hand right now.
@@ -574,6 +745,19 @@ export default function App() {
     .filter(([id, entry]) => !running[id] && ((entry.state === 'failed' && entry.reason !== 'not-genuine') || entry.state === 'stopped'))
     .map(([id]) => id);
   const batching = batchActive.current;
+  // Under the overall: the batch's progress while it runs, otherwise what "not set up" is made of.
+  const inBatch = Object.values(batch);
+  const runningNow = inBatch.filter(entry => entry.state === 'running').length;
+  const waiting = inBatch.filter(entry => entry.state === 'queued').length;
+  // Only this batch: entries from earlier batches stay in `batch`, but none of them is running or waiting.
+  const eta = batching && batchStarted ? minutesLeft(batchStarted.ms, Date.now(), batchStarted.size - runningNow - waiting, runningNow + waiting) : null;
+  const untried = (state: SensorState | null) => Object.values(sensors).filter(sensor => !batch[sensor.id] && sensorState(sensor.advertising) === state).length;
+  const notPrepared = untried('not-staged');
+  const unknown = untried(null); // older firmware advertises no state
+  const overallLine = (batching
+    ? [`${runningNow} in progress`, waiting > 0 && `${waiting} waiting`, eta && `about ${eta} min left`]
+    : [readyIds.length > 0 && `${readyIds.length} ready to set up`, notPrepared > 0 && `${notPrepared} not prepared`, unknown > 0 && `${unknown} state unknown`]
+  ).filter(Boolean).join(' · ') || null;
   // One sheet at a time, the site sheet first: a sheet asked for while the other one is still sliding away waits for
   // it to leave.
   const siteGone = useGone(choosingSite);
@@ -590,6 +774,12 @@ export default function App() {
       : found === 0 ? 'Looking for IoT sensors…'
       : `${found} sensor${found > 1 ? 's' : ''} nearby · still searching`
   );
+  const refreshButton = found > 0 && ready && !anyRunning && (
+    <Pressable onPress={refresh} hitSlop={13} accessibilityRole="button" accessibilityLabel="Refresh the list"
+      accessibilityHint="Removes the sensors no longer heard and searches again">
+      <RefreshIcon />
+    </Pressable>
+  );
 
   return (
     <SafeAreaProvider>
@@ -597,12 +787,19 @@ export default function App() {
       <SafeAreaView style={s.screen} edges={['top', 'left', 'right']}>
         <StatusBar style="dark" />
         <View style={[s.header, s.headerFixed]}>
-          <View style={s.brand}>
+          {/* A tap on the logo opens the demo with simulated sensors, or leaves it (each asks first). */}
+          <Pressable style={s.brand} onPress={askDemo} hitSlop={8} accessibilityRole="button"
+            accessibilityLabel={demo ? 'IoT provide. Leave the demo' : 'IoT provide.'} accessibilityHint={demo ? undefined : 'Opens a demo with simulated sensors'}>
             {/* IoT mark from example.com's site header (SVG rendered to a transparent PNG). */}
-            <Image source={require('./assets/iot-mark.png')} style={s.mark} accessibilityLabel="IoT" />
+            <Image source={require('./assets/iot-mark.png')} style={s.mark} accessibilityIgnoresInvertColors />
             <Text style={s.wordmark} maxFontSizeMultiplier={1.2}>provide.</Text>
-          </View>
-          <Text style={s.chip} maxFontSizeMultiplier={1.2}>WI‑FI SETUP</Text>
+          </Pressable>
+          {/* In the demo the chip says so, and a tap on it leaves too. */}
+          {demo ? (
+            <Pressable onPress={askDemo} hitSlop={8} accessibilityRole="button" accessibilityLabel="Demo with simulated sensors. Leave the demo">
+              <Text style={[s.chip, s.chipDemo]} maxFontSizeMultiplier={1.2}>DEMO</Text>
+            </Pressable>
+          ) : <Text style={s.chip} maxFontSizeMultiplier={1.2}>WI‑FI SETUP</Text>}
         </View>
 
         <View style={s.body} onLayout={event => setBodyH(event.nativeEvent.layout.height)}>
@@ -610,55 +807,68 @@ export default function App() {
           <Animated.ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} scrollEnabled={found > 0}
             snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}
             contentContainerStyle={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }]}>
-          {found > 0 && (
-            // Compact requirements, not cards: the room goes to the sensors.
-            <View style={s.requirements} onLayout={event => setSiteH(event.nativeEvent.layout.height)}>
-              <Pressable style={[s.requirement, !liveToken && s.requirementTodo]} onPress={() => setTokenSheet(sheet => ({ open: true, asked: false, n: sheet.n + 1 }))}
+          {measured && (
+            // Compact requirements, not cards: the room goes to the sensors. Shown from launch, after the dot.
+            <Animated.View entering={afterDot} layout={layout} style={s.requirements} onLayout={event => setSiteH(event.nativeEvent.layout.height)}>
+              <Pressable style={[s.requirement, !liveToken && s.requirementTodo]} disabled={!!demo} onPress={() => setTokenSheet(sheet => ({ open: true, asked: false, n: sheet.n + 1 }))}
                 accessibilityRole="button" accessibilityLabel={liveToken ? `Technician code of ${liveToken.name}, valid until ${expiryText(liveToken.expires)}. Change`
                   : tokenInfo ? `Technician code expired on ${expiryText(tokenInfo.expires)}. Change` : 'Technician code required. Add it'}>
                 <Text style={[s.check, liveToken ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{liveToken ? '✓' : '!'}</Text>
                 <Text style={[s.requirementText, s.grow]} numberOfLines={1}>
                   {liveToken ? `${liveToken.name} · until ${expiryText(liveToken.expires)}` : tokenInfo ? 'Technician code expired' : 'Technician code required'}
                 </Text>
-                <Text style={s.requirementAction}>{tokenInfo ? 'Change' : 'Add'}</Text>
+                {!demo && <Text style={s.requirementAction}>{tokenInfo ? 'Change' : 'Add'}</Text>}
               </Pressable>
-              <Pressable style={[s.requirement, !activeSite && s.requirementTodo]} onPress={() => setChoosingSite(true)}
+              <Pressable style={[s.requirement, !activeSite && s.requirementTodo]} disabled={!!demo} onPress={() => setChoosingSite(true)}
                 accessibilityRole="button" accessibilityLabel={activeSite ? `Site Wi-Fi: ${activeSite.name}. Change` : 'Site Wi-Fi required. Choose a site'}>
                 <Text style={[s.check, activeSite ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{activeSite ? '✓' : '!'}</Text>
                 <Text style={[s.requirementText, s.grow]} numberOfLines={1}>{activeSite ? activeSite.name : 'Site Wi‑Fi required'}</Text>
-                <Text style={s.requirementAction}>{activeSite ? 'Change' : 'Choose'}</Text>
+                {!demo && <Text style={s.requirementAction}>{activeSite ? 'Change' : 'Choose'}</Text>}
               </Pressable>
-            </View>
+            </Animated.View>
           )}
-          {found > 0 && (readyIds.length > 0 || Object.keys(batch).length > 0) && (
-            <View style={s.batch}>
-              {!batching && readyIds.length > 0 && (
-                <Pressable style={s.primary} onPress={() => startBatch(readyIds)} accessibilityRole="button">
-                  <Text style={s.primaryText}>Set up all ready ({readyIds.length})</Text>
+          {found > 0 && overall && (
+            // Fades in once the cards have moved down for it, instead of appearing under them.
+            <Animated.View entering={appear} layout={layout}><Summary counts={counts} line={overallLine} filter={shownGroup} onFilter={pickFilter} /></Animated.View>
+          )}
+          {found > 0 && (readyIds.length > 0 || failedIds.length > 0 || summary?.stopReason) && (
+            <Animated.View entering={appear} layout={layout} style={s.batch}>
+              {readyIds.length > 0 && !summary?.stopReason && (!batching || batchControl.current.add) && (
+                <Pressable style={s.primary} onPress={() => (batching ? addToBatch(readyIds) : startBatch(readyIds))} accessibilityRole="button">
+                  <Text style={s.primaryText}>{batching ? `Add ${readyIds.length} to the batch` : `Set up all ready (${readyIds.length})`}</Text>
                 </Pressable>
               )}
-              {Object.keys(batch).length > 0 && (
-                <View style={s.row} accessibilityRole="tablist">
-                  {([['all', 'All', 'All'], ['done', '✓', 'Done'], ['failed', '✗', 'Failed'], ['left', '⏳', 'Left']] as const).map(([key, glyph, spoken]) => (
-                    <Pressable key={key} style={[s.filter, filter === key && s.filterOn]} onPress={() => setFilter(filter === key ? 'all' : key)}
-                      accessibilityRole="tab" accessibilityState={{ selected: filter === key }} accessibilityLabel={`${spoken}, ${tally[key]}`}>
-                      <Text style={[s.filterText, filter === key && s.filterTextOn]}>{glyph} {tally[key]}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
               {summary?.stopReason && <Text style={s.warnText} accessibilityRole="alert">Stopped: {reasonText(summary.stopReason, 'join')}</Text>}
-              {!batching && summary && failedIds.length > 0 && (
+              {!batching && failedIds.length > 0 && (
                 <Pressable style={s.secondary} onPress={() => startBatch(failedIds)} accessibilityRole="button">
                   <Text style={s.secondaryText}>Retry failed ({failedIds.length})</Text>
                 </Pressable>
               )}
+            </Animated.View>
+          )}
+          {inProgress.length > 0 && <Text style={[s.label, s.listLabel]} maxFontSizeMultiplier={1.3}>IN PROGRESS · {inProgress.filter(Boolean).length}</Text>}
+          {Array.from(inProgress, (sensor, index) => !sensor ? (
+            // A slot between two sensors, freed until the next one starts: kept, so the rows below do not move.
+            <View key={`slot-${index}`} style={[s.sensorRow, s.emptySlot, index > 0 && s.tight]} />
+          ) : (
+            // Fixed slots, one per link: their content changes in place (a freshly mounted row shows blank for a moment).
+            <SensorCard key={`slot-${index}`} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={false}
+              outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
+              siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null} compact open={sensor.id === openId}
+              group={groups[sensor.id]} tight={index > 0 && sensor.id !== openId && inProgress[index - 1]?.id !== openId} />
+          ))}
+          {found > 0 && introDone && (
+            <View style={s.listHead}>
+              <Text style={[s.label, s.listLabel, s.grow]} maxFontSizeMultiplier={1.3}>{LIST_LABELS[shownGroup]} · {shown.length}</Text>
+              {refreshButton}
             </View>
           )}
           {shown.map((sensor, index) => (
-            <SensorCard key={sensor.id} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={index === 0}
+            <SensorCard key={sensor.id} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={!compact && index === 0}
               outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
-              siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null} />
+              siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null}
+              compact={compact} open={sensor.id === openId} group={groups[sensor.id]} seen={seenAt.current.get(sensor.id)}
+              tight={compact && index > 0 && sensor.id !== openId && shown[index - 1].id !== openId} />
           ))}
 
           {attempts.length > 0 && (
@@ -679,23 +889,24 @@ export default function App() {
               <Animated.View style={[s.titleBlock, titleStyle]} pointerEvents="none" onLayout={event => setTitleH(event.nativeEvent.layout.height)}>
                 <Text style={s.label} maxFontSizeMultiplier={1.3}>ENCRYPTED BLUETOOTH LINK</Text>
                 <Text style={s.title} maxFontSizeMultiplier={1.3}>Set up sensors. <Text style={s.tone}>Each proves it is a IoT sensor, then joins the site Wi‑Fi.</Text></Text>
-                {!BleManager && (
+                {!radio && (
                   <View style={[s.card, s.warnCard]} accessibilityRole="alert">
                     <Text style={s.warnText}>Bluetooth is unavailable in Expo Go. Install the development build (see configurator/README.md) to test a sensor.</Text>
                   </View>
                 )}
 
-                {BleManager && !ready && ble !== BleState.Unknown && (
+                {radio && !ready && ble !== BleState.Unknown && (
                   <View style={[s.card, s.warnCard]} accessibilityRole="alert">
                     <Text style={s.warnText}>{BLE_HELP[ble] ?? 'Bluetooth is unavailable right now.'}</Text>
                   </View>
                 )}
               </Animated.View>
-              {BleManager && (
+              {radio && (
                 <>
                   <Animated.View style={[s.floating, radarStyle]}>
                     <Radar active={ready && !paused} color={C.ink} size={radarSize} onPress={togglePause} label={paused ? 'Resume search' : 'Pause search'} />
                   </Animated.View>
+                  {/* Only the visible caption takes touches: the hidden one sits over the list. */}
                   <Animated.Text style={[s.small, s.center, s.largeCaption, largeCaption]} maxFontSizeMultiplier={1.3} numberOfLines={2} pointerEvents="none" accessibilityLiveRegion="polite">{caption}</Animated.Text>
                   <Animated.View style={[s.compactCaption, compactCaption]} pointerEvents="none">
                     <Text style={s.small} maxFontSizeMultiplier={1.3} numberOfLines={2} importantForAccessibility="no">{caption}</Text>
@@ -730,6 +941,7 @@ const s = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mark: { width: 28, height: 28, tintColor: C.ink },
   wordmark: { fontFamily: 'Onest_600SemiBold', fontSize: 26, letterSpacing: -1.2, color: C.ink },
+  chipDemo: { backgroundColor: C.ink, color: '#ffffff' },
   chip: { fontFamily: 'Onest_600SemiBold', fontSize: 11, letterSpacing: 0.6, color: C.ink, backgroundColor: C.mint, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   label: { fontFamily: 'Onest_500Medium', fontSize: 12, letterSpacing: 0.7, color: C.blue, marginTop: 6 },
   title: { fontFamily: 'Onest_500Medium', fontSize: 30, lineHeight: 32, letterSpacing: -1, color: C.ink },
@@ -750,6 +962,18 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   grow: { flex: 1 },
   sensorName: { fontFamily: 'Onest_600SemiBold', fontSize: 16, color: C.ink },
+  emptySlot: { opacity: 0.5 },
+  listHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 24 },
+  listLabel: { marginTop: 0, marginBottom: -4 },
+  refreshIcon: { width: 18, height: 18 },
+  refreshRing: { position: 'absolute', left: 1, top: 1, width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: C.ink, borderTopColor: 'transparent', transform: [{ rotate: '45deg' }] },
+  refreshHead: { position: 'absolute', right: 1, top: -1, width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderBottomWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: C.ink, transform: [{ rotate: '90deg' }] },
+  sensorRow: { minHeight: 56, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.card, justifyContent: 'center' },
+  rowBody: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tight: { marginTop: 6 - GAP }, // 6 pt between rows instead of the list's GAP
+  rowName: { fontFamily: 'Onest_600SemiBold', fontSize: 15, color: C.ink },
+  rowLine: { fontFamily: 'Onest_400Regular', fontSize: 13, lineHeight: 18, color: C.muted },
+  rowSignal: { fontFamily: 'Onest_400Regular', fontSize: 13, color: C.muted, fontVariant: ['tabular-nums'] },
   stateOk: { fontFamily: 'Onest_500Medium', color: C.ink },
   stateWarn: { color: C.warn },
   small: { fontFamily: 'Onest_400Regular', fontSize: 14, lineHeight: 20, color: C.muted },
@@ -758,10 +982,6 @@ const s = StyleSheet.create({
   secondaryText: { fontFamily: 'Onest_500Medium', fontSize: 15, color: C.ink },
   requirements: { gap: 8 },
   batch: { gap: 10 },
-  filter: { flex: 1, minHeight: 36, borderRadius: 999, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
-  filterOn: { backgroundColor: C.ink, borderColor: C.ink },
-  filterText: { fontFamily: 'Onest_500Medium', fontSize: 14, color: C.ink, fontVariant: ['tabular-nums'] },
-  filterTextOn: { color: '#ffffff' },
   stateWarnLine: { fontFamily: 'Onest_400Regular', fontSize: 14, lineHeight: 20, color: C.warn },
   requirement: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.card },
   requirementTodo: { backgroundColor: C.warnBg },
@@ -776,3 +996,12 @@ const s = StyleSheet.create({
   log: { gap: 4, paddingTop: 6 },
   logLine: { fontFamily: 'Onest_400Regular', fontSize: 13, color: C.ink, fontVariant: ['tabular-nums'] },
 });
+
+// The app, or its demo: 200 simulated sensors instead of the radio (src/demo.ts). Switching remounts the screen, so no
+// sensor, result, scan or credential crosses from one mode to the other. Launched with `-demo 1` (simctl), it opens in
+// the demo.
+export default function App() {
+  const [demo, setDemo] = useState<Demo | null>(() => (Platform.OS === 'ios' && String(Settings.get('demo')) === '1' ? startDemo(Crypto.getRandomBytes) : null));
+  useEffect(() => () => demo?.stop(), [demo]);
+  return <Provide key={demo ? 'demo' : 'real'} demo={demo} onDemo={on => setDemo(on ? startDemo(Crypto.getRandomBytes) : null)} />;
+}

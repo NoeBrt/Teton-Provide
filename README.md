@@ -21,8 +21,9 @@ through NetworkManager and reports the IPv4 address it received for that attempt
 **Status.** With the first protocol (a QR label per sensor), an iPhone set up the Wi-Fi of the Ubuntu device end to
 end on real hardware: encrypted BLE exchange, NetworkManager join, **Device connected** with the address
 ([demo/real-join.txt](demo/real-join.txt)); a `btmon` capture shows the credentials only inside an encrypted write.
-The current protocol (certificates, technician codes, batch of 200) passes its tests on both sides and runs in the
-iOS Simulator against 20 fake sensors; its real-hardware run is pending. Not run yet: wrong-password and
+The current protocol (certificates, technician codes, batch of 200) passes its tests on both sides. The app runs it
+in its own demo mode (200 simulated sensors, no radio) and over real Bluetooth against a test bench on noe-lab that
+shows 200 simulated sensors; its run with real sensors is pending. Not run yet: wrong-password and
 absent-network cases on hardware, a reboot test, Android. See [What is proven](docs/ARCHITECTURE.md#what-is-proven).
 
 ## Hardware and assumptions
@@ -107,10 +108,17 @@ code through `npx expo run:android`; we have not run it on a device.
 3. **provide.** scans by itself and lists each sensor by ID with its state (ready, online…).
 4. Tap **Set up all ready (N)**, or **Set up** on one card. The first time, enter the site: a name, the Wi-Fi
    network and its password, typed or read from the network's standard Wi-Fi QR code (`WIFI:T:WPA;S:…;P:…;;`, as
-   Android shares it). The password stays in the Keychain behind Face ID.
+   Android shares it). The password stays in the Keychain behind Face ID. Once unlocked, the code and the password
+   stay in memory; back in the app after more than 2 minutes away, Face ID asks again.
 5. Each card shows the steps: connecting, securing the channel, sending the network, joining the Wi-Fi. Expect
-   **Device connected** with the network name and the sensor's new IPv4 address; the counters and filters show
-   what is done, what failed and why.
+   **Device connected** with the network name and the sensor's new IPv4 address; a failed card says why.
+6. With more than four sensors in range, each sensor becomes a one-line row (its group's shape, one status line,
+   its signal); a tap opens it in place into the full card, a second tap folds it. A card above the list reads
+   "N set up of M in range", with the batch's progress and the time left. Its tabs **Set up**, **Errors** and
+   **Not set up** show only that group; tap the tab again for all. **Not set up** puts the sensors being set up in
+   an **IN PROGRESS** block on top; **Errors** groups the failures by cause. Sensors found during a batch join it
+   with **Add N to the batch**; **Retry failed** sets up the failed ones again. The refresh icon beside the list
+   header drops the sensors not heard for 15 s.
 
 On the device, check the result:
 
@@ -133,20 +141,50 @@ sudo systemctl start iot-device
 Each sensor card also has **Test**, which writes `hello` and expects `world`: a radio check that carries no
 credentials.
 
+### Demo mode, without sensors
+
+Tap the **provide.** logo and confirm: the app swaps the radio for 200 simulated sensors and the chip reads **DEMO**.
+Each one runs the sensor side of Noise `XX` with a certificate from a demo authority, so the app runs its real
+handshake, checks and encryption. Among them: sensors set up before, not prepared, out of Wi-Fi range, impostors and
+another customer's. The demo uses its own code and site, in memory; it reads and writes nothing saved and sends
+nothing over Bluetooth. Tap the logo or the chip to leave. In the iOS Simulator,
+`xcrun simctl launch booted dev.iotchallenge.configurator -demo 1` opens the app in demo mode.
+
+### Test bench: 200 simulated sensors over real Bluetooth
+
+`lab/` holds a bench for noe-lab, kept out of the app. `iot_sim.py` (Bumble, Python) takes `hci0` through the HCI
+user channel and advertises 200 sensors in turn over the advertising sets the controller enables at once, keeping 6
+free for the phone's links (the MT7921 reports 20 sets and enabled 16). Each sensor answers GATT and Noise like the
+device service, byte for byte, and simulates its Wi-Fi join: most join in 5.5 s; some are slow, out of range, busy,
+time out, are online or offline, or are clones (a copied certificate without its key). The password
+`wrong-password` makes every join fail with a refused password.
+
+```sh
+sh lab/mint-lab.sh           # on noe-lab, as noe: 200 identities, keys 0600, customer LAB (194-196: OTHER)
+sudo sh ~/noe-ws/sim-lab.sh  # copy of lab/sim-lab.sh: stops iot-device and bluetooth, gives hci0 back on exit
+.venv/bin/python iot_sim.py --selftest noise-vectors.json  # in ~/noe-ws/iot-sim, a copy of the phone's vectors
+```
+
+`mint-lab.sh` uses the `stage` and `authority` binaries in `~/noe-ws/iot-dev/target/release` and the authorities in
+`~/noe-ws/iot-authority`; `sim-lab.sh` expects `iot_sim.py` and a virtual environment with Bumble in
+`~/noe-ws/iot-sim`. The identities are certified by the real device authority, so the phone needs a technician code
+that covers `LAB`. Use a throwaway site: the bench never joins Wi-Fi, but it receives the password.
+
 ## Tests
 
 ```sh
 cargo test --all-targets --locked                         # protocol and simulation, no Bluetooth: 40 tests
 cargo test --features ble,stage --all-targets --locked    # adds the device, NetworkManager, Noise and authority tests: 88 tests
 cargo clippy --features ble,stage --all-targets --locked -- -D warnings
-cd configurator && npm ci && npm test && npm run typecheck && npm run lint   # 59 tests
+cd configurator && npm ci && npm test && npm run typecheck && npm run lint   # 68 tests
 ```
 
 The Noise tests replay a transcript produced by the device's `snow` implementation against the phone's
 JavaScript one, byte for byte, with the certificate and the technician code (`tests/noise_vectors.rs`,
 `configurator/src/noise.test.ts`). The phone tests also check that a sensor failing the certificate checks never
-receives the code or the password (`configurator/src/setup.test.ts`), and run 200 fake sensors through the batch
-(`configurator/src/batch.test.ts`).
+receives the code or the password (`configurator/src/setup.test.ts`), run 200 fake sensors through the batch
+(`configurator/src/batch.test.ts`), and check that demo sensors are refused under the real device authority
+(`configurator/src/demo.test.ts`).
 
 Development tools, kept from the first milestone: a dependency-free simulation
 (`cargo run --example simulation --locked`), benchmarks ([docs/BENCHMARKS.md](docs/BENCHMARKS.md)), and a
@@ -160,9 +198,11 @@ NetworkManager without changing anything.
 | iPhone to Ubuntu over real BLE: discovery, six exchanges, reconnect after a service restart | [demo/phone-hello.txt](demo/phone-hello.txt) | `ACTUAL_BLE` |
 | Encrypted protocol, test-first trace | [demo/tdd-provision.txt](demo/tdd-provision.txt) | `COMMAND_FIXTURE` |
 | Technician flow with 20 sensors, real app code against fake Noise responders, fake radio | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-technicians-flow) | `SIMULATION` |
+| 200 sensors in demo mode: overall card, compact rows, batch with sensors added, tabs | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-technicians-flow), [42 s video](docs/architecture/overall-200-sensors.mp4) | `SIMULATION` |
+| iPhone to 200 simulated sensors over real BLE (test bench): 84 provisioning sessions and 79 simulated joins in one run | `lab/`; run log on noe-lab, not in the repository | `ACTUAL_BLE` |
 | Real setup from the iPhone (first protocol): encrypted exchange, Wi-Fi join, Device connected; capture without the SSID | [demo/real-join.txt](demo/real-join.txt) | `ACTUAL` |
 | Offline hello against the systemd service | [demo/service-offline-hello.txt](demo/service-offline-hello.txt) | `ACTUAL_BLE` |
-| Current protocol on hardware; wrong password, absent network and rollback on hardware; reboot; Android | | `NOT_RUN` |
+| Current protocol on hardware; wrong password, absent network and rollback on hardware; the overall, six links and scanning during runs with many real sensors; reboot; Android | | `NOT_RUN` |
 
 Earlier material: [solution report (PDF, French)](docs/rapport-solution.pdf) and the
 [first interactive mockup](docs/architecture-demo.html); the step-by-step engineering log is in

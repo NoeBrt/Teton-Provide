@@ -367,7 +367,7 @@ review, and a measurement of the affected path. Document measurement limits.
   IoT device certificates checked offline by the app inside Noise `XX`; technician codes signed by a separate
   authority, delivered as a `provide://technician/<hex>` link or QR, behind Face ID, 30 days, per customer, checked
   by the sensor with the firmware build date as clock floor; reconfiguration with rollback; "Set up all ready
-  sensors in range", three at a time, stop on site-wide errors; counters, filters, Retry failed. Sensor ID is
+  sensors in range", three at a time (six since step 18), stop on site-wide errors; counters, filters, Retry failed. Sensor ID is
   `IOT-` + 10 hex digits (40 bits) instead of the 6 first proposed, to avoid collisions in large fleets.
 - Device: `src/authority.rs` (certificates, codes, Ed25519 via `ed25519-dalek` 2.2), `src/provision.rs` rewritten
   (XX, identity files, token phase, encrypted refusal reasons), `device/wifi.rs` two alternating profile UUIDs with
@@ -441,3 +441,130 @@ review, and a measurement of the affected path. Document measurement limits.
 - Next owner: rebuild the app (the native project lost the scheme and has the new permission strings) and the
   device; `stage install` on noe-lab; issue a new code, print the bare QR, scan it in **provide.**, then the real run.
   Commit `demo/real-reconfigure.txt` with this step (`git add`): it is untracked.
+
+## Step 18 - Overall of the sensors in range
+
+- Request (user): the most aesthetic and ergonomic view of many sensors, compatible with the current design, with the
+  current design still available in a corner.
+- Tried first, never committed (backups in a scratchpad, outside the repository): a design canvas with five
+  approaches in the real **provide.** layout (A summary and failures by cause, B the wing as tiles, C dense list with
+  search by the end of the ID, D find a sensor by its signal, E end-of-visit report), compared by a judge panel.
+  Built: A as an **overview** (progress card with a check line, failures by cause with **Retry N**, the sensors
+  working now, folded groups), B as a **wall** (one tile per sensor, problems pinned) and a switch at the corner of
+  the sensor list back to the cards, about 470 lines. Checked in the Simulator with 200 fake sensors.
+- Technician's feedback on that build: they like the original card list best. They want an overall with the same
+  ergonomics, easy access to the sensors not set up, set up and with errors, no emoji, and the original design
+  philosophy kept. The overview, the wall, the switch and their media were removed
+  ([decision 28](../docs/DECISIONS.md#28-overall-of-the-sensors-in-range)).
+- Built (uncommitted, on `dea35be`):
+  - `configurator/src/wing.ts`, outside React like `flow.ts`: `groupOf(state, batchEntry)` puts each sensor in one
+    group, set up, error or not set up: this session's result first, from a batch or a setup by hand; otherwise
+    online is set up, offline is an error (set up, but not on its Wi-Fi), anything else is not set up. A sensor that
+    joined but now advertises offline is an error. The advertisement never turns a failure into set up (an impostor
+    can advertise online). `minutesLeft`: the pace so far, once 10 sensors have finished. `wing.test.ts`: 2 tests.
+  - `configurator/src/Summary.tsx`: a card in the original style. Title "N set up of M in range" in two tones like the
+    screen title; one line, the batch's progress ("3 in progress · 126 waiting · about 1 min left") or what is left
+    ("R ready to set up · P not prepared", then "· U state unknown" when older firmware advertises no state); a bar
+    (set up in ink, errors in red, the rest blank); three tabs **Set up**, **Errors**, **Not set up** with their
+    counts and a shape each (filled ink, filled red, hollow), no symbols.
+    Tab roles, spoken "Errors, 8", text capped at ×1.3.
+  - `App.tsx`: the card shows when more than `AUTO_FOLD_AFTER` (4) sensors are in range or a batch has run (step 19:
+    only past 4 sensors). Its tabs replace the filter pills (All, a tick, a cross, an hourglass emoji): a tap filters
+    the cards, a second tap shows all, a tab at 0 is disabled. A tab whose group empties was deselected, and the list
+    sorted errors first, then not set up, then set up, failures grouped by cause (both replaced in step 19: a
+    selected tab stays on, the list keeps the scan order, only the Errors tab groups by cause). The time left counts
+    only the current batch (`batchStarted` holds its start and size). A setup by hand is kept like a batch result:
+    **Retry failed** also appears after one fails, with no batch needed, and the sensor leaves **Set up all ready**
+    and counts under Errors, so a sensor that is not genuine is no longer retried by that button.
+- Checked in the iOS Simulator (`SIMULATION`) with 200 fake sensors, each with a real Noise `XX` responder (temporary
+  harness, not in the repository; demo mode replaced it in step 19). Before the batch: 6 set up, 4 not prepared, 190
+  ready. The batch ends with 182 connected and 8 refused (3 cannot see the network, 3 not genuine, 2 of another
+  customer): "188 set up of 200 in range", Errors 8, Not set up 4, **Retry failed (5)** (the 3 not genuine are left
+  out). iPhone 16 Pro during the batch: 64 / 3 / 133, "3 in progress · 126 waiting · about 1 min left". Errors tab:
+  only the refused sensors, each with its reason. iPhone SE with accessibility-large text, during the batch: 40 / 1 /
+  159; the title, the line and "Not set up" wrap, the card stays on the first screen. Screens
+  `docs/architecture/08-overall-running.png` to `11-overall-se-large-text.png`, video `overall-200-sensors.mp4` (55 s
+  at 2x speed: the batch, then the three tabs). Step 19 replaced these media with demo-mode captures and removed
+  `09-overall-done.png`; the numbers above (64 / 3 / 133, "3 in progress") describe the step 18 build, which ran
+  three links.
+- Evidence: app 61 tests at this step (2 in `wing.test.ts`; 68 after step 19), `npx tsc --noEmit` and `npx expo lint`
+  clean, run again for these docs. Docs: `docs/ARCHITECTURE.md` (flow, 200 devices, what is proven, code map),
+  decision 28, README (demo step 6, evidence), `tasks/compliance.md`.
+- Limits: a sensor set up before but offline counts as an error; no Retry per cause (the Errors tab groups by cause,
+  **Retry failed** covers them); the time left assumes a steady pace; screens 5 to 7 and `demo-simulator.mp4` still
+  show the old filter pills.
+- Still open at this step, FIXED in step 19: when a batch stopped (`WrongPsk`, code locked or expired), the queued
+  sensors were marked stopped only after the ones in progress finished (up to the 60 s join timeout). `runBatch` now
+  takes the queue out when `stopReason` is first set (test "a stop marks the queue at once").
+- The app is installed on the technician's iPhone. NOT_RUN: the overall there with many real sensors; no real sensor
+  has gone through it yet.
+- Next owner: use the overall on the technician's iPhone with real sensors; commit `Summary.tsx`, `wing.ts`,
+  `wing.test.ts`, the screens and the video (all untracked).
+
+## Step 19 - Batch at the pace of a wing, demo mode, test bench
+
+- Goal: set up a wing faster, show the app with a wing and no sensors, and measure it over real Bluetooth.
+  Decisions [29](../docs/DECISIONS.md#29-batch-at-the-pace-of-a-wing) and
+  [30](../docs/DECISIONS.md#30-demo-mode-in-the-app-and-the-lab-bench).
+- List and overall (`App.tsx`, `Summary.tsx`, uncommitted on `dea35be`):
+  - The overall card shows only past 4 sensors in range (no longer "or after a batch"). A selected tab stays on (the
+    deselect rule is gone); it keeps what it showed and adds the sensors that join its group. The list keeps the scan
+    order; only the Errors tab, when tapped, groups by cause.
+  - Past 4 sensors each sensor is a compact row (group shape, one status line, signal); a tap opens it in place into
+    the full card, a second tap folds it.
+  - Not set up tab: an **IN PROGRESS** block on top, one fixed slot per running sensor (kept while the sensor is in
+    the block; an empty slot is kept until reused). Running sensors leave the list below, which is what is left to
+    do; finished ones belong to Set up or Errors. A row opened while in progress stays in the block with its result
+    until closed.
+  - List header "SENSORS · N", "NOT SET UP · N", "SET UP · N" or "ERRORS · N" with a refresh icon, hidden while
+    anything runs: drops sensors not heard for 15 s (`STALE_MS`), never one in the batch; while paused it only
+    resumes the search.
+  - Launch: title and radar, then the code and site rows (from launch, before any sensor), then the sensors after the
+    intro (`INTRO_MS`, 1.4 s). Panel height and radar size animate after the first layout. When the list gets crowded
+    the radar folds to compact at once, so the overall card shows whole; a batch folds it once (1.2 s), never per
+    sensor.
+- Batch (`batch.ts`, `setup.ts`): `BATCH_CONCURRENCY` 6 (was 3; a sensor holds a link about 7.5 s, so 200 take about
+  8 min at 3 and about 4 at 6; not measured on hardware). Link failures (timeout, rejected, `Busy`, `unknown`) go back
+  to the queue up to `RETRIES` (2) more times, with the same attempt ID when needed, never after a stop. A stop marks
+  the queue at once. **Add N to the batch** adds the sensors found meanwhile (`BatchControl.add`, de-duplicated, not
+  after a stop). The scan continues during runs (the stop per run was removed). Status poll every 500 ms. During a
+  batch, **Test** stays available on sensors the batch is not working on; **Set up** by hand stays disabled.
+- Credentials: the code and the site password stay in memory and are locked again when the app comes back after more
+  than 2 minutes away (`LOCK_AFTER_MS`), instead of as soon as it leaves; a short switch no longer stops a batch.
+- Demo mode (`src/demo.ts`, `demo.test.ts`): tap the logo and confirm; the chip reads DEMO; the logo or the chip
+  leaves; `-demo 1` (simctl) starts in it. 200 simulated sensors on a fake radio, each running the sensor side of
+  Noise `XX` with a certificate from a demo authority whose seeds are public (0x51, 0x52), trusted only on the demo
+  radio; a remount separates the modes. Demo code and site in memory; nothing saved is read or written; the code and
+  site sheets never open. Discovery is gradual: about half in 4 s, the rest over a minute. Audited: no path pairs the
+  demo authority with the real radio; `demo.test.ts` shows demo sensors refused under the real `DEVICE_AUTHORITY`.
+- Test bench (`lab/`, kept out of the app): `iot_sim.py` (Bumble, Python 3.10) takes noe-lab's hci0 through the HCI
+  user channel and shows 200 sensors over real Bluetooth. Identities from `mint-lab.sh` (`stage init` and
+  `authority certify` for `LAB`, 194 to 196 for `OTHER`, keys in 0600 files in `~/noe-ws/lab-sensors`, certified by
+  the real device authority), rotated over the advertising sets the MT7921 enables (it reports 20, enabled 16 at
+  once; 6 kept free for the phone's links). GATT and Noise byte for byte (`--selftest` replays
+  `configurator/src/noise-vectors.json`); simulated join outcomes per identity (ok 5.5 s, slow, not in range, busy,
+  timeout, online, offline, clone); `wrong-password` gives `WrongPsk`. `sim-lab.sh` (sudo) stops `iot-device` and
+  `bluetooth`, runs the simulator and gives hci0 back on exit. A technician code for `LAB` and `DEMO` was issued (30
+  days).
+- Measured on the bench (`ACTUAL_BLE`, simulated sensors, iPhone app; run log on noe-lab, not in the repository): a
+  run with 14 advertising sets and a 3 s cycle had 84 provisioning sessions and 79 joins, against 20 sessions in the
+  run before the retries and the faster cycle. The bench's sensors are on air part of the time, so its connect
+  latency is worse than real sensors'.
+- Media (`SIMULATION`, demo mode, iPhone 16 Pro unless said): `08-overall-running.png` (batch running, compact rows,
+  Add 2 to the batch), `09-overall-in-progress.png` (Not set up tab, IN PROGRESS · 6), `10-overall-errors.png` (after
+  a batch: Errors tab, 3 errors grouped by cause, list header with the refresh icon, Set up all ready and Retry
+  failed), `11-overall-se-large-text.png` (iPhone SE, accessibility-large, during a batch: Add 19 to the batch),
+  `overall-200-sensors.mp4` (42 s at 2x speed: discovery, a batch with sensors added, the Not set up tab, the Errors
+  tab). `09-overall-done.png` removed.
+- Evidence: app 68 tests (12 in `batch.test.ts`, 3 in `demo.test.ts`), `npm run typecheck` and `npm run lint` clean,
+  run for these docs. The 2-minute lock has no test. Docs: README (status, step 4 and 6, demo mode, test bench, tests,
+  evidence), `docs/ARCHITECTURE.md`, decisions 26 to 30, `docs/SECURITY.md` (in-memory lock, demo authority, bench
+  identities, root simulator), `tasks/compliance.md`.
+- Still open: measure six links and scanning during runs on the bench and with real sensors (iOS connects were
+  thought more reliable without a concurrent scan); release the link during the join; a concurrency that adapts to
+  failures. The models beyond one phone are documented in `docs/ARCHITECTURE.md` ("Beyond one phone"), none built.
+- NOT_RUN: the overall, six links and the scan during runs with many real sensors; the current protocol against the
+  real device service with a holder-bound code.
+- Next owner: run a batch on the bench with real timing logs, then with real sensors; commit `Summary.tsx`, `wing.ts`,
+  `wing.test.ts`, `demo.ts`, `demo.test.ts`, `lab/` and the media in `docs/architecture/` (all untracked). Do not add
+  the challenge PDF at the repository root.
