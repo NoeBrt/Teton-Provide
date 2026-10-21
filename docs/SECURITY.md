@@ -69,6 +69,9 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
   can show them.
 - **Site profile:** SSID and password, saved per facility in the Keychain behind Face ID, unlocked once per session.
   Each sensor receives it inside its own Noise session.
+- **In memory:** once unlocked, the code and the password stay in the app's memory, also while it is in the
+  background. When the app comes back after more than 2 minutes away (`LOCK_AFTER_MS`), both are locked again and
+  Face ID asks for them at the next use; a shorter switch keeps them, so it does not stop a running batch.
 - **Shared password risk:** with WPA2-Personal all sensors hold the same password, so one extracted sensor exposes
   the network and revocation means rotating it everywhere. Prefer per-device credentials in production: EAP-TLS
   certificates or per-device PSKs (PPSK/iPSK), issued by Smith. The demo uses WPA2-Personal.
@@ -124,6 +127,20 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
 - No signed time source (Roughtime, NTS): the clock floor bounds a wrong clock but does not correct it (see Clock).
 - The demo authorities live on noe-lab (0600, outside the repository), not on an offline machine.
 - NetworkManager stores the PSK in a root-only system connection file.
+- Someone who opens the unlocked phone within 2 minutes of the technician leaving the app reaches the code and the
+  site password without Face ID (`LOCK_AFTER_MS`).
+- **Demo authority.** Demo mode embeds a second device authority whose seeds are public (bytes filled with 0x51 and
+  0x52, `configurator/src/demo.ts`). It is passed to the checks only in demo mode, for the simulated sensors on the
+  demo's fake radio; switching modes remounts the screen, and real sensors are always checked against
+  `DEVICE_AUTHORITY`. Audited: no path pairs the demo authority with the real radio. The demo's code and site live in
+  memory; the saved code and sites are never read or written in demo mode.
+- **Lab bench identities.** The bench's 200 identities (`lab/mint-lab.sh`, customer `LAB`, 194 to 196 `OTHER`) are
+  certified by the real device authority; their private keys sit in 0600 files on noe-lab (`~/noe-ws/lab-sensors`).
+  Any phone whose code covers `LAB` sends them the site password, so the bench is used with a throwaway site; the
+  simulator never joins Wi-Fi. A technician code for `LAB` and `DEMO` was issued for 30 days.
+- **Root simulator.** `lab/teton_sim.py` runs as root to take hci0 through the HCI user channel and receives the site
+  password in memory, like a sensor. Its log holds sensor IDs, attempt IDs, the technician's name and outcomes, never
+  a key or a password.
 
 ## Tests required before enabling secrets
 
@@ -131,6 +148,7 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
   receives the token or the credentials. (`src/provision.rs`, `configurator/src/setup.test.ts`)
 - Tokens for another customer, expired, forged or presented without their holder key are refused and close the
   session. (`src/provision.rs`, `src/authority.rs`)
+- Demo sensors are refused as not genuine under the real device authority. (`configurator/src/demo.test.ts`)
 - The code `authority issue` prints is the code the app reads. (`tests/noise_vectors.rs`,
   `configurator/src/authority.test.ts`)
 - The clock floor never starts before the firmware date and rises no faster than the uptime. (`device/main.rs`)

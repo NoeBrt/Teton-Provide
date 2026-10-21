@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BATCH_CONCURRENCY, runBatch, type BatchEntry } from './batch.ts';
+import { BATCH_CONCURRENCY, RETRIES, runBatch, type BatchControl, type BatchEntry } from './batch.ts';
 import type { SetupFailure, SetupResult } from './setup.ts';
 
 const sensors = Array.from({ length: 200 }, (_, i) => `TETON-${String(i).padStart(10, '0')}`);
@@ -30,12 +30,12 @@ const record = () => {
   return { last, onChange: (id: string, entry: BatchEntry) => last.set(id, entry) };
 };
 
-test('200 sensors, three at a time, all set up', async () => {
+test('200 sensors, BATCH_CONCURRENCY at a time, all set up', async () => {
   const { setupOne, peak } = fleet(() => null);
   const { last, onChange } = record();
   const summary = await runBatch(sensors, setupOne, onChange);
   assert.deepEqual(summary, { ok: 200, failed: 0, stopped: 0 });
-  assert.equal(peak(), BATCH_CONCURRENCY, 'never more than three links at once');
+  assert.equal(peak(), BATCH_CONCURRENCY, 'never more links at once than BATCH_CONCURRENCY');
   assert.ok([...last.values()].every(entry => entry.state === 'ok' && entry.ipv4 === '10.0.0.2'));
 });
 
@@ -103,4 +103,71 @@ test('the first failure that stops a batch is the one reported', async () => {
   };
   const summary = await runBatch(['a', 'b'], setupOne, () => {}, 2);
   assert.equal(summary.stopReason, 'WrongPsk');
+});
+
+test('a stop marks the queue at once, while a sensor still in progress has not finished', async () => {
+  let release = () => {};
+  const slow = new Promise<void>(resolve => { release = resolve; });
+  const { last, onChange } = record();
+  const done = runBatch(sensors.slice(0, 20), async id => {
+    if (id === sensors[0]) { await slow; return { ok: true, ipv4: '10.0.0.2', attempt: new Uint8Array(16) }; }
+    return { ok: false, step: 'secure', reason: 'WrongPsk' };
+  }, onChange);
+  await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(last.get(sensors[0])?.state, 'running', 'still joining');
+  assert.deepEqual(last.get(sensors[19]), { state: 'stopped', reason: 'WrongPsk' }, 'not counted as waiting any more');
+  assert.equal(last.get(sensors[1])?.step, 'secure', 'a failure keeps the step it failed at');
+  release();
+  assert.equal((await done).stopped, 20 - BATCH_CONCURRENCY);
+});
+
+test('a link failure goes back to the queue, and counts as failed only after its retries', async () => {
+  const calls = new Map<string, number>();
+  const { last, onChange } = record();
+  const summary = await runBatch(['flaky', 'gone', 'wifi'], async id => {
+    const n = (calls.get(id) ?? 0) + 1;
+    calls.set(id, n);
+    if (id === 'flaky' && n === 1) return { ok: false, step: 'connect', reason: 'timeout' };
+    if (id === 'gone') return { ok: false, step: 'connect', reason: 'timeout' };
+    if (id === 'wifi') return { ok: false, step: 'join', reason: 'NotInRange' };
+    return { ok: true, ipv4: '10.0.0.2', attempt: new Uint8Array(16) };
+  }, onChange);
+  assert.deepEqual(summary, { ok: 1, failed: 2, stopped: 0 });
+  assert.equal(calls.get('flaky'), 2, 'retried once, then set up');
+  assert.equal(calls.get('gone'), 1 + RETRIES, 'out of range: tried, then retried RETRIES times');
+  assert.equal(calls.get('wifi'), 1, 'a Wi-Fi failure is final');
+  assert.equal(last.get('gone')?.state, 'failed');
+});
+
+test('sensors found while the batch runs join its queue, within the same number of links', async () => {
+  const { setupOne, started, peak } = fleet(() => null);
+  const { last, onChange } = record();
+  const control: BatchControl = {};
+  const done = runBatch(sensors.slice(0, 10), setupOne, onChange, BATCH_CONCURRENCY, control);
+  await new Promise(resolve => setTimeout(resolve, 1));
+  control.add?.(sensors.slice(10, 20));
+  const summary = await done;
+  assert.deepEqual(summary, { ok: 20, failed: 0, stopped: 0 });
+  assert.equal(started.length, 20);
+  assert.ok(peak() <= BATCH_CONCURRENCY);
+  assert.equal(last.get(sensors[19])?.state, 'ok');
+  assert.equal(control.add, undefined, 'nothing can be added once it has ended');
+});
+
+test('a link failure after a stop is final: every sensor ends counted, none left waiting', async () => {
+  let release = () => {};
+  const slow = new Promise<void>(resolve => { release = resolve; });
+  const { last, onChange } = record();
+  const ids = sensors.slice(0, 12);
+  const done = runBatch(ids, async id => {
+    if (id === ids[1]) return { ok: false, step: 'join', reason: 'WrongPsk' };
+    if (id === ids[0]) { await slow; return { ok: false, step: 'connect', reason: 'timeout' }; }
+    return { ok: true, ipv4: '10.0.0.2', attempt: new Uint8Array(16) };
+  }, onChange);
+  await new Promise(resolve => setTimeout(resolve, 5));
+  release();
+  const summary = await done;
+  assert.equal(summary.ok + summary.failed + summary.stopped, ids.length);
+  assert.ok(ids.every(id => !['queued', 'running'].includes(last.get(id)!.state)), 'nothing left waiting');
+  assert.equal(last.get(ids[0])?.state, 'failed');
 });
