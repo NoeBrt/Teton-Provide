@@ -584,3 +584,20 @@ review, and a measurement of the affected path. Document measurement limits.
 - NOT_RUN: real desktop BLE, keychain persistence, webcam QR, native batch playtest. Browser radio is still unavailable
   and browser secret storage still volatile at this step. No noe-lab service was stopped. Challenge PDF excluded.
 - Next: T7 first, as now requested, then T4/T5/T6, checkpoint B where hardware/authorization allow, T8 and checkpoint C.
+
+## Desktop icon — iOS artwork, macOS container, 2026-10-22
+
+- User-requested interruption before T7: reused `configurator/assets/icon.png` exactly; its SHA-256 remains
+  `d88e8c95a882dca99d472f1bf76bf75eb9ccdcf3ee44409d11b15d076b932c34` (iOS unchanged).
+- `desktop/make-icons.swift` deterministically draws the same black/white artwork into an 824 px squircle on a
+  transparent 1024 px canvas, and regenerates the dev PNGs and every ICNS size (16–1024). No image model or dependency.
+  Its pixel assertions check transparent corners and opaque artwork, including the small sizes. Run on macOS with
+  `swift configurator/desktop/make-icons.swift` from the repository root.
+- PASS: icon generation, 70 JS tests, typecheck, lint, Tauri debug `.app` build; bundled ICNS byte-for-byte equals the
+  source ICNS. Provide relaunched in demo mode; macOS's registered running icon was inspected and
+  [captured](../docs/desktop/icon-running-macos.png). On this macOS version the OS adds a glass surround to a legacy
+  packaged ICNS; the checked-in image itself is a white squircle with transparent margins. Dock is auto-hidden and its
+  accessibility query timed out; a literal Dock screenshot is NOT_RUN. No Dock preferences were changed.
+- The first packaged build exposed TypeScript scanning compressed generated Tauri JavaScript: tsconfig now excludes
+  `desktop/src-tauri/target`, `gen`, and `dist` (source checks remain on). The subsequent typecheck and lint pass.
+- T7 changes are preserved separately and remain uncommitted. Real BLE/keychain/webcam remain T4–T6 work.
