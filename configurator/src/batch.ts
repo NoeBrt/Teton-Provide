@@ -11,7 +11,7 @@ export type BatchSummary = { ok: number; failed: number; stopped: number; stopRe
 export const STOPS_BATCH: readonly SetupFailure[] = ['WrongPsk', 'token-invalid', 'token-expired', 'locked'];
 /** Link failures (nothing settled on the sensor): it goes back to the end of the queue, resumed with the same attempt
  * by the flow, up to RETRIES more times; only then does it count as failed. Wi-Fi failures and refusals are final. */
-export const RETRIED: readonly SetupFailure[] = ['timeout', 'rejected', 'Busy', 'unknown'];
+export const RETRIED: readonly SetupFailure[] = ['timeout', 'rejected', 'unidentified', 'Busy', 'unknown'];
 export const RETRIES = 2;
 // Six BLE links at once: the join (~5.5 s) dominates and iOS holds more links; to confirm on the noe-lab test bench
 // (lab/iot_sim.py) and with real sensors, since the links share one radio.

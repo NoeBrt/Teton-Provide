@@ -12,14 +12,14 @@ const FADE_FROM = 0.4; // it starts fading while still moving, so it never stall
 const THIN = 0.4; // the stroke loses 40% as it spreads, like a wave losing energy
 const EMIT = 0.12; // the dot swells briefly (6%) as each circle leaves it
 // Press feedback: the dot grows while held, then springs back with a little overshoot on release.
-const HOLD = { duration: 600, easing: Easing.out(Easing.cubic) };
-const HOLD_SCALE = 0.4;
-const RELEASE = { damping: 7, stiffness: 220, mass: 0.8 };
+export const HOLD = { duration: 600, easing: Easing.out(Easing.cubic) };
+export const HOLD_SCALE = 0.4;
+export const RELEASE = { damping: 7, stiffness: 220, mass: 0.8 };
 // Stroke and dot are tuned at both radar sizes (compact 48 pt, large 320 pt) and interpolated in between,
 // so the resize stays continuous. The dot keeps a 44 pt touch target through hitSlop.
 export const SIZES = [48, 320];
 const STROKES = [2.5, 5];
-const DOTS = [14, 40];
+export const DOTS = [14, 40];
 const dotFor = (size: number) => { 'worklet'; return interpolate(size, SIZES, DOTS, 'clamp'); };
 export const RESIZE = { duration: 450, easing: Easing.inOut(Easing.cubic) }; // shared with the layout transition in App
 

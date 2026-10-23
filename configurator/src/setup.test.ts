@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { isUnsettled, setup, type SetupOptions, type SetupResult } from './setup.ts';
+import { RETRIED } from './batch.ts';
 import { decodeToken, fromHex, type Token } from './authority.ts';
 import type { BleLink } from './probe.ts';
 
@@ -140,4 +141,11 @@ test('a listed provisioning characteristic matches whatever the case of its UUID
   const { link } = device([m2, accepted, response1, response2]);
   link.retrieveServices = async () => ({ characteristics: [{ service: '3B0A90CE-9564-40D1-B96B-14CF8858ABA3', characteristic: '3C2C02FA-847E-480C-9F22-B239DFA524C9' }] });
   assert.equal((await run(link)).ok, true);
+});
+
+test('a sensor that has not advertised its ID yet is not contacted, and the attempt can be retried', async () => {
+  const { link, writes } = device([m2]);
+  assert.deepEqual(await run(link, {}, ''), { ok: false, step: 'connect', reason: 'unidentified' });
+  assert.equal(writes.length, 0, 'nothing was written');
+  assert.ok(RETRIED.includes('unidentified'), 'a batch tries it again once its name is heard');
 });

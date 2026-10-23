@@ -12,7 +12,11 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [{ "label": "main", "title": "Provide", "width": 1280, "height": 800, "minWidth": 400, "minHeight": 600 }],
-    "security": { "csp": null }
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'self' ipc: http://ipc.localhost",
+      "devCsp": null,
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
   },
   "bundle": {
     "active": true,

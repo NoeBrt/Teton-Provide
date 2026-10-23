@@ -1,0 +1,34 @@
+{
+  "result": "PASS",
+  "evidence": "SIMULATION",
+  "sizes": [
+    "1280x800",
+    "1920x1080"
+  ],
+  "responsiveWidths": [
+    320,
+    400,
+    768,
+    899,
+    900,
+    1280,
+    1920,
+    2560
+  ],
+  "scenarios": [
+    "Open without distortion",
+    "Test world",
+    "six batch slots",
+    "Add during batch",
+    "Retry",
+    "tabs",
+    "Refresh",
+    "independent scrolling",
+    "unique sensors",
+    "Escape/focus return",
+    "Tab trap",
+    "Enter field navigation",
+    "pasted code card and Clear"
+  ],
+  "errors": []
+}

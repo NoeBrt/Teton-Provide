@@ -8,12 +8,14 @@
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
+    "barcode-detector": "3.2.3",
     "expo": "~57.0.30",
     "expo-build-properties": "~57.0.22",
     "expo-camera": "~57.0.6",
     "expo-crypto": "~57.0.4",
     "expo-dev-client": "~57.0.20",
     "expo-font": "~57.0.4",
+    "expo-haptics": "~57.0.3",
     "expo-keep-awake": "~57.0.2",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
@@ -43,7 +45,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "desktop:dev": "cd desktop && tauri dev",
-    "desktop:build": "cd desktop && tauri build"
+    "desktop:build": "rm -rf dist desktop/src-tauri/target/release/bundle && cd desktop && tauri build",
+    "desktop:install": "npm run desktop:build -- --bundles app && ditto desktop/src-tauri/target/release/bundle/macos/Provide.app /Applications/Provide.app.new && rm -rf /Applications/Provide.app desktop/src-tauri/target/release/bundle && mv /Applications/Provide.app.new /Applications/Provide.app",
+    "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});fs.copyFileSync(require.resolve('zxing-wasm/reader/zxing_reader.wasm',{paths:[require.resolve('barcode-detector')]}),'public/zxing_reader.wasm')\""
   },
   "private": true
 }
