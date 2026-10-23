@@ -268,11 +268,14 @@ function SensorGrid({ desktop, children }: { desktop: boolean; children: React.R
 
 // Desktop, before the first sensor: the list's place shows the search instead of an empty half window. The rows are
 // placeholders, pulsing while the search runs (src/feedback.web.ts), replaced by the sensors as they are heard.
-function Waiting({ text, searching }: { text: string; searching: boolean }) {
+function Waiting({ text, searching, action }: { text: string; searching: boolean; action?: React.ReactNode }) {
   return (
     // Arrives with the code and site rows, after the title and the dot (the launch order).
     <Animated.View entering={unlessSwitched(afterDot)} style={s.waiting}>
-      <Text style={[s.label, s.listLabel]} maxFontSizeMultiplier={1.3}>SENSORS · 0</Text>
+      <View style={s.listHead}>
+        <Text style={[s.label, s.listLabel, s.grow]} maxFontSizeMultiplier={1.3}>SENSORS · 0</Text>
+        {action}
+      </View>
       <Text style={s.small} accessibilityLiveRegion="polite">{text}</Text>
       <View style={s.grid} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {Array.from({ length: 6 }, (_, i) => (
@@ -299,6 +302,9 @@ function Provide({ demo, onDemo }: Mode) {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [outcomes, setOutcomes] = useState<Record<string, CardOutcome>>({}); // latest result per sensor, shown in its card
   const [paused, setPaused] = useState(false);
+  const [refreshRequest, setRefreshRequest] = useState(0);
+  const [refreshStatus, setRefreshStatus] = useState<'idle' | 'refreshing' | 'updated' | 'failed'>('idle');
+  const scanWork = useRef(Promise.resolve());
   const [sites, setSites] = useState<Site[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [choosingSite, setChoosingSite] = useState(false);
@@ -401,13 +407,35 @@ function Provide({ demo, onDemo }: Mode) {
   // A sensor that stops advertising stays listed until Refresh (STALE_MS).
   useEffect(() => {
     const ble = radio;
-    if (!ble || !scanning) return;
+    if (!ble || !scanning) { setRefreshStatus('idle'); return; }
     let live = true;
-    const round = () => { if (live) ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: SCAN_SECONDS, allowDuplicates: true }).catch(() => {}); };
-    const subscription = ble.onStopScan(round);
-    round();
-    return () => { live = false; subscription.remove(); ble.stopScan().catch(() => {}); };
-  }, [scanning]);
+    let pendingRefresh = refreshRequest > 0;
+    const round = () => {
+      scanWork.current = scanWork.current.then(async () => {
+        if (live) await ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: SCAN_SECONDS, allowDuplicates: true });
+      }).catch(() => {
+        if (live) { pendingRefresh = false; setRefreshStatus('failed'); }
+      });
+    };
+    const ended = () => {
+      if (!live) return;
+      if (pendingRefresh) {
+        pendingRefresh = false;
+        setRefreshStatus('updated');
+        AccessibilityInfo.announceForAccessibility('Sensor list updated');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+      round();
+    };
+    // Serialize start/stop: a slow start must finish before cancellation, and old stop events precede the new listener.
+    let subscription: { remove(): void } | undefined;
+    scanWork.current.then(() => {
+      if (!live) return;
+      subscription = ble.onStopScan(ended);
+      round();
+    });
+    return () => { live = false; subscription?.remove(); scanWork.current = scanWork.current.then(() => ble.stopScan()).catch(() => {}); };
+  }, [scanning, refreshRequest]);
 
   // Shared by the hello test and the Wi-Fi setup: progress in the card, then its result, log and announcement.
   const run = async <R,>(sensor: Peripheral, kind: Kind, work: (onStep: (step: string) => void) => Promise<{ outcome: CardOutcome; detail: string; result: R }>): Promise<R | undefined> => {
@@ -579,13 +607,15 @@ function Provide({ demo, onDemo }: Mode) {
   const togglePause = () => setPaused(value => !value);
   // Refresh: sensors gone quiet leave the list (not one in a batch), and the search resumes.
   const refresh = () => {
-    if (paused) { setPaused(false); return; } // nothing was heard while paused: resume before judging who is gone
     const now = Date.now();
-    const gone = Object.keys(sensors).filter(id => !running[id] && !batch[id] && now - (heardAt.current.get(id) ?? 0) > STALE_MS);
+    // Nothing was heard while paused: resume before judging who is gone.
+    const gone = paused ? [] : Object.keys(sensors).filter(id => !running[id] && !batch[id] && now - (heardAt.current.get(id) ?? 0) > STALE_MS);
     gone.forEach(id => seenAt.current.delete(id)); // back later, it fades in again
     if (gone.length) setSensors(found => Object.fromEntries(Object.entries(found).filter(([id]) => !gone.includes(id))));
     setPaused(false);
-    AccessibilityInfo.announceForAccessibility(gone.length ? `${gone.length} sensors no longer heard were removed` : 'Search resumed');
+    setRefreshStatus('refreshing');
+    setRefreshRequest(request => request + 1);
+    AccessibilityInfo.announceForAccessibility('Refreshing the sensor list');
   };
   // Not while a test or a batch runs: their sensors belong to the mode being left.
   const askDemo = () => {
@@ -882,21 +912,25 @@ function Provide({ demo, onDemo }: Mode) {
   const caption = (
     !ready ? 'Search paused.'
       : anyRunning ? (Object.values(running).some(r => r.kind === 'setup') ? 'Setting up…' : 'Testing…')
+      : refreshStatus === 'refreshing' ? 'Refreshing the sensor list…'
+      : refreshStatus === 'failed' ? 'Search failed. Tap refresh to try again.'
       : paused ? 'Search paused. Tap the dot to resume.'
       : found === 0 ? 'Looking for IoT sensors…'
       : `${found} sensor${found > 1 ? 's' : ''} nearby · still searching`
   );
-  // The reward: a tap on the finger, the arrow turns once (to the nearest whole turn, so a second tap mid-turn carries
-  // on without a jump; none with Reduce Motion), and a success tap once the list is refreshed. iOS only: on the desktop
-  // the haptics find no vibration and do nothing.
+  // Progress lasts for the new scan round; success feedback happens only when that round finishes.
   const tapRefresh = () => {
     refresh();
     if (!reduceMotion) refreshSpin.value = withTiming(Math.round(refreshSpin.value) + 1, SPIN);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); // a build without the module stays silent
   };
-  const refreshButton = found > 0 && ready && !anyRunning && (
-    <Pressable onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }} onPress={tapRefresh} hitSlop={13}
-      accessibilityRole="button" accessibilityLabel="Refresh the list" accessibilityHint="Removes the sensors no longer heard and searches again">
+  const refreshButton = (found > 0 || refreshStatus !== 'idle') && ready && !anyRunning && (
+    <Pressable onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }} onPress={tapRefresh}
+      disabled={refreshStatus === 'refreshing'} style={s.refreshButton}
+      accessibilityRole="button" accessibilityLabel="Refresh the list" aria-busy={refreshStatus === 'refreshing'}
+      accessibilityHint="Removes the sensors no longer heard and searches again">
+      {refreshStatus !== 'idle' && <Text style={s.refreshText} accessibilityLiveRegion="polite">
+        {refreshStatus === 'refreshing' ? 'Refreshing…' : refreshStatus === 'updated' ? 'List updated' : 'Search failed · retry'}
+      </Text>}
       <RefreshIcon spin={refreshSpin} />
     </Pressable>
   );
@@ -958,7 +992,7 @@ function Provide({ demo, onDemo }: Mode) {
         group={groups[sensor.id]} tight={!desktop && index > 0 && sensor.id !== openId && inProgress[index - 1]?.id !== openId} />
     ))}
     </SensorGrid>
-    {found > 0 && introDone && (
+    {(found > 0 || refreshStatus !== 'idle') && introDone && (
       <View style={s.listHead}>
         <Text style={[s.label, s.listLabel, s.grow]} maxFontSizeMultiplier={1.3}>{LIST_LABELS[shownGroup]} · {shown.length}</Text>
         {refreshButton}
@@ -1051,8 +1085,8 @@ function Provide({ demo, onDemo }: Mode) {
               </ScrollView>
               <View style={s.main}>
                 {found === 0 && radio ? (
-                  <Waiting searching={ready && !paused}
-                    text={ready && !paused ? 'Sensors show here as soon as they are heard. Stay within a few metres of them.' : caption} />
+                  <Waiting searching={ready && !paused && refreshStatus !== 'failed'} action={refreshButton}
+                    text={refreshStatus !== 'failed' && ready && !paused ? 'Sensors show here as soon as they are heard. Stay within a few metres of them.' : caption} />
                 ) : (<>
                   <View style={s.overview}>{overview}</View>
                   <Animated.ScrollView ref={scrollRef} style={s.sensorScroll} contentContainerStyle={s.desktopList}>
@@ -1143,6 +1177,8 @@ const s = StyleSheet.create({
   listHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 24 },
   listLabel: { marginTop: 0, marginBottom: -4 },
   refreshIcon: { width: 18, height: 18 },
+  refreshButton: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  refreshText: { fontFamily: 'Onest_400Regular', fontSize: 12, color: C.muted },
   refreshRing: { position: 'absolute', left: 1, top: 1, width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: C.ink, borderTopColor: 'transparent', transform: [{ rotate: '45deg' }] },
   refreshHead: { position: 'absolute', right: 1, top: -1, width: 0, height: 0, borderLeftWidth: 4, borderRightWidth: 4, borderBottomWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: C.ink, transform: [{ rotate: '90deg' }] },
   sensorRow: { minHeight: 56, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.card, justifyContent: 'center' },
