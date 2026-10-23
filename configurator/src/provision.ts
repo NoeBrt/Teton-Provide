@@ -1,4 +1,4 @@
-// Messages carried inside the Noise channel. Mirrors Request/Response in src/provision.rs on the device.
+// Messages carried inside the Noise channel. Mirrors Request/Response in device/src/provision.rs on the device.
 export const PROVISION_CHARACTERISTIC_UUID = '3c2c02fa-847e-480c-9f22-b239dfa524c9';
 export const ATTEMPT_ID_LEN = 16;
 export const MAX_SSID = 32;

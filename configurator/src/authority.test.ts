@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { x25519 } from '@noble/curves/ed25519.js';
 import { checkToken, decodeToken, deviceId, fromHex, OLD_LINK, parseTokenText, verifyCertificate } from './authority.ts';
 
-// Certificate and token signed by snow's side with fixed authority keys (tests/noise_vectors.rs).
+// Certificate and token signed by snow's side with fixed authority keys (device/tests/noise_vectors.rs).
 const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.meta.url), 'utf8'));
 const deviceAuthority = fromHex(vectors.deviceAuthority);
 const technicianAuthority = fromHex(vectors.technicianAuthority);
@@ -58,7 +58,7 @@ test('a token comes from its bare code, the code pasted with the old link prefix
   for (const text of bad) assert.equal(parseTokenText(text), null, text);
 });
 
-// The code `authority issue` prints (tests/noise_vectors.rs writes it as `code` with authority::code_text).
+// The code `authority issue` prints (device/tests/noise_vectors.rs writes it as `code` with authority::code_text).
 test('the code the authority prints is read as is', () => {
   assert.match(vectors.code, /^[0-9a-f]+\.[0-9a-f]+$/, 'the bare code, no link prefix');
   const token = parseTokenText(vectors.code);

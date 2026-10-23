@@ -8,11 +8,11 @@ import { DEVICE_AUTHORITY, deviceId, verifyCertificate, type Token } from './aut
 import { ATTEMPT_ID_LEN, decodeResponse, PROVISION_CHARACTERISTIC_UUID, provisionRequest, statusRequest, type Failure, type Outcome } from './provision.ts';
 import { SERVICE_UUID, TimeoutError, withTimeout, sensorId, sensorState, type Advertising, type BleLink } from './probe.ts';
 
-// First byte of every write (src/provision.rs FRAME_*): start a handshake, or continue the session.
+// First byte of every write (device/src/provision.rs FRAME_*): start a handshake, or continue the session.
 const FRAME_HANDSHAKE = 0;
 const FRAME_TRANSPORT = 1;
 const MAX_MESSAGE = 511;
-// The sensor's answer to the token (src/provision.rs TOKEN_*, REFUSED_*).
+// The sensor's answer to the token (device/src/provision.rs TOKEN_*, REFUSED_*).
 const TOKEN_ACCEPTED = 0;
 const REFUSED_OTHER_CUSTOMER = 2;
 const REFUSED_EXPIRED = 3;
@@ -71,7 +71,7 @@ export async function setup(
   let attempt: Uint8Array | undefined;
   const at = (next: SetupStep) => { step = next; onStep(next); };
   const exchange = async (frame: number, message: Uint8Array) => {
-    // One Noise message per GATT write: never let the library split it (src/provision.rs MAX_MESSAGE).
+    // One Noise message per GATT write: never let the library split it (device/src/provision.rs MAX_MESSAGE).
     await withTimeout(ble.write(id, SERVICE_UUID, PROVISION_CHARACTERISTIC_UUID, [frame, ...message], 1 + MAX_MESSAGE), timeoutMs);
     return Uint8Array.from(await withTimeout(ble.read(id, SERVICE_UUID, PROVISION_CHARACTERISTIC_UUID), timeoutMs));
   };

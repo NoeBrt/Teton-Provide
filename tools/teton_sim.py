@@ -4,7 +4,7 @@
 One Bumble host owns hci0 through the kernel's HCI user channel. Each identity directory (`stage init` +
 `authority certify` + `stage install`, the same files as /var/lib/teton-device) becomes one sensor with its own
 static random address; ~20 legacy ADV_IND sets rotate over all identities. The GATT and Noise behaviour is a port of
-device/main.rs and src/provision.rs; NetworkManager is replaced by a timed outcome per identity (PLAN).
+device/bin/main.rs and device/src/provision.rs; NetworkManager is replaced by a timed outcome per identity (PLAN).
 
   sudo .venv/bin/python teton_sim.py ~/noe-ws/lab-sensors      # teton-device + bluetooth stopped, hci0 down
   .venv/bin/python teton_sim.py --selftest .../configurator/src/noise-vectors.json
@@ -29,16 +29,16 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
-SERVICE_UUID = '3b0a90ce-9564-40d1-b96b-14cf8858aba3'  # src/protocol.rs:7
-HELLO_UUID = '29b3765c-de49-4114-889e-89b05852c968'  # src/protocol.rs:8
-PROVISION_UUID = '3c2c02fa-847e-480c-9f22-b239dfa524c9'  # src/provision.rs:30
+SERVICE_UUID = '3b0a90ce-9564-40d1-b96b-14cf8858aba3'  # device/src/protocol.rs:7
+HELLO_UUID = '29b3765c-de49-4114-889e-89b05852c968'  # device/src/protocol.rs:8
+PROVISION_UUID = '3c2c02fa-847e-480c-9f22-b239dfa524c9'  # device/src/provision.rs:30
 NOISE_NAME = b'Noise_XX_25519_ChaChaPoly_SHA256'  # exactly 32 bytes, so h = name
-PROLOGUE = b'teton-provision/2'  # src/provision.rs:29
-CERT_DOMAIN, TOKEN_DOMAIN = b'teton-device-cert/1', b'teton-technician-token/2'  # src/authority.rs:13-14
-FIRMWARE_BUILT = 1_792_454_400  # device/main.rs:47: token expiry is never checked against an earlier clock
-IDLE_S = 60  # device/main.rs:42
-MAX_MESSAGE = 511  # src/provision.rs:34
-MAX_RECORDS = 64  # src/provision.rs:604
+PROLOGUE = b'teton-provision/2'  # device/src/provision.rs:29
+CERT_DOMAIN, TOKEN_DOMAIN = b'teton-device-cert/1', b'teton-technician-token/2'  # device/src/authority.rs:13-14
+FIRMWARE_BUILT = 1_792_454_400  # device/bin/main.rs:47: token expiry is never checked against an earlier clock
+IDLE_S = 60  # device/bin/main.rs:42
+MAX_MESSAGE = 511  # device/src/provision.rs:34
+MAX_RECORDS = 64  # device/src/provision.rs:604
 GAP_NAME = 'noe-lab'  # what BlueZ serves as 0x2A00 on noe-lab (Adapter1.Alias)
 
 # Calibration knobs (the hardware decides): see the spec's open questions.
@@ -50,7 +50,7 @@ MAX_SETS = 20
 JOIN_S = 5.5  # measured on noe-lab: 5-6 s from pending to connected
 NOT_IN_RANGE_S = 10.0  # never measured on hardware
 WRONG_PSK_S = 15.0  # never measured on hardware
-TIMEOUT_S = 45.0  # device/wifi.rs:36
+TIMEOUT_S = 45.0  # device/bin/wifi.rs:36
 SLOW_S = 40.0
 WRONG_PASSWORD = b'wrong-password'  # typed in the app, every sensor fails WrongPsk (the batch stops, batch.ts:11)
 # Directory number -> behaviour; anything else is 'ok'. Customer OTHER comes from the certificate itself.
@@ -69,7 +69,7 @@ def failed(code):
     return bytes([2, code])
 
 
-# --- Noise_XX_25519_ChaChaPoly_SHA256, responder (snow in src/provision.rs:470-485; noise.ts is the initiator) ---
+# --- Noise_XX_25519_ChaChaPoly_SHA256, responder (snow in device/src/provision.rs:470-485; noise.ts is the initiator) ---
 def _hmac(key, data):
     return hmac.new(key, data, hashlib.sha256).digest()
 
@@ -158,7 +158,7 @@ class Responder:
         return Cipher(k1), Cipher(k2)
 
 
-# --- Certificates and technician tokens (src/authority.rs) ---
+# --- Certificates and technician tokens (device/src/authority.rs) ---
 CUSTOMER = re.compile(rb'[A-Za-z0-9_-]{1,32}')
 
 
@@ -196,7 +196,7 @@ class Refused(Exception):
 
 
 def check_token(data, technician_authority, customer, now, holder_proven):
-    """Returns the technician's name, or raises Refused(reason): src/provision.rs:538-545, authority.rs:306-325."""
+    """Returns the technician's name, or raises Refused(reason): device/src/provision.rs:538-545, authority.rs:306-325."""
     try:
         body, signature = split_signed(data, 2)
         if len(body) < 41:
@@ -227,7 +227,7 @@ def check_token(data, technician_authority, customer, now, holder_proven):
     return name.decode()
 
 
-def decode_request(plain):  # src/provision.rs:102-129 -> ('status'|'provision', attempt, ssid, password)
+def decode_request(plain):  # device/src/provision.rs:102-129 -> ('status'|'provision', attempt, ssid, password)
     if len(plain) >= 17:
         tag, attempt, rest = plain[0], plain[1:17], plain[17:]
         if tag == 2 and not rest:
@@ -250,7 +250,7 @@ class Peer:
 
 
 class Session:
-    """Noise state for one phone; any error closes it for good (src/provision.rs:457-583)."""
+    """Noise state for one phone; any error closes it for good (device/src/provision.rs:457-583)."""
 
     def __init__(self, sensor, now):
         self.sensor, self.now, self.phase = sensor, now, 'start'
@@ -302,13 +302,13 @@ class Sensor:
         self.ipv4 = bytes([10, 77, n >> 8, n & 0xFF])
         self.provisioned = profile in ('online', 'offline')
         self.online = profile == 'online'
-        self.hello = None  # the phone that wrote hello last: one slot per sensor (device/main.rs:38-39)
-        self.peers = {}  # phone address -> Peer (device/main.rs:91-95)
-        self.records = {}  # attempt -> [payload hash, outcome] (src/provision.rs:606-612)
+        self.hello = None  # the phone that wrote hello last: one slot per sensor (device/bin/main.rs:38-39)
+        self.peers = {}  # phone address -> Peer (device/bin/main.rs:91-95)
+        self.records = {}  # attempt -> [payload hash, outcome] (device/src/provision.rs:606-612)
         self.links = 0
         self.busy_done = False
 
-    def state(self):  # device/main.rs:327-334
+    def state(self):  # device/bin/main.rs:327-334
         return 2 if self.online else 3 if self.provisioned else 1
 
     def advertising_data(self):  # BlueZ 5.64 order: service UUIDs, manufacturer data, then flags
@@ -318,7 +318,7 @@ class Sensor:
     def scan_response_data(self):
         return bytes([len(self.name) + 1, 0x09]) + self.name.encode()
 
-    # Hello characteristic (device/main.rs:56-80)
+    # Hello characteristic (device/bin/main.rs:56-80)
     def hello_write(self, phone, value):
         self.hello = None
         if value != b'hello':
@@ -333,7 +333,7 @@ class Sensor:
         log(self.name, 'hello exchanged')
         return b'world'
 
-    # Provisioning characteristic (device/main.rs:101-175)
+    # Provisioning characteristic (device/bin/main.rs:101-175)
     def provision_write(self, phone, value, mtu):
         now = time.monotonic()
         self.peers = {a: p for a, p in self.peers.items() if now - p.last < IDLE_S}
@@ -370,7 +370,7 @@ class Sensor:
         reply, peer.reply = (peer.reply, None) if peer else (None, None)
         return reply or b''
 
-    # Attempt registry (src/provision.rs:620-673) and the simulated NetworkManager join (device/main.rs:277-312)
+    # Attempt registry (device/src/provision.rs:620-673) and the simulated NetworkManager join (device/bin/main.rs:277-312)
     def handle(self, kind, attempt, ssid, password):
         if kind == 'status':
             return self.records.get(attempt, [None, UNKNOWN])[1]
@@ -392,7 +392,7 @@ class Sensor:
             if password == WRONG_PASSWORD:
                 delay, outcome = WRONG_PSK_S, failed(1)
         except UnicodeDecodeError:
-            delay, outcome = 0, failed(1)  # device/wifi.rs:61-63
+            delay, outcome = 0, failed(1)  # device/bin/wifi.rs:61-63
         self.start(attempt, payload_hash, delay, outcome)
         return PENDING
 
@@ -412,7 +412,7 @@ class Sensor:
 # --- Bluetooth: one GATT database, ~20 advertising sets, the identity from the set that took the connection ---
 class SensorServer(Server):
     def on_att_read_blob_request(self, bearer, request):
-        if request.value_offset:  # device/main.rs:68-71, 166-169: InvalidOffset, and the reply is not consumed
+        if request.value_offset:  # device/bin/main.rs:68-71, 166-169: InvalidOffset, and the reply is not consumed
             raise att.ATT_Error(att.ErrorCode.INVALID_OFFSET, request.attribute_handle)
         return super().on_att_read_blob_request(bearer, request)
 
@@ -536,7 +536,7 @@ def selftest(vectors_path):
     """Replays configurator/src/noise-vectors.json on the device side, byte for byte."""
     import json
     v = json.loads(Path(vectors_path).read_text())
-    key = lambda fill: bytes((fill + i) & 0xFF for i in range(32))  # tests/noise_vectors.rs:24-26
+    key = lambda fill: bytes((fill + i) & 0xFF for i in range(32))  # device/tests/noise_vectors.rs:24-26
     sensor = Sensor.__new__(Sensor)
     sensor.name, sensor.profile, sensor.customer = v['deviceId'], 'ok', v['customer']
     sensor.certificate, sensor.technician_authority = bytes.fromhex(v['certificate']), bytes.fromhex(v['technicianAuthority'])

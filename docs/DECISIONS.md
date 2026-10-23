@@ -174,7 +174,7 @@ Memory queues also work within this session's socket restrictions.
 BlueZ, BLE timing/MTU, systemd recovery, offline wireless operation, or Wi-Fi joining.
 
 **Evidence / test:** User instruction, 2026-10-17. Planned executable checks and
-the distinct hardware acceptance checkpoint are in `docs/development/todo.md`.
+the distinct hardware acceptance checkpoint are in the development notes (git history).
 
 ## 8. Docker boundary
 
@@ -231,7 +231,7 @@ Bleak documents BlueZ >=5.55, met by the workstation's tools, not yet verified o
 **Original proposal:** Private GitHub repository and hardware-first milestone.
 
 **Final choice:** Continue in the existing local `teton-provisioning/` Git
-repository. Write `docs/ARCHITECTURE.md`, `docs/development/plan.md`, and `docs/development/todo.md`.
+repository. Write `docs/ARCHITECTURE.md` and the plan and to-do list (development notes, git history).
 Do not change the existing workspace AGENTS.md or implement future features now.
 
 **Reason:** The latest request explicitly asks to define the stack and plan
@@ -318,7 +318,7 @@ sub-agents explicitly authorized for collaboration.
 mode and checked responses; separately time reused-session exchange and full
 connect/exchange/close. Run a bounded 300-second mixed-failure endurance test.
 Keep commands, compiler, code commit, raw results, and resource snapshots in
-`evidence/`, with interpretation in `docs/BENCHMARKS.md`.
+`evidence/`, with interpretation in `evidence/simulation/README.md`.
 
 **Reason:** Fixed, checked work plus independent review gives a defensible
 software milestone. Benchmarks retain validation and worker cleanup. No
@@ -367,7 +367,7 @@ no blocking defect. All 23 tests pass in debug/release, with formatting, Clippy,
 and release build passing. Three processes checked 80,073 timed jobs across
 45 scenario summaries, all with zero exit status. For 200 jobs, medians of
 per-process median batch times were 6.713/2.237/2.431 ms at 1/4/8 clients.
-See `docs/development/REVIEW.md`, `docs/BENCHMARKS.md`, and raw evidence under `evidence/`.
+See the development notes (git history), `evidence/simulation/README.md`, and raw evidence under `evidence/`.
 
 ## 15. Phone configurator and headless Ubuntu device
 
@@ -439,8 +439,8 @@ semantics, a descendant retaining stdout after TERM, non-UTF-8 argument leakage,
 and D-Bus autoactivation. Separate Standards/Spec reviews identified defects
 that were reproduced and fixed. Rustfmt, Clippy, and release builds pass.
 The actual prepared-binary run returns exit 1 because host service access is
-blocked; see `evidence/real/host-preflight.txt`, `evidence/checks/tdd-host-audit.txt`, and
-`evidence/checks/host-audit-verification.txt`. This does not close checkpoint H.
+blocked; see `evidence/real/host-preflight.txt`, `evidence/tests/tdd-host-audit.txt`, and
+`evidence/tests/host-audit-verification.txt`. This does not close checkpoint H.
 
 ## 17. Standalone architecture document and technician mockup
 
@@ -451,7 +451,7 @@ an interactive illustration of the non-technical operator flow.
 credential protection, and real Wi-Fi activation have passed their gates.
 
 **Final choice:** The user explicitly requests an HTML architecture/mockup now.
-Add `docs/development/archive/architecture-demo.html` with inline CSS/JavaScript, phone/desktop
+Add a standalone HTML mockup (now in the git history) with inline CSS/JavaScript, phone/desktop
 previews, and simulated success, password, network, disconnect, and identity
 outcomes. Keep the actual runtime implementation gated. Use French, a neutral
 paper/green palette, one diagram, and a focused device/network/result workflow.
@@ -471,7 +471,7 @@ audit tests and the rest of the Rust suite are unchanged and not rerun here.
 A separate review found retained SSID validation after reset; the reproduced
 regression is fixed. All 12 DOM scenario groups pass under jsdom with controlled
 timers, no DOM errors, no outbound requests, and no pending timers. See
-`evidence/checks/mockup-dom-verification.md` for method, tested file hash, and limitations.
+`evidence/tests/mockup-dom-verification.md` for method, tested file hash, and limitations.
 Chrome headless fails on a prohibited socket operation in this session; Firefox
 is also blocked by its snap runtime path. DOM checks do not validate visual
 layout, native browser accessibility, CSP enforcement, or physical provisioning.
@@ -562,7 +562,7 @@ the offline baseline or pretending another simulation is radio evidence.
 205 cached crates, required BLE/runtime crates absent, temporary-manifest
 `cargo check --locked --offline` fails with package `bluer` unavailable.
 Actual BlueZ/NetworkManager access remains prohibited; see the separate
-`evidence/real/host-preflight-continuation.txt` and `docs/development/HANDOFF.md`.
+`evidence/real/host-preflight-continuation.txt` and the development notes (git history).
 
 ## 21. Real BlueZ hello endpoint behind the `ble` feature
 
@@ -587,8 +587,8 @@ graph is fetched.
 Per-connection state and notifications are deferred to the secure protocol.
 The default adapter is used; no adapter argument yet.
 
-**Evidence / test:** Six unit tests in `device/main.rs`, four mutations caught
-(`evidence/checks/tdd-ble-device.txt`); all suites, Rustfmt, and
+**Evidence / test:** Six unit tests in `device/bin/main.rs`, four mutations caught
+(`evidence/tests/tdd-ble-device.txt`); all suites, Rustfmt, and
 Clippy with and without `ble`. Actual run: `evidence/real/host-ble-endpoint.txt` (rfkill soft
 block, BlueZ returns `Busy`). Over-the-air exchange remains `NOT_RUN`.
 
@@ -651,7 +651,7 @@ device's Wi-Fi apply should reuse Smith's connectivity guard and error names
 (`WrongPSK`, `NotInRange`, `NmcliError`) so technician messages match Smith.
 
 **Evidence / test:** `npm test` (6 probe tests, 6 mutations caught,
-`evidence/checks/tdd-configurator.txt`), an independent review with its fixes applied, `tsc`, `expo lint`, `expo-doctor` 20/20, an iOS
+`evidence/tests/tdd-configurator.txt`), an independent review with its fixes applied, `tsc`, `expo lint`, `expo-doctor` 20/20, an iOS
 prebuild with the Bluetooth usage string, and an iOS JavaScript export. No phone
 has run the app yet.
 
@@ -682,7 +682,7 @@ both a fake sensor and a real but different one. Changing the protocol now would
 **Trade-off:** A photographed label lets someone provision a sensor that is not yet provisioned (accepted risk,
 `docs/SECURITY.md`); attestation or a Smith manifest removes it.
 
-**Evidence / test:** `evidence/checks/tdd-provision.txt`, `configurator/src/setup.test.ts` (a sensor failing the handshake
+**Evidence / test:** `evidence/tests/tdd-provision.txt`, `configurator/src/setup.test.ts` (a sensor failing the handshake
 never receives the credentials).
 
 ## 25. Channel if Teton's own sensors have no BLE
@@ -768,11 +768,11 @@ fast as the uptime, so it cannot lock codes out, but after a long power-off it t
 The authorities' private keys must stay offline at Teton; the
 demo keeps them in `~/noe-ws/teton-authority` on noe-lab (0600, outside the repository).
 
-**Evidence / test:** `src/authority.rs` and `src/provision.rs` tests (impostor with a copied certificate, other
+**Evidence / test:** `device/src/authority.rs` and `device/src/provision.rs` tests (impostor with a copied certificate, other
 authority, other customer, expired and forged tokens, reconfiguration, rollback profile order);
-`tests/noise_vectors.rs` with `configurator/src/noise.test.ts` (byte-for-byte interop); `configurator/src/setup.test.ts`
+`device/tests/noise_vectors.rs` with `configurator/src/noise.test.ts` (byte-for-byte interop); `configurator/src/setup.test.ts`
 (the token never leaves for a sensor that fails the checks); `configurator/src/batch.test.ts` (200 fake sensors);
-Simulator video `docs/assets/architecture/demo-simulator.mp4`.
+Simulator video `docs/media/demo-simulator.mp4`.
 
 ## 28. Overall of the sensors in range
 
@@ -842,8 +842,8 @@ rooms from Smith. The time left assumes the pace so far holds. The code is about
 sensor that joined then advertises offline an error; the time left only after ten have finished); app 68 tests,
 `npx tsc --noEmit` and `npx expo lint` clean. iOS Simulator in demo mode (`SIMULATION`, decision 30), 200 simulated
 sensors, each with a real Noise `XX` responder, iPhone 16 Pro and iPhone SE with accessibility-large text: screens
-`docs/assets/architecture/08-overall-running.png` to `11-overall-se-large-text.png` and the 42 s video
-`docs/assets/architecture/overall-200-sensors.mp4` (2x speed: discovery, a batch with sensors added, the Not set up tab, the
+`docs/media/08-overall-running.png` to `11-overall-se-large-text.png` and the 42 s video
+`docs/media/overall-200-sensors.mp4` (2x speed: discovery, a batch with sensors added, the Not set up tab, the
 Errors tab). The design canvas and the first build are kept
 outside the repository. NOT_RUN: the overall with many real sensors; the app is installed on the technician's
 iPhone, where it has not yet been used at scale.
@@ -893,7 +893,7 @@ with real sensors.
 ## 30. Demo mode in the app, and the lab bench
 
 **Decision:** Demo mode ships inside the app: 200 simulated sensors on a fake radio, trusted through a second, public
-demo authority that only the fake radio uses. A separate bench in `lab/`, outside the app, shows 200 simulated
+demo authority that only the fake radio uses. A separate bench in `tools/`, outside the app, shows 200 simulated
 sensors over real Bluetooth from noe-lab, with identities certified by the real device authority for a lab customer.
 
 **Original proposal:** The Simulator screens and videos of decisions 27 and 28 came from a temporary harness, not in
@@ -906,7 +906,7 @@ the repository. Nothing let a reviewer see a wing, and nothing loaded the phone'
 | Entry | Tap the logo and confirm; the chip reads **DEMO**; the logo or the chip leaves (not while a test or a batch runs). The launch argument `-demo 1` (simctl) starts in it. |
 | Isolation | Switching remounts the screen: no sensor, result, scan or credential crosses modes. The demo authority (seeds filled with 0x51 and 0x52, public) is passed to `setup()` only in demo mode; real sensors are always checked against `DEVICE_AUTHORITY`. The demo's code and site live in memory; nothing saved is read or written, and the code and site sheets never open. |
 | Demo wing | `configurator/src/demo.ts`: each sensor runs the sensor side of Noise `XX` with its own key. 6 set up before, 4 not prepared, 3 out of Wi-Fi range, 3 impostors (a copied certificate without its key), 2 of another customer, some slow joins. About half is heard within 4 s, the rest over a minute. |
-| Bench | `lab/teton_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `lab/mint-lab.sh` (`stage init`, `authority certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `lab/sim-lab.sh` stops `teton-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
+| Bench | `tools/teton_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `tools/mint-lab.sh` (`stage init`, `authority certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `tools/sim-lab.sh` stops `teton-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
 
 **Reason:** One app for both: the demo runs the real code paths (handshake, checks, batch, overall), so what a
 reviewer sees is what a technician gets. The bench measures what the Simulator cannot: the radio, iOS's links, the
@@ -922,7 +922,7 @@ measured ones.
 
 **Evidence / test:** `configurator/src/demo.test.ts` (3 tests: the expected outcome for each simulated sensor through
 the real `setup()`, demo sensors refused under the real authority, Test on a demo sensor); screens 8 to 11 and
-`docs/assets/architecture/overall-200-sensors.mp4` (`SIMULATION`); bench runs (`ACTUAL_BLE`, run log on noe-lab, not in the
+`docs/media/overall-200-sensors.mp4` (`SIMULATION`); bench runs (`ACTUAL_BLE`, run log on noe-lab, not in the
 repository).
 
 ## Sensor identity carrier correction — approved 2026-10-23
@@ -932,4 +932,4 @@ missing. Rename/alias and process-memory workarounds did not survive cache lifet
 moving all five identity bytes into the existing primary manufacturer record after the state byte (31/31 legacy
 bytes), with one shared parser for display, saved-site lookup and setup. Names remain diagnostic. No certificate
 or Noise binding is weakened. Older state-only firmware requires an update; no fallback reintroduces the missing
-scan-response dependency. Scope, regressions and evidence limits: `docs/development/sensor-identity-proposal.md` and HANDOFF.
+scan-response dependency. Scope, regressions and evidence limits: the identity proposal and handoff notes (git history).

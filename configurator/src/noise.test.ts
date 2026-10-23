@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { initiator, NOISE_PARAMS, PROLOGUE } from './noise.ts';
 import { decodeResponse, provisionRequest, statusRequest } from './provision.ts';
 
-// Produced by snow on the device side (tests/noise_vectors.rs): fixed keys make every byte deterministic.
+// Produced by snow on the device side (device/tests/noise_vectors.rs): fixed keys make every byte deterministic.
 const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.meta.url), 'utf8'));
 const hex = (s: string) => Uint8Array.from(Buffer.from(s, 'hex'));
 const messages: Uint8Array[] = vectors.messages.map((m: { message: string }) => hex(m.message));

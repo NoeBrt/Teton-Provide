@@ -4,7 +4,7 @@ Status: **implemented** (commit `52644b3`, holder-bound codes and review fixes s
 below. It replaces the QR-label protocol of
 the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sensors; decision 27 of
 `docs/DECISIONS.md` records why and what was chosen. `docs/ARCHITECTURE.md` explains it for readers, and
-`docs/EVALUATION.md` tracks which of the tests at the end of this file have run.
+The [requirements map](../README.md#requirements-map) tracks which of the tests at the end of this file have run.
 
 ## Constraints
 
@@ -141,26 +141,26 @@ The storage policies below describe the iPhone. On desktop, the current adapter 
   demo's fake radio; switching modes remounts the screen, and real sensors are always checked against
   `DEVICE_AUTHORITY`. Audited: no path pairs the demo authority with the real radio. The demo's code and site live in
   memory; the saved code and sites are never read or written in demo mode.
-- **Lab bench identities.** The bench's 200 identities (`lab/mint-lab.sh`, customer `LAB`, 194 to 196 `OTHER`) are
+- **Lab bench identities.** The bench's 200 identities (`tools/mint-lab.sh`, customer `LAB`, 194 to 196 `OTHER`) are
   certified by the real device authority; their private keys sit in 0600 files on noe-lab (`~/noe-ws/lab-sensors`).
   Any phone whose code covers `LAB` sends them the site password, so the bench is used with a throwaway site; the
   simulator never joins Wi-Fi. A technician code for `LAB` and `DEMO` was issued for 30 days.
-- **Root simulator.** `lab/teton_sim.py` runs as root to take hci0 through the HCI user channel and receives the site
+- **Root simulator.** `tools/teton_sim.py` runs as root to take hci0 through the HCI user channel and receives the site
   password in memory, like a sensor. Its log holds sensor IDs, attempt IDs, the technician's name and outcomes, never
   a key or a password.
 
 ## Tests required before enabling secrets
 
 - A sensor that copies a genuine certificate, presents another authority's certificate, or advertises another ID never
-  receives the token or the credentials. (`src/provision.rs`, `configurator/src/setup.test.ts`)
+  receives the token or the credentials. (`device/src/provision.rs`, `configurator/src/setup.test.ts`)
 - Tokens for another customer, expired, forged or presented without their holder key are refused and close the
-  session. (`src/provision.rs`, `src/authority.rs`)
+  session. (`device/src/provision.rs`, `device/src/authority.rs`)
 - Demo sensors are refused as not genuine under the real device authority. (`configurator/src/demo.test.ts`)
-- The code `authority issue` prints is the code the app reads. (`tests/noise_vectors.rs`,
+- The code `authority issue` prints is the code the app reads. (`device/tests/noise_vectors.rs`,
   `configurator/src/authority.test.ts`)
-- The clock floor never starts before the firmware date and rises no faster than the uptime. (`device/main.rs`)
+- The clock floor never starts before the firmware date and rises no faster than the uptime. (`device/bin/main.rs`)
 - Tampered, truncated, reordered, and replayed frames are rejected. (`configurator/src/noise.test.ts`,
-  `src/provision.rs`)
+  `device/src/provision.rs`)
 - A BLE capture (`btmon` on the device) contains no SSID or password bytes. (`evidence/real/real-join.txt`, first protocol)
 - Wrong password, unreachable network, and existing or fallback connections never report success; a failed
   reconfiguration returns to the previous network. (NOT_RUN on hardware)

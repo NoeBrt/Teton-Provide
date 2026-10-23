@@ -1,10 +1,10 @@
-// Documentation capture only. Usage: node evidence/tools/record-demos.mjs PLAYWRIGHT_MODULE [CHROMIUM_EXECUTABLE].
+// Documentation capture only. Usage: node tools/record-demos.mjs PLAYWRIGHT_MODULE [CHROMIUM_EXECUTABLE].
 // Setup uses the checked-in public test authority in an isolated browser bundle, never real deployment credentials.
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 const { chromium } = await import(process.argv[2] || 'playwright');
-const fixture = JSON.parse(await readFile(new URL('../../configurator/src/noise-vectors.json', import.meta.url)));
-const root = new URL('../checks/demos/', import.meta.url).pathname;
+const fixture = JSON.parse(await readFile(new URL('../configurator/src/noise-vectors.json', import.meta.url)));
+const root = new URL('../evidence/tests/demos/', import.meta.url).pathname;
 await mkdir(root, { recursive: true });
 const browser = await chromium.launch({headless:true,...(process.argv[3] && {executablePath:process.argv[3]})});
 async function record(name, width, height) {

@@ -1,9 +1,9 @@
 #!/bin/sh
-# Installs the device service on Ubuntu. From the repository root, after
+# Installs the device service on Ubuntu. From device/, after
 #   cargo build --release --features ble,stage --locked
-# run: sudo device/systemd/install.sh [wifi-interface]
+# run: sudo systemd/install.sh [wifi-interface]
 set -eu
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/.."
 for binary in device stage; do
   [ -x "target/release/$binary" ] || { echo "target/release/$binary missing: build it first" >&2; exit 1; }
 done
@@ -11,11 +11,11 @@ done
 id teton >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin teton
 install -m 755 target/release/device /usr/local/bin/teton-device
 install -m 755 target/release/stage /usr/local/bin/teton-stage
-install -m 644 device/systemd/teton-device.service /etc/systemd/system/
+install -m 644 systemd/teton-device.service /etc/systemd/system/
 # Only one of these is read, depending on the polkit version.
 install -d /etc/polkit-1/localauthority/50-local.d /etc/polkit-1/rules.d
-install -m 644 device/systemd/teton-device.pkla /etc/polkit-1/localauthority/50-local.d/
-install -m 644 device/systemd/50-teton-device.rules /etc/polkit-1/rules.d/
+install -m 644 systemd/teton-device.pkla /etc/polkit-1/localauthority/50-local.d/
+install -m 644 systemd/50-teton-device.rules /etc/polkit-1/rules.d/
 if [ -n "${1:-}" ]; then echo "TETON_WIFI_INTERFACE=$1" > /etc/default/teton-device; fi
 # A Teton device is a BLE peripheral only. BlueZ's battery plugin reads the battery level of each connected phone;
 # iOS requires an encrypted link for it, so BlueZ asks the phone to pair, pairing fails, and BlueZ stops answering

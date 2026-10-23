@@ -1,6 +1,6 @@
-// Noise_XX_25519_ChaChaPoly_SHA256, initiator side (the phone). Mirrors src/provision.rs on the device, which
+// Noise_XX_25519_ChaChaPoly_SHA256, initiator side (the phone). Mirrors device/src/provision.rs on the device, which
 // uses snow. Written from the Noise spec (rev. 34) on the audited @noble primitives; byte-for-byte interop is
-// checked against vectors produced by snow (noise-vectors.json, tests/noise_vectors.rs).
+// checked against vectors produced by snow (noise-vectors.json, device/tests/noise_vectors.rs).
 //   -> e
 //   <- e, ee, s, es   (payload: the device certificate)
 //   -> s, se          (payload: the technician token)
