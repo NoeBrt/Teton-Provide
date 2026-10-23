@@ -980,3 +980,17 @@ review, and a measurement of the affected path. Document measurement limits.
   Rollback Mac bundle: `/private/tmp/Provide.before-refresh-motion.app`. No firmware or storage changes.
 - NOT_RUN: visual animation check on the physical iPhone; Windows/Linux desktop. Rendered motion was measured in
   WebKit/Chromium, not inferred from the presence of an animation declaration.
+
+## Completion jump and fade — 2026-10-23
+
+- User requested visible list feedback when the update finishes, even if the same sensors remain. The existing
+  in-progress rotation/bounce is retained; success now gives the existing scroll container a 6 px lift and a
+  0.55-to-1 opacity fade, settling in about 420 ms. No card remounts, hierarchy, gaps or scrolling offsets change.
+- Web uses a finite `data-refresh-done` compositor animation; native uses the existing Reanimated values with
+  explicit cancellation/reset. Reduced Motion retains full visibility and the text confirmation without movement.
+- COMMAND_FIXTURE PASS: completion-fade regression failed before the change. Frame sampling confirms an opacity
+  dip, multiple jump positions and full visibility at completion; WebKit 1280 px and reduced-motion Chromium
+  390 px pass, along with 87 JS tests, typecheck and lint. Independent review found no blocker.
+- Mac and signed iPhone Release rebuilt, installed and launched; Simulator Release built and demo launched.
+  Rollback Mac bundle: `/private/tmp/Provide.before-completion.app`. No firmware, credentials or storage changes.
+- NOT_RUN: visual animation check on the physical iPhone, Windows/Linux desktop.

@@ -691,16 +691,24 @@ function Provide({ demo, onDemo }: Mode) {
   const captionIn = useSharedValue(0);
   const refreshSpin = useSharedValue(0);
   const refreshLift = useSharedValue(0);
-  const refreshBounce = useAnimatedStyle(() => ({ transform: [{ translateY: refreshLift.value }] }));
+  const refreshOpacity = useSharedValue(1);
+  const refreshBounce = useAnimatedStyle(() => ({ transform: [{ translateY: refreshLift.value }], opacity: refreshOpacity.value }));
   useEffect(() => {
     refreshSpin.value = 0;
     refreshLift.value = 0;
+    refreshOpacity.value = 1;
     if (refreshStatus === 'refreshing' && !reduceMotion && !WEB) {
       refreshSpin.value = withRepeat(withTiming(1, { duration: 800, easing: Easing.linear }), -1, false);
       refreshLift.value = withSequence(withTiming(-4, { duration: 100 }), withSpring(0, { damping: 12, stiffness: 200 }));
     }
-    return () => { cancelAnimation(refreshSpin); cancelAnimation(refreshLift); };
-  }, [refreshStatus, reduceMotion, refreshSpin, refreshLift]);
+    if (refreshStatus === 'updated' && !reduceMotion && !WEB) {
+      refreshLift.value = 6;
+      refreshOpacity.value = 0.55;
+      refreshLift.value = withSpring(0, { damping: 12, stiffness: 200 });
+      refreshOpacity.value = withTiming(1, { duration: 380 });
+    }
+    return () => { cancelAnimation(refreshSpin); cancelAnimation(refreshLift); cancelAnimation(refreshOpacity); };
+  }, [refreshStatus, reduceMotion, refreshSpin, refreshLift, refreshOpacity]);
   useEffect(() => {
     if (!measured) return;
     const timer = setTimeout(() => setIntroDone(true), reduceMotion ? 0 : INTRO_MS);
@@ -1095,7 +1103,7 @@ function Provide({ demo, onDemo }: Mode) {
                 ) : (<>
                   <View style={s.overview}>{overview}</View>
                   <Animated.ScrollView ref={scrollRef} style={s.sensorScroll} contentContainerStyle={s.desktopList}
-                    {...{ dataSet: refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : undefined }}>
+                    {...{ dataSet: refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : refreshStatus === 'updated' ? { refreshDone: 'true' } : undefined }}>
                     {sensorList}
                   </Animated.ScrollView>
                 </>)}
@@ -1104,7 +1112,7 @@ function Provide({ demo, onDemo }: Mode) {
           ) : (
             <>
               <Animated.ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} scrollEnabled={found > 0}
-                style={!WEB && refreshBounce} {...{ dataSet: WEB && refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : undefined }}
+                style={!WEB && refreshBounce} {...{ dataSet: WEB ? (refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : refreshStatus === 'updated' ? { refreshDone: 'true' } : undefined) : undefined }}
                 snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}
                 contentContainerStyle={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }]}>
                 {requirements}
