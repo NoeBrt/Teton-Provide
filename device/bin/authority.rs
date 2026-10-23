@@ -1,6 +1,9 @@
 //! Teton's authorities, run at the workshop (offline). Two Ed25519 keys, kept apart from the devices:
 //!
 //! ```text
+//! authority init | public | certify DEVICE_PUBLIC_KEY_HEX | issue NAME
+//!     short forms for an evaluation: the authority lives in $TETON_AUTHORITY, else ~/teton-authority; sensors are
+//!     certified for customer DEMO and codes are valid one day
 //! authority init DIR
 //!     creates the device authority and the technician authority (private keys 0600) and prints their public keys
 //! authority public DIR
@@ -34,16 +37,35 @@ const DEVICE_KEY: &str = "device-authority.key";
 const TECHNICIAN_KEY: &str = "technician-authority.key";
 /// Codes are valid 30 days at most, which also keeps the expiry far from overflowing.
 const MAX_DAYS: u64 = 30;
-const USAGE: &str = "usage: authority init DIR | public DIR | certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER | issue DIR NAME CUSTOMERS [DAYS]";
+const USAGE: &str = "usage: authority init | public | certify DEVICE_PUBLIC_KEY_HEX | issue NAME   (in $TETON_AUTHORITY, \
+                     else ~/teton-authority; customer DEMO; 1 day)\n       \
+                     authority init DIR | public DIR | certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER | issue DIR NAME CUSTOMERS [DAYS]";
+/// Short forms: one evaluation authority in a known place, the DEMO customer, codes valid one day.
+const DEMO: &str = "DEMO";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let result = match args
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-        .as_slice()
-    {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let dir = std::env::var_os("TETON_AUTHORITY")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join("teton-authority")))
+        .unwrap_or_else(|| PathBuf::from("teton-authority"));
+    match run(&args, &dir) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("authority: {message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// One command; the short forms use `default` as the authority directory.
+fn run(args: &[&str], default: &Path) -> Result<(), String> {
+    match args {
+        ["init"] => init(default),
+        ["public"] => public(default),
+        ["certify", key] => certify(default, key, DEMO),
+        ["issue", name] => issue(default, name, DEMO, 1),
         ["init", dir] => init(Path::new(dir)),
         ["public", dir] => public(Path::new(dir)),
         ["certify", dir, key, customer] => certify(Path::new(dir), key, customer),
@@ -53,13 +75,6 @@ fn main() -> ExitCode {
             .map_err(|_| "DAYS must be a number".to_string())
             .and_then(|days| issue(Path::new(dir), name, customers, days)),
         _ => Err(USAGE.to_string()),
-    };
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(message) => {
-            eprintln!("authority: {message}");
-            ExitCode::FAILURE
-        }
     }
 }
 
@@ -157,8 +172,9 @@ fn issue(dir: &Path, name: &str, customers: &str, days: u64) -> Result<(), Strin
         qr.render::<unicode::Dense1x2>().quiet_zone(true).build()
     );
     println!(
-        "Technician code for {name}, customers {}, valid {days} days:",
-        customers.join(", ")
+        "Technician code for {name}, customers {}, valid {days} day{}:",
+        customers.join(", "),
+        if days == 1 { "" } else { "s" }
     );
     println!("{code}");
     println!(
@@ -179,6 +195,22 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         init(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn the_short_forms_use_the_default_directory_and_the_demo_customer() {
+        let dir =
+            std::env::temp_dir().join(format!("teton-authority-short-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(run(&["init"], &dir), Ok(()));
+        assert_eq!(run(&["public"], &dir), Ok(()));
+        assert_eq!(run(&["certify", &"11".repeat(32)], &dir), Ok(()));
+        assert_eq!(run(&["issue", "Evaluator"], &dir), Ok(()));
+        assert!(
+            run(&["issue", "Evaluator", "DEMO"], &dir).is_err(),
+            "no 2-word form"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
