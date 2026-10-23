@@ -8,7 +8,11 @@ video { transform: none !important; }
 [role="button"], [role="tab"] { cursor: pointer; }
 [aria-disabled="true"] { cursor: default; }
 @keyframes provide-pulse { from { opacity: 1; } to { opacity: 0.4; } }
+@keyframes provide-refresh-spin { to { transform: rotate(360deg); } }
+@keyframes provide-refresh-bounce { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-4px); } 65% { transform: translateY(1px); } }
 @media (prefers-reduced-motion: no-preference) {
+  [data-refresh-spin] { animation: provide-refresh-spin 800ms linear infinite; }
+  [data-refresh-bounce] { animation: provide-refresh-bounce 380ms ease-out; }
   [data-pulse] { animation: provide-pulse 900ms ease-in-out infinite alternate; }
   [data-pulse="1"] { animation-delay: 150ms; }
   [data-pulse="2"] { animation-delay: 300ms; }
