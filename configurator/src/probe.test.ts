@@ -88,7 +88,7 @@ test('identity requires a complete manufacturer record and ignores names', () =>
   assert.equal(sensorId({ manufacturerData: { '004c': { bytes: [1, 0x7b, 9, 0xf2, 3, 0x39] } } }), null);
   assert.equal(sensorId(undefined), null);
   assert.equal(sensorLabel({ name: 'IOT-7B09F20339', advertising: { localName: 'IOT-7B09F20339' } }), 'Unnamed sensor');
-  assert.equal(sensorLabel({ name: 'FLWR-O-019', advertising: adv([1, 0x7b, 9, 0xf2, 3, 0x39]) }), 'IOT-7B09F20339');
+  assert.equal(sensorLabel({ name: 'jetson-019', advertising: adv([1, 0x7b, 9, 0xf2, 3, 0x39]) }), 'IOT-7B09F20339');
 });
 
 test('redraw follows identity, state and signal, ignoring cached names', () => {

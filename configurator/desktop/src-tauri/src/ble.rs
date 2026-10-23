@@ -377,7 +377,7 @@ mod tests {
         let data = HashMap::from([(0xffff, vec![1]), (0x004c, vec![2, 3])]);
         let h = heard(
             "A".into(),
-            Some("FLWR-O-019".into()),
+            Some("jetson-019".into()),
             Some("IOT-AFD042F349".into()),
             Some(-60),
             &data,
