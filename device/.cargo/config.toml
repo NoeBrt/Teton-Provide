@@ -1,0 +1,3 @@
+# `cargo authority issue "Evaluator"`: builds and runs the authority tool (bin/authority.rs) in one step.
+[alias]
+authority = "run --quiet --release --features stage --bin authority --"
