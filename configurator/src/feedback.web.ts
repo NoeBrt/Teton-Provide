@@ -12,9 +12,9 @@ video { transform: none !important; }
 @keyframes provide-refresh-bounce { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-4px); } 65% { transform: translateY(1px); } }
 @keyframes provide-refresh-done { from { opacity: 0.55; transform: translateY(6px); } 65% { opacity: 1; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: no-preference) {
-  [data-refresh-spin] { animation: provide-refresh-spin 800ms linear infinite; }
-  [data-refresh-bounce] { animation: provide-refresh-bounce 380ms ease-out; }
-  [data-refresh-done] { animation: provide-refresh-done 420ms ease-out; }
+  [data-refresh-spin] { animation: provide-refresh-spin 600ms linear infinite; }
+  [data-refresh-bounce] { animation: provide-refresh-bounce 220ms ease-out; }
+  [data-refresh-done] { animation: provide-refresh-done 260ms ease-out; }
   [data-pulse] { animation: provide-pulse 900ms ease-in-out infinite alternate; }
   [data-pulse="1"] { animation-delay: 150ms; }
   [data-pulse="2"] { animation-delay: 300ms; }

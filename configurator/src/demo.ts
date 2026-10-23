@@ -150,11 +150,11 @@ export function startDemo(random: (n: number) => Uint8Array) {
     onDidUpdateState: () => ({ remove() {} }),
     onDiscoverPeripheral: (cb: (p: Peripheral) => void) => { discover = cb; return { remove() { discover = null; } }; },
     onStopScan: (cb: () => void) => { stopped = cb; return { remove() { stopped = null; } }; },
-    scan: async () => {
+    scan: async ({ seconds = 3 }: { seconds?: number } = {}) => {
       startedAt ||= Date.now();
       scanning = true;
       clearTimeout(scanTimer);
-      scanTimer = setTimeout(() => { scanning = false; stopped?.(); }, 3000);
+      scanTimer = setTimeout(() => { scanning = false; stopped?.(); }, seconds * 1000);
     },
     stopScan: async () => { clearTimeout(scanTimer); scanning = false; },
     connect: async (id: string) => {
