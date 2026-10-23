@@ -963,3 +963,20 @@ review, and a measurement of the affected path. Document measurement limits.
   changes retained outside this commit. NOT_RUN: physical iPhone Refresh interaction, Windows/Linux desktop.
 - Existing desktop storage remains memory-only (`secureStore.web.ts`, T5 pending); restarting the desktop app
   loses its in-memory technician code/site. This limitation was surfaced to the user, not changed by this fix.
+
+## Refresh motion — 2026-10-23
+
+- User asked for visible movement throughout Refresh, including the arrow and a small list bounce. The previous
+  implementation rotated once for 550 ms, then showed a static label for the remainder of the scan.
+- Arrow now turns continuously at one revolution per 800 ms until completion/failure/pause. Existing scroll
+  container gives a small 4 px bounce on refresh; no card wrapper or layout/coordinate changes. Web uses compositor
+  CSS keyframes; native uses Reanimated repeat/sequence with cancellation. Reduce Motion keeps text without motion.
+- COMMAND_FIXTURE PASS: browser regression failed before the change. It samples 1.1 s of rendered frames, verifies
+  rotation after 650 ms, list movement, removal of animation attributes on completion and motion disabled at 390 px
+  with reduced motion. WebKit 1280 px and Chromium 390 px PASS; 87 JS tests, typecheck and lint PASS.
+- Independent review caught a draft wrapper affecting phone card gaps/onLayout offsets; removed it entirely,
+  targeting existing ScrollViews instead. Final review found no remaining blocker.
+- Deployed Mac app and signed physical iPhone Release (installed/launched); iOS Simulator Release built/launched.
+  Rollback Mac bundle: `/private/tmp/Provide.before-refresh-motion.app`. No firmware or storage changes.
+- NOT_RUN: visual animation check on the physical iPhone; Windows/Linux desktop. Rendered motion was measured in
+  WebKit/Chromium, not inferred from the presence of an animation declaration.

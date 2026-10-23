@@ -53,10 +53,29 @@ try {
   assert.equal(await refresh.getAttribute('aria-busy'), 'true');
   assert.equal(await refresh.isDisabled(), true, 'one refresh at a time');
   await page.getByText('Refreshing…', { exact: true }).waitFor();
+  const motion = await page.evaluate(() => new Promise(resolve => {
+    const frames = [];
+    const start = performance.now();
+    const sample = () => {
+      const icon = document.querySelector('[data-refresh-spin]');
+      const list = document.querySelector('[data-refresh-bounce]');
+      frames.push({ ms: performance.now() - start, icon: icon && getComputedStyle(icon).transform, list: list && getComputedStyle(list).transform });
+      if (performance.now() - start < 1100) requestAnimationFrame(sample);
+      else resolve(frames);
+    };
+    requestAnimationFrame(sample);
+  }));
+  if (width >= 900) {
+    assert.ok(new Set(motion.filter(frame => frame.ms > 650).map(frame => frame.icon)).size > 3, 'icon keeps turning after the old one-shot animation');
+    assert.ok(new Set(motion.map(frame => frame.list)).size > 3, 'list gives a small bounce');
+  } else {
+    assert.ok(motion.every(frame => frame.icon === 'none' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(frame.list)), 'Reduce Motion has no rotation or translation');
+  }
   await page.screenshot({ path: `/private/tmp/iot-refresh-${engine}-${width}-progress.png` });
   await page.getByText(/Reports set up · connected to/).waitFor();
   await page.evaluate(() => window.fixture.end());
   await page.getByText('List updated', { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-refresh-spin], [data-refresh-bounce]').count(), 0, 'motion ends with the refresh');
   await page.screenshot({ path: `/private/tmp/iot-refresh-${engine}-${width}-updated.png` });
   assert.equal(await refresh.isDisabled(), false);
   // The automatic next round is still starting when the user refreshes again.

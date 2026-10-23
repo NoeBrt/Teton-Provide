@@ -24,7 +24,7 @@ import { stateText, type Setups, type Site, type SiteNetwork } from './src/sites
 import { C, DESKTOP_MIN_WIDTH } from './src/theme';
 import Animated, {
   cancelAnimation, Easing, FadeIn, FadeOut, interpolate, LinearTransition, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
-  useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withDelay, withSpring, withTiming, type SharedValue,
+  useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { Radar, RESIZE, SIZES } from './src/Radar';
@@ -60,7 +60,6 @@ const SUCCESS_SHOWN_MS = 8000; // then the card folds back; its state line and t
 const layout = Platform.OS === 'web' ? undefined : LinearTransition.duration(RESIZE.duration).easing(RESIZE.easing);
 // A card unfolding on desktop answers a click: short and decelerating, where iOS follows the finger's slower pace.
 const UNFOLD = { duration: 220, easing: Easing.out(Easing.cubic) };
-const SPIN = { duration: 550, easing: Easing.out(Easing.back(1.2)) }; // the refresh arrow's turn, a slight overshoot
 const appear = FadeIn.duration(RESIZE.duration).delay(RESIZE.duration / 2);
 // Launch order: the title and the dot, then the code and site Wi-Fi rows (they can be set before any sensor is found),
 // then the sensors heard meanwhile.
@@ -250,12 +249,11 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
   );
 });
 
-// A clockwise arrow drawn with views (the app has no icon library): an open ring and its arrowhead. `spin` counts
-// turns: each tap adds one, on the UI thread.
-function RefreshIcon({ spin }: { spin: SharedValue<number> }) {
+// The web compositor and native UI thread keep the arrow turning for the whole refresh.
+function RefreshIcon({ spin, refreshing }: { spin: SharedValue<number>; refreshing: boolean }) {
   const turning = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   return (
-    <Animated.View style={[s.refreshIcon, turning]} importantForAccessibility="no-hide-descendants">
+    <Animated.View style={[s.refreshIcon, !WEB && turning]} {...{ dataSet: WEB && refreshing ? { refreshSpin: 'true' } : undefined }} importantForAccessibility="no-hide-descendants">
       <View style={s.refreshRing} />
       <View style={s.refreshHead} />
     </Animated.View>
@@ -692,6 +690,17 @@ function Provide({ demo, onDemo }: Mode) {
   const radarIn = useSharedValue(0);
   const captionIn = useSharedValue(0);
   const refreshSpin = useSharedValue(0);
+  const refreshLift = useSharedValue(0);
+  const refreshBounce = useAnimatedStyle(() => ({ transform: [{ translateY: refreshLift.value }] }));
+  useEffect(() => {
+    refreshSpin.value = 0;
+    refreshLift.value = 0;
+    if (refreshStatus === 'refreshing' && !reduceMotion && !WEB) {
+      refreshSpin.value = withRepeat(withTiming(1, { duration: 800, easing: Easing.linear }), -1, false);
+      refreshLift.value = withSequence(withTiming(-4, { duration: 100 }), withSpring(0, { damping: 12, stiffness: 200 }));
+    }
+    return () => { cancelAnimation(refreshSpin); cancelAnimation(refreshLift); };
+  }, [refreshStatus, reduceMotion, refreshSpin, refreshLift]);
   useEffect(() => {
     if (!measured) return;
     const timer = setTimeout(() => setIntroDone(true), reduceMotion ? 0 : INTRO_MS);
@@ -919,19 +928,15 @@ function Provide({ demo, onDemo }: Mode) {
       : `${found} sensor${found > 1 ? 's' : ''} nearby · still searching`
   );
   // Progress lasts for the new scan round; success feedback happens only when that round finishes.
-  const tapRefresh = () => {
-    refresh();
-    if (!reduceMotion) refreshSpin.value = withTiming(Math.round(refreshSpin.value) + 1, SPIN);
-  };
   const refreshButton = (found > 0 || refreshStatus !== 'idle') && ready && !anyRunning && (
-    <Pressable onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }} onPress={tapRefresh}
+    <Pressable onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }} onPress={refresh}
       disabled={refreshStatus === 'refreshing'} style={s.refreshButton}
       accessibilityRole="button" accessibilityLabel="Refresh the list" aria-busy={refreshStatus === 'refreshing'}
       accessibilityHint="Removes the sensors no longer heard and searches again">
       {refreshStatus !== 'idle' && <Text style={s.refreshText} accessibilityLiveRegion="polite">
         {refreshStatus === 'refreshing' ? 'Refreshing…' : refreshStatus === 'updated' ? 'List updated' : 'Search failed · retry'}
       </Text>}
-      <RefreshIcon spin={refreshSpin} />
+      <RefreshIcon spin={refreshSpin} refreshing={refreshStatus === 'refreshing'} />
     </Pressable>
   );
 
@@ -1089,7 +1094,8 @@ function Provide({ demo, onDemo }: Mode) {
                     text={refreshStatus !== 'failed' && ready && !paused ? 'Sensors show here as soon as they are heard. Stay within a few metres of them.' : caption} />
                 ) : (<>
                   <View style={s.overview}>{overview}</View>
-                  <Animated.ScrollView ref={scrollRef} style={s.sensorScroll} contentContainerStyle={s.desktopList}>
+                  <Animated.ScrollView ref={scrollRef} style={s.sensorScroll} contentContainerStyle={s.desktopList}
+                    {...{ dataSet: refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : undefined }}>
                     {sensorList}
                   </Animated.ScrollView>
                 </>)}
@@ -1098,6 +1104,7 @@ function Provide({ demo, onDemo }: Mode) {
           ) : (
             <>
               <Animated.ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} scrollEnabled={found > 0}
+                style={!WEB && refreshBounce} {...{ dataSet: WEB && refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : undefined }}
                 snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}
                 contentContainerStyle={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }]}>
                 {requirements}
