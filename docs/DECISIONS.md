@@ -945,7 +945,7 @@ repository).
 
 ## Sensor identity carrier correction — approved 2026-10-23
 
-The repeated FLWR-O-019/not-genuine failure came from using an OS name cache when the scan-response name was
+The repeated jetson-019/not-genuine failure came from using an OS name cache when the scan-response name was
 missing. Rename/alias and process-memory workarounds did not survive cache lifetime changes. The user approved
 moving all five identity bytes into the existing primary manufacturer record after the state byte (31/31 legacy
 bytes), with one shared parser for display, saved-site lookup and setup. Names remain diagnostic. No certificate

@@ -1,4 +1,5 @@
 Sensor identity deployment evidence — 2026-10-23
+(Redacted for publication: the test sensor's hostname is shown as jetson-019 and its user as <user>.)
 
 COMMAND_FIXTURE PASS: 86 JS tests; 85 Linux Rust tests with ble,stage
 (33 library + 2 authority + 20 device + 17 audit + 1 Noise vector + 4 security + 8 simulation).
@@ -9,24 +10,24 @@ all 17 host-audit fixtures pass in Ubuntu 22.04 ARM64. The first container run
 lacked the public Noise-vector fixture; it was copied and the complete suite rerun.
 
 ACTUAL_BLE — Mac CoreBluetooth scan BEFORE (20 s):
-0.094s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
-0.094s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
-10.377s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
-10.377s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
-19.374s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
-19.376s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+0.094s manufacturer=ffff02 advertisedName=absent cachedName=jetson-019
+0.094s manufacturer=ffff02 advertisedName=absent cachedName=jetson-019
+10.377s manufacturer=ffff02 advertisedName=absent cachedName=jetson-019
+10.377s manufacturer=ffff02 advertisedName=absent cachedName=jetson-019
+19.374s manufacturer=ffff02 advertisedName=absent cachedName=jetson-019
+19.376s manufacturer=ffff02 advertisedName=absent cachedName=jetson-019
 reports=6 identityMatches=0
 
 ACTUAL_BLE — Mac CoreBluetooth scan AFTER (20 s):
-4.698s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
-4.698s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
-13.701s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
-13.702s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
+4.698s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=jetson-019
+4.698s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=jetson-019
+13.701s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=jetson-019
+13.702s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=jetson-019
 reports=4 identityMatches=4
 
-ACTUAL_HOST — deployment to FLWR-O-019:
+ACTUAL_HOST — deployment to jetson-019:
 Final btmon check: properties 0x0013, Connectable + Scannable, legacy ADV_IND.
-/home/floware/teton-factory/target/release/device.identity: OK
+/home/<user>/teton-factory/target/release/device.identity: OK
 active
 3361419b2f3dbf6b8e8bc96813dfd2ed21ccdc494a1ac2f65fb5ef83007888d2  /usr/local/bin/teton-device
       LE Set Extended Advertising Data (0x08|0x0037) ncmd 2

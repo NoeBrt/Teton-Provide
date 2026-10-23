@@ -125,7 +125,7 @@ The real runs used these machines, each in the role it would have in the field.
   </tr>
   <tr>
     <td align="center"><img src="docs/media/setup/noe-lab.jpg" alt="noe-lab laptop, thermal printer and internet box, annotated" width="400" /><br/><b>noe-lab, printer and internet box</b><br/><sub>Ubuntu device and 200-sensor bench; the printer makes the technician QR stickers (blurred: a code is a credential); the box is the site Wi-Fi</sub></td>
-    <td align="center"><img src="docs/media/setup/jetson.jpg" alt="Jetson board labelled 019" width="400" /><br/><b>Jetson FLWR-O-019</b> · real sensor hardware<br/><sub>ARM64, Ubuntu 22.04, staged like a production sensor</sub></td>
+    <td align="center"><img src="docs/media/setup/jetson.jpg" alt="Jetson board labelled 019" width="400" /><br/><b>Jetson 019</b> · real sensor hardware<br/><sub>ARM64, Ubuntu 22.04, staged like a production sensor</sub></td>
   </tr>
 </table>
 
@@ -134,7 +134,7 @@ The real runs used these machines, each in the role it would have in the field.
 | **iPhone 15 Pro** | iOS 27, provide. Release build (standalone, no Metro) | The technician's phone: hello, code import, site Wi-Fi from its QR code, real setups. |
 | **MacBook** | macOS, Apple silicon; provide. desktop app (Tauri) | The desktop configurator. Also Teton's workshop: holds the authorities, certifies sensors, issues technician codes (`cargo authority`), builds the ARM64 device firmware in an Ubuntu 22.04 container. |
 | **noe-lab** | x86-64, Ubuntu 22.04.5, kernel 6.8, BlueZ 5.64, NetworkManager 1.36, MediaTek MT7921 (BLE + Wi-Fi) | The first real device: hello, then real Wi-Fi joins from the iPhone. Also the 200-sensor bench: simulated sensors advertised over its real Bluetooth chip ([tools/teton_sim.py](tools/teton_sim.py)). Administered over Ethernet, so provisioning its Wi-Fi never cut the session. |
-| **Jetson FLWR-O-019** | Floware sensor, ARM64, Ubuntu 22.04 (L4T), kernel 5.15, BlueZ 5.64 | Real sensor hardware, staged like a production sensor as `TETON-7B09F20339`: real setups from the Mac and the iPhone, reconfiguration, the identity-in-advertisement change. |
+| **Jetson 019** | NVIDIA Jetson (Orin), ARM64, Ubuntu 22.04 (L4T), kernel 5.15, BlueZ 5.64 | Real sensor hardware, staged like a production sensor as `TETON-7B09F20339`: real setups from the Mac and the iPhone, reconfiguration, the identity-in-advertisement change. |
 | **Internet box** | Home router, WPA2-Personal | The facility network the sensors join; no Internet needed during setup. |
 | **Thermal printer** | Pocket printer (48 mm), paired with noe-lab | Prints the technician codes as QR stickers (`print-ticket`); the code goes in on stdin and no copy is kept. |
 
