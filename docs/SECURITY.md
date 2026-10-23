@@ -4,7 +4,7 @@ Status: **implemented** (commit `52644b3`, holder-bound codes and review fixes s
 below. It replaces the QR-label protocol of
 the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sensors; decision 27 of
 `docs/DECISIONS.md` records why and what was chosen. `docs/ARCHITECTURE.md` explains it for readers, and
-`tasks/compliance.md` tracks which of the tests at the end of this file have run.
+`docs/EVALUATION.md` tracks which of the tests at the end of this file have run.
 
 ## Constraints
 
@@ -65,6 +65,8 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
    observed after activation. Only that answer may show **Device connected**.
 
 ## Site credentials versus device secrets
+
+The storage policies below describe the iPhone. On desktop, the current adapter keeps secrets only in memory; persistent system-keychain storage is not implemented, and closing the app loses the code and site credentials.
 
 - **Device key:** unique per sensor, never leaves its state directory. The certificate is public.
 - **Technician code:** `<token hex>.<holder private key hex>`, which `authority issue` prints as text and as a QR
@@ -159,7 +161,7 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
 - The clock floor never starts before the firmware date and rises no faster than the uptime. (`device/main.rs`)
 - Tampered, truncated, reordered, and replayed frames are rejected. (`configurator/src/noise.test.ts`,
   `src/provision.rs`)
-- A BLE capture (`btmon` on the device) contains no SSID or password bytes. (`demo/real-join.txt`, first protocol)
+- A BLE capture (`btmon` on the device) contains no SSID or password bytes. (`evidence/real/real-join.txt`, first protocol)
 - Wrong password, unreachable network, and existing or fallback connections never report success; a failed
   reconfiguration returns to the previous network. (NOT_RUN on hardware)
 - Oversized and malformed frames are rejected without panic (unit tests; no fuzzing yet).

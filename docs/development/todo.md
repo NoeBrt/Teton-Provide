@@ -4,7 +4,7 @@ Status: software checkpoint S and follow-up review/TDD/scale verification comple
 The 40 Rust tests pass in debug and release, including 17 host-preflight CLI tests.
 Four additional public release-executable CLI cases pass with Python 3.
 The demo, three benchmark trials, and a 300-second recovery soak have captured
-evidence in `demo/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
+evidence in `evidence/` and `docs/BENCHMARKS.md`. Tasks 4-7 remain hardware-gated;
 their commands are planned acceptance commands, not currently available targets.
 The real demo requires Android and iPhone configurators and a headless Ubuntu
 computer; no Jetson is required. Graphical technician UX on both mobile platforms
@@ -71,7 +71,7 @@ after its harness is verified; capture benchmark and bounded-soak output separat
 Stop prevents discovery/new requests; an already pending wait keeps its deadline.
 **Dependencies:** 2.
 **Files:** `src/simulation.rs`, `tests/simulation.rs`, `examples/benchmark.rs`,
-`demo/`, `README.md`.
+`evidence/`, `README.md`.
 **Scope:** Medium. Evidence records actual output; no BLE or 200-device throughput claim.
 
 ## Checkpoint S: software demonstration
@@ -94,8 +94,8 @@ Preparation slice (does not close the hardware gate):
   inherited shell startup/functions cannot replace audited commands.
 
 Command: `cargo run --bin audit-host --locked --offline`; optional `hciN` argument.
-Evidence: `demo/host-preflight.txt` (blocked), `demo/host-audit-verification.txt`,
-and `demo/tdd-host-audit.txt`. No radio or provisioning acceptance is implied.
+Evidence: `evidence/real/host-preflight.txt` (blocked), `evidence/checks/host-audit-verification.txt`,
+and `evidence/checks/tdd-host-audit.txt`. No radio or provisioning acceptance is implied.
 
 **Description:** Inspect the Ubuntu device and any Linux diagnostic configurator
 using the README commands; confirm adapter capabilities and Rust/libdbus/BlueZ
@@ -105,13 +105,13 @@ preparation separately; platform selection itself is settled.
 **Acceptance criteria:**
 
 - [x] Identify device, OS, BlueZ, radios, NetworkManager ownership, and usable D-Bus APIs.
-  (`demo/host-inventory.txt`.)
+  (`evidence/real/host-inventory.txt`.)
 - [x] Resolve/build `bluer` with `bluetoothd` behind the optional `ble` feature;
   lock/cache the complete tested graph and document native prerequisites and ARM64
   differences. Verify both default and BLE-enabled locked offline builds; a disabled
   optional dependency still requires resolution. (x86-64 only; ARM64 not built.)
 - [x] Required host access is available; otherwise record the exact unpassed gate.
-  (Access available; gate: rfkill soft block, see `demo/host-ble-endpoint.txt`.)
+  (Access available; gate: rfkill soft block, see `evidence/real/host-ble-endpoint.txt`.)
 - [x] Before mobile framework selection, review an offline authenticated bootstrap
   for both Android and iPhone: trusted physical device identity, technician
   authorization, channel/library support, replay protection, and status recovery.
@@ -119,7 +119,7 @@ preparation separately; platform selection itself is settled.
   (Done: `docs/SECURITY.md` recommends Noise NKpsk2 with key and secret in the QR label.)
 - [ ] Record model/OS versions, Bluetooth permission denial/retry, build/signing,
   distribution, and prepared client installation/startup offline for each platform.
-  (iPhone: model/OS and Xcode free-account signing recorded in `demo/phone-hello.txt`; permission denial,
+  (iPhone: model/OS and Xcode free-account signing recorded in `evidence/real/phone-hello.txt`; permission denial,
   offline startup, and Android remain.)
   Select native/shared/browser access only against those verified constraints;
   Android browser support alone cannot satisfy the iPhone requirement.
@@ -139,11 +139,11 @@ handler through a read/write GATT characteristic.
 **Acceptance criteria:**
 
 - [x] `TETON-DEMO-001` advertises a fixed service UUID discoverable by another machine.
-  (Discovered by service UUID from an iPhone 15 Pro running `configurator/`: `demo/phone-hello.txt`.)
+  (Discovered by service UUID from an iPhone 15 Pro running `configurator/`: `evidence/real/phone-hello.txt`.)
 - [x] The endpoint accepts only `hello`; malformed writes fail without raw payload logging.
   (Unit-tested in `device/main.rs`; not yet exercised over the air.)
 - [x] Startup failure and normal shutdown cleanly report/release registrations.
-  (rfkill failure reported; SIGINT releases the advertisement and service UUID: `demo/host-ble-endpoint.txt`.)
+  (rfkill failure reported; SIGINT releases the advertisement and service UUID: `evidence/real/host-ble-endpoint.txt`.)
 
 **Verification:** `cargo test --features ble --bin device --locked`; live
 advertisement discovery from the configurator, with sanitized evidence recorded.
@@ -183,7 +183,7 @@ a transport probe, not the final provisioning UI.
   (Not physically tested by the user's decision on 2026-10-18; same code as iPhone.)
 - [ ] iPhone client starts offline, discovers/connects/exchanges hello, and reconnects.
   (2026-10-19: discovery, 6 hello/world exchanges and reconnect after a device service restart PASS on an
-  iPhone 15 Pro, iOS 27.0, Release build signed with a free Apple ID: `demo/phone-hello.txt`. Still open:
+  iPhone 15 Pro, iOS 27.0, Release build signed with a free Apple ID: `evidence/real/phone-hello.txt`. Still open:
   offline startup with Internet disabled and no shared LAN.)
 - [ ] Both runs use Internet disabled and no shared LAN; no device screen, SSH,
   credentials, or technical operator commands are required to complete the exchange.
@@ -194,7 +194,7 @@ separately for Android and iPhone. A generic BLE diagnostic
 app may help feasibility testing but does not replace submitted configurator code.
 **Dependencies:** 4, 5.
 **Files:** Phone adapter under `configurator/` once selected, `README.md`,
-`demo/phone-hello.txt`, `docs/DECISIONS.md`; do not create empty directories now.
+`evidence/real/phone-hello.txt`, `docs/DECISIONS.md`; do not create empty directories now.
 **Scope:** Medium; choose exact platform files after task 4.
 
 ## 7. Host service lifecycle and radio evidence
@@ -212,7 +212,7 @@ validate restart/reboot and collect honest hardware evidence.
 `journalctl -u teton-provisioning`; repeat the documented real round trip.
 **Dependencies:** 5, 6a; reboot access must be available without losing the only recovery path.
 **Files:** `device/systemd/teton-provisioning.service`, `README.md`,
-`demo/ble-hello.txt`, `docs/DECISIONS.md`.
+`evidence/ble-hello.txt`, `docs/DECISIONS.md`.
 **Scope:** Medium, four files. Verify service permissions rather than assuming root is necessary.
 
 ## Checkpoint H: real transport milestone
@@ -232,8 +232,8 @@ validate restart/reboot and collect honest hardware evidence.
 - [x] Check 80,073 timed jobs, retain raw data and queue/service latency definitions.
 - [x] All 23 tests pass in debug/release; formatting, Clippy, and release build pass.
 
-Reports: `docs/REVIEW.md`, `docs/BENCHMARKS.md`; evidence: `demo/tdd-scaled.txt`,
-`demo/verification-tests.txt`, `demo/benchmark-scaled.txt`, `demo/benchmark-scaled.csv`.
+Reports: `docs/development/REVIEW.md`, `docs/BENCHMARKS.md`; evidence: `evidence/checks/tdd-scaled.txt`,
+`evidence/checks/verification-tests.txt`, `evidence/simulation/benchmark-scaled.txt`, `evidence/simulation/benchmark-scaled.csv`.
 Hardware tasks 4-7 remain open.
 
 ## Later scope, not implementation tasks yet

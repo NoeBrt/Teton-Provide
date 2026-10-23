@@ -22,8 +22,8 @@ All 40 Rust tests (including 17 host-preflight CLI tests), four additional publi
 benchmark CLI cases, and the labeled demo pass locally; baseline/scale benchmark trials,
 a 300-second recovery soak, and skill-based review/TDD verification are complete. Tasks are tracked
 in [todo.md](todo.md); architecture choices live in
-[ARCHITECTURE.md](../docs/ARCHITECTURE.md) and their history in
-[DECISIONS.md](../docs/DECISIONS.md). Each reviewed increment records its checks,
+[ARCHITECTURE.md](../ARCHITECTURE.md) and their history in
+[DECISIONS.md](../DECISIONS.md). Each reviewed increment records its checks,
 measurements, evidence class, and next action in [HANDOFF.md](HANDOFF.md).
 
 ## Dependency order
@@ -99,7 +99,7 @@ Tests exercise the executable's exit status and output, substituting commands
 only at the operating-system boundary. Capture the actual restricted-host result.
 This prepares task 4 without starting credential, security, or UI implementation.
 The diagnostic is implemented and tested; its actual host result remains blocked
-by service access. See decision 16 and the separate evidence under `demo/`.
+by service access. See decision 16 and the separate evidence under `evidence/`.
 
 ## Verification strategy
 
@@ -123,7 +123,7 @@ Benchmark/soak use `examples/benchmark.rs` and the actual `src/simulation.rs`.
 Run in release mode, retain bounded waits, and record host, commands, sample
 counts, elapsed time, and results. Keep successful exchange measurements distinct
 from timeout/recovery scenarios. Repeated fault/restart checks demonstrate only
-software cleanup. Capture sanitized output under `demo/` with a prominent
+software cleanup. Capture sanitized output under `evidence/` with a prominent
 `SIMULATION` label; do not fabricate an overnight duration or extrapolate to BLE.
 
 Tests must not silently skip hardware assertions and then report hardware
@@ -164,7 +164,7 @@ record actual red/green output and an isolated mutation check. The scaled
 benchmark runs 1/20/50/200/1,000 simulated jobs with 1/4/8 concurrent clients,
 three independent processes, and seven measured batches per case. Report
 queue-inclusive completion separately from service time; keep concurrency bounded
-and retain raw data. See `docs/REVIEW.md` and `docs/BENCHMARKS.md` for results.
+and retain raw data. See `docs/development/REVIEW.md` and `docs/BENCHMARKS.md` for results.
 
 Android and iPhone support are fixed requirements. Their actual models/OS versions,
 clients/build/distribution, device adapter capability, host permissions, and

@@ -1,8 +1,8 @@
 # Configurator (Expo / React Native)
 
-Phone app for the technician. This first version is the **BLE hello probe** only:
-it finds devices advertising the Teton service UUID, connects, writes `hello`,
-reads `world`, and logs each attempt. It sends no credentials.
+The **provide.** technician app discovers sensors, checks device certificates and technician authorization, sends Wi-Fi credentials through Noise XX, and reports the result of each join. It supports individual setup and a queue for 200 sensors, with up to six concurrent sessions.
+
+Start with the [root README](../README.md) for videos or the [Ubuntu setup guide](../docs/SETUP.md) for the complete real-device walkthrough.
 
 Stack: Expo SDK 57, React Native 0.86 (New Architecture), TypeScript,
 [`react-native-ble-manager`](https://github.com/innoveit/react-native-ble-manager)
@@ -51,17 +51,33 @@ server and no network.
 On the Ubuntu device: `./target/release/device` (see the root README). In the
 app (“provide.”): the search runs by itself (tap the centre dot to pause/resume), then **Test** on a sensor (`TETON-` and its ID). Expect
 “world” received. Repeat, and toggle Bluetooth or walk away to check reconnects.
-Screenshot the log for `demo/phone-hello.txt`.
+Screenshot the log for `evidence/real/phone-hello.txt`.
 
 The bundle identifier `dev.tetonchallenge.configurator` in `app.json` can be
 changed to one from your Apple account.
 
-## Preview without Bluetooth (Expo Go)
+## Preview without Bluetooth
 
-Without a paid Apple account, the UI can still be viewed in Expo Go: `npx expo start
---go --tunnel` (tunnel mode avoids the firewall and needs no shared Wi-Fi), then scan
-the QR code. Expo Go has no Bluetooth module, so the app shows “Bluetooth
-is unavailable in Expo Go”. Use nRF Connect for the radio test.
+```sh
+npm ci
+npm run web
+```
+
+Open the URL printed by Expo with `?demo=1`. This browser preview uses simulated sensors; Expo Go cannot run native BLE provisioning.
+
+## Desktop (Tauri)
+
+On macOS with Rust, Xcode command-line tools and Node installed:
+
+```sh
+npm ci
+npm run desktop:dev
+npm run desktop:build
+```
+
+The packaged app is under `desktop/src-tauri/target/release/bundle/`. Real Bluetooth has been exercised on macOS. Windows/Linux desktop runtime and packaging remain unverified. Desktop credentials currently stay in memory and are lost at exit; the system-keychain bridge is not implemented.
+
+For a fresh evaluation, replace **both** authority public keys in `src/authority.ts` before building. See [authority setup](../docs/SETUP.md#2-create-your-evaluation-authorities).
 
 ## Install on an iPhone from a Mac (free Apple ID)
 
@@ -74,7 +90,7 @@ Once: install Xcode and open it, point the tools at it
 the Mac and enable Developer Mode (Settings › Privacy & Security).
 
 Standalone build (JavaScript bundled, no Metro, works offline). Verified on 2026-10-19 with
-Xcode 27.1 and an iPhone 15 Pro, iOS 27.0 (`demo/phone-hello.txt`):
+Xcode 27.1 and an iPhone 15 Pro, iOS 27.0 (`evidence/real/phone-hello.txt`):
 
 ```sh
 cd configurator && npm ci

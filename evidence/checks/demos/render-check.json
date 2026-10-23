@@ -1,0 +1,55 @@
+{
+  "renderer": "Local Markdown/HTML preview with GitHub-style responsive CSS; not a live GitHub render",
+  "checks": [
+    {
+      "viewport": 1440,
+      "overflow": false,
+      "images": [
+        {
+          "src": "configurator/desktop/src-tauri/icons/icon.png",
+          "naturalWidth": 1024,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "src": "docs/assets/demos/mobile-200-preview.png",
+          "naturalWidth": 600,
+          "width": 165,
+          "height": 358.59375
+        },
+        {
+          "src": "docs/assets/demos/desktop-200-preview.png",
+          "naturalWidth": 1440,
+          "width": 640,
+          "height": 400
+        }
+      ],
+      "result": "PASS"
+    },
+    {
+      "viewport": 390,
+      "overflow": false,
+      "images": [
+        {
+          "src": "configurator/desktop/src-tauri/icons/icon.png",
+          "naturalWidth": 1024,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "src": "docs/assets/demos/mobile-200-preview.png",
+          "naturalWidth": 600,
+          "width": 92.65625,
+          "height": 201.359375
+        },
+        {
+          "src": "docs/assets/demos/desktop-200-preview.png",
+          "naturalWidth": 1440,
+          "width": 210.34375,
+          "height": 131.453125
+        }
+      ],
+      "result": "PASS"
+    }
+  ]
+}

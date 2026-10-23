@@ -34,17 +34,17 @@ review, and a measurement of the affected path. Document measurement limits.
   A draining Bash pipeline preserves GNU timeout supervision; quoted argv,
   pipefail, and privileged shell mode preserve failure and environment boundaries.
 - Evidence class: `COMMAND_FIXTURE` **PASS**. Actual red/green and startup-code
-  mutation failure: [trace](../demo/tdd-audit-deadline.txt).
+  mutation failure: [trace](../../evidence/checks/tdd-audit-deadline.txt).
 - Verification: all 40 Rust tests pass in debug/release; Rustfmt and
   `cargo clippy --all-targets --locked --offline -- -D warnings` pass with the
   installed `stable` override. Seventeen tests exercise the public audit CLI.
 - Review: fresh-context correctness/security review and follow-up found no
   unresolved issue; inherited startup/functions were also independently tested.
-- Measurement: 48 controlled runs, [method/results](../docs/BENCHMARKS.md#audit-supervision-repair-command-fixtures).
+- Measurement: 48 controlled runs, [method/results](../BENCHMARKS.md#audit-supervision-repair-command-fixtures).
   Normal median 7.596 → 14.451 ms; exited-parent median 6013.658 ms/false PASS →
   4008.137 ms/correct TIMEOUT. Extra startup cost is an accepted correctness trade-off.
 - `ACTUAL_HOST` **BLOCKED** after the repair; see the separate
-  [host result](../demo/host-preflight-continuation.txt). `ACTUAL_BLE`, secure
+  [host result](../../evidence/real/host-preflight-continuation.txt). `ACTUAL_BLE`, secure
   transfer, Android/iPhone operation, and `ACTUAL_WIFI` remain **NOT_RUN**.
 - Next owner: implementation agent. Fix benchmark non-UTF-8 argv at the public
   executable boundary, then review/measure it and align dual-platform acceptance.
@@ -54,17 +54,17 @@ review, and a measurement of the affected path. Document measurement limits.
 - Revision: `4eff13c`.
 - Changed: `examples/benchmark.rs` reads OS arguments with fallible UTF-8
   conversion; `tests/benchmark_cli.py` checks the actual release executable.
-- Evidence class: `COMMAND_FIXTURE` **PASS**. The [public red/green trace](../demo/tdd-benchmark-cli.txt)
+- Evidence class: `COMMAND_FIXTURE` **PASS**. The [public red/green trace](../../evidence/checks/tdd-benchmark-cli.txt)
   shows old panic exit 101, then successful checks for help and three invalid
   argument cases after the repair. No input is echoed on failure.
 - Review: an independent fresh-context reviewer found no issue and reran all
   four public CLI cases plus four existing benchmark unit tests successfully.
-- Measurement: [84 startup calls](../docs/BENCHMARKS.md#benchmark-cli-argument-repair-startup-only)
+- Measurement: [84 startup calls](../BENCHMARKS.md#benchmark-cli-argument-repair-startup-only)
   confirm help is unchanged and invalid-byte argv changes from panic/leak to
   controlled exit 1/static usage. Timing ranges overlap; no speed claim.
 - Valid-path verification: three release `--scale` processes pass 45 scenario
   summaries and 80,073 measured synthetic jobs plus 11,439 warmup jobs. See the
-  [raw output](../demo/benchmark-scaled-continuation.txt). This does not measure
+  [raw output](../../evidence/simulation/benchmark-scaled-continuation.txt). This does not measure
   actual BLE or fleet capacity.
 - Gates: actual host remains **BLOCKED**; Android/iPhone BLE, authenticated
   transfer, and actual Wi-Fi remain **NOT_RUN**. The core simulation is unchanged.
@@ -87,7 +87,7 @@ review, and a measurement of the affected path. Document measurement limits.
 - Review: independent requirements review found a P2 ambiguity (authentication
   alone did not explicitly require encryption). The current architecture, plan,
   checklist, and decision now close it; follow-up found no remaining concrete issue.
-- Verification: [final checks](../demo/continuation-verification.txt) record
+- Verification: [final checks](../../evidence/checks/continuation-verification.txt) record
   40 Rust tests in debug/release, four real-executable CLI cases, Rustfmt, Clippy,
   and the full release build. Final binary hashes match the measured binaries.
   Documentation-only changes use static review and `git diff --check`; they add
@@ -115,10 +115,10 @@ review, and a measurement of the affected path. Document measurement limits.
   `device/systemd/teton-device.service`, README run/install steps, decision 21.
 - Evidence class: `ACTUAL_HOST` **PARTIAL**. `audit-host` passes GATT, advertising,
   and NetworkManager Wi-Fi; Bluetooth is soft-blocked by rfkill and BlueZ 5.64
-  answers `Busy` to power-on. See [host run](../demo/host-ble-endpoint.txt).
+  answers `Busy` to power-on. See [host run](../../evidence/real/host-ble-endpoint.txt).
   Unblocking needs root; no advertisement was emitted.
 - `COMMAND_FIXTURE` **PASS**: six slot-logic unit tests; four mutations are each
-  caught ([trace](../demo/tdd-ble-device.txt)). 46 Rust tests pass in debug and
+  caught ([trace](../../evidence/checks/tdd-ble-device.txt)). 46 Rust tests pass in debug and
   release; Rustfmt, Clippy with and without `ble`, and the four CLI cases pass.
   Default builds compile no third-party crate.
 - Review: independent fresh-context review approved after one fix (three slot
@@ -134,19 +134,19 @@ review, and a measurement of the affected path. Document measurement limits.
   `sudo rfkill unblock bluetooth`, rerun `audit-host`, start `target/release/device`,
   and use nRF Connect on Android and on iPhone to discover `TETON-DEMO-001`,
   write `hello`, read `world`, disconnect, and reconnect. Record sanitized results
-  in `demo/phone-hello.txt`. Then install the unit and test restart/reboot (task 7).
+  in `evidence/real/phone-hello.txt`. Then install the unit and test restart/reboot (task 7).
 
 ## Step 5 — Teton styling, UI test, host inventory, credential bootstrap review
 
 - Revision: uncommitted on `a9551fa`, together with Step 4.
-- Changed: `docs/architecture-demo.html` restyled after teton.ai (palette from its
+- Changed: `docs/development/archive/architecture-demo.html` restyled after teton.ai (palette from its
   CSS; free Onest embedded, OFL, as a stand-in for the licensed Wallop face; CSP
-  gains `font-src data:`). New `demo/ui-playwright.mjs`, `docs/SECURITY.md`.
+  gains `font-src data:`). New `evidence/tools/ui-playwright.mjs`, `docs/SECURITY.md`.
 - Evidence class: `SIMULATION` **PASS** for the mockup: Playwright 1.48.2 Chromium,
   PC 1440 px, iPhone 13 and Pixel 7 emulation, both previews, all five outcomes and
   retries, password cleared, targets ≥ 44 px, no overflow or CSP errors
-  ([results](../demo/mockup-playwright.txt)). Real Safari/WebKit not tested.
-- `ACTUAL_HOST`: sanitized inventory in [host-inventory](../demo/host-inventory.txt):
+  ([results](../../evidence/checks/mockup-playwright.txt)). Real Safari/WebKit not tested.
+- `ACTUAL_HOST`: sanitized inventory in [host-inventory](../../evidence/real/host-inventory.txt):
   HP Victus, MediaTek MT7921 (BLE and Wi-Fi on one chip), peripheral role,
   20 advertising instances. Bluetooth still soft-blocked by rfkill.
 - Security review: `docs/SECURITY.md` rejects OS pairing options on sourced
@@ -162,12 +162,12 @@ review, and a measurement of the affected path. Document measurement limits.
 ## Step 6 — Solution report (PDF) and extended interface tests
 
 - Revision: uncommitted on `a9551fa`, together with Steps 4-5.
-- Changed: `demo/ui-playwright.mjs` adds axe-core WCAG 2.1 AA scans (three screens,
+- Changed: `evidence/tools/ui-playwright.mjs` adds axe-core WCAG 2.1 AA scans (three screens,
   three formats) and a keyboard-only run; Playwright and axe paths come from
-  `PLAYWRIGHT`/`AXE`. New `docs/report/` (HTML source, build script, screenshots,
-  embedded Onest) producing `docs/rapport-solution.pdf` (9 A4 pages, French).
+  `PLAYWRIGHT`/`AXE`. New `docs/development/archive/report/` (HTML source, build script, screenshots,
+  embedded Onest) producing `docs/development/archive/rapport-solution.pdf` (9 A4 pages, French).
 - Evidence class: `SIMULATION` **PASS**, 79 mockup checks, 0 failures, 0 axe
-  violations ([results](../demo/mockup-playwright.txt)). An axe sanity page with
+  violations ([results](../../evidence/checks/mockup-playwright.txt)). An axe sanity page with
   planted defects reports four violations, so the scan is live. Real Safari and
   physical phones are not tested.
 - The report states the challenge is incomplete: no credential transfer and no
@@ -181,13 +181,13 @@ review, and a measurement of the affected path. Document measurement limits.
 - Evidence class: `ACTUAL_HOST` **PASS**. `audit-host` passes 4/4. While
   `target/release/device` runs, BlueZ reports the adapter powered, one active LE
   advertisement, and the service UUID on the adapter; after SIGINT both are released
-  ([run](../demo/host-ble-endpoint.txt)). The adapter stays powered after exit.
+  ([run](../../evidence/real/host-ble-endpoint.txt)). The adapter stays powered after exit.
 - Still `NOT_RUN`: discovery and `hello` exchange from Android and iPhone,
   reconnect, systemd restart/reboot, secure transfer, `ACTUAL_WIFI`.
 - Next owner: someone with a phone next to the machine. Start
   `./target/release/device`, then in nRF Connect connect to `TETON-DEMO-001`,
   write the text `hello`, read `world`; disconnect and repeat. Record model, OS,
-  app version, and outcomes in `demo/phone-hello.txt`.
+  app version, and outcomes in `evidence/real/phone-hello.txt`.
 
 ## Step 8 — Site network once, room-by-room provisioning
 
@@ -197,12 +197,12 @@ review, and a measurement of the affected path. Document measurement limits.
   intervention and kept in phone secure storage; the label secret stays per device.
   WPA2-Personal shares one password across sensors (accepted for the demo);
   production should use per-device EAP-TLS or PPSK issued by Smith.
-- `docs/architecture-demo.html` now models: site network → room (scan up to four
+- `docs/development/archive/architecture-demo.html` now models: site network → room (scan up to four
   labels, one button) → one status per sensor, targeted retry, next room without
   credentials, sensor ↔ room recorded. `docs/ARCHITECTURE.md` updated.
 - Evidence class: `SIMULATION` **PASS**, 91 Playwright checks, 0 failures, 0 axe
   violations; six checks provision room 215 without re-entering credentials
-  ([results](../demo/mockup-playwright.txt)). PDF report rebuilt (9 pages) with the
+  ([results](../../evidence/checks/mockup-playwright.txt)). PDF report rebuilt (9 pages) with the
   new screens and the Step 7 host result.
 
 ## Step 9 — Expo configurator: BLE hello probe for iPhone
@@ -216,7 +216,7 @@ review, and a measurement of the affected path. Document measurement limits.
   per-step deadlines (iOS connects never time out by themselves); `App.tsx` scans by
   service UUID, tests a sensor, and keeps a 10-line journal for evidence.
 - Evidence class: `COMMAND_FIXTURE` **PASS**: 6 probe tests with a fake link, 6
-  mutations caught ([trace](../demo/tdd-configurator.txt)); `tsc`, `expo lint`,
+  mutations caught ([trace](../../evidence/checks/tdd-configurator.txt)); `tsc`, `expo lint`,
   `expo-doctor` 20/20; iOS prebuild shows the French Bluetooth usage string and
   bundle ID; the iOS JavaScript export compiles. Node 22.23 installed with nvm.
 - Review: independent review asked for two fixes (success text contrast on mint;
@@ -253,7 +253,7 @@ review, and a measurement of the affected path. Document measurement limits.
      then `./target/release/device` (Bluetooth must be unblocked: `rfkill list`).
   3. In the app: Rechercher les capteurs → Tester `TETON-DEMO-001`; expect
      « world » reçu. Repeat, disconnect, reconnect. Record iPhone model, iOS version,
-     app commit, and the journal lines in `demo/phone-hello.txt` (`ACTUAL_BLE`).
+     app commit, and the journal lines in `evidence/real/phone-hello.txt` (`ACTUAL_BLE`).
   4. Then: install the systemd unit and test restart/reboot (task 7); after that,
      the Noise channel per `docs/SECURITY.md`, then NetworkManager activation
      reusing Smith's connectivity guard (decision 23).
@@ -267,7 +267,7 @@ review, and a measurement of the affected path. Document measurement limits.
   installed with `xcrun devicectl device install app`. `npx expo prebuild -p ios` regenerates `ios/`.
 - Evidence class: `ACTUAL_BLE` **PASS** for discovery, hello/world, and reconnect after a device service
   restart: iPhone 15 Pro, iOS 27.0, noe-lab Ubuntu 22.04.5 / BlueZ 5.64; six `hello exchanged` over two
-  service runs, registrations released on stop ([evidence](../demo/phone-hello.txt)).
+  service runs, registrations released on stop ([evidence](../../evidence/real/phone-hello.txt)).
   `NOT_RUN`: offline startup (Internet off, no shared LAN), systemd restart/reboot, Android.
   `NOT_RECORDED`: the on-phone error message while the service was stopped.
 - Configurator changes, made at the user's explicit request before checkpoint H (the repo rule says no
@@ -277,16 +277,16 @@ review, and a measurement of the affected path. Document measurement limits.
   public distribution); English UI; result and progress shown inside the tested sensor's card with a
   steady-height drawer and a 0.7 s minimum progress (UI only, `result.ms` stays real); scroll-driven
   radar (large ↔ compact follows the finger, native snapping, compact mode holds until a second gesture,
-  auto-fold only above four sensors). Design history and choices: `docs/configurator/README.md`.
+  auto-fold only above four sensors). Design history and choices: `docs/assets/configurator/README.md`.
 - Checks: `npm test` 6/6, `npm run typecheck`, `npm run lint`, `expo-doctor` 21/21. UI behaviour checked
-  in the iOS Simulator with fake sensors (`SIMULATION`, recording `docs/configurator/simulator-flow.mp4`);
+  in the iOS Simulator with fake sensors (`SIMULATION`, recording `docs/assets/configurator/simulator-flow.mp4`);
   fake data never ships in `App.tsx`.
 - iPhone screen recording through `devicectl` is unsupported on this phone (CoreDevice error 1001);
   use the phone's own screen recording for the presentation.
 - Open question sent to Teton: do production devices have BLE? If not, the fallback that creates no
   local network is a QR shown to the device camera (DPP needs Android; SoftAP creates a local network).
 - Next owner: the user, then implementation.
-  1. Repeat the iPhone run with Internet disabled and no shared LAN; record it in `demo/phone-hello.txt`.
+  1. Repeat the iPhone run with Internet disabled and no shared LAN; record it in `evidence/real/phone-hello.txt`.
   2. Install the systemd unit and test restart/reboot (task 7).
   3. Commit the configurator changes after review (nothing committed in this step).
   4. Then the Noise channel per `docs/SECURITY.md`, then NetworkManager activation.
@@ -295,7 +295,7 @@ review, and a measurement of the affected path. Document measurement limits.
 
 - Revision: `f2f6363` (Noise NKpsk2 provisioning, `stage`, NetworkManager activation, configurator sites and
   label scan) plus this step's device fixes. Branch `feat/ble-device-and-configurator`, not pushed.
-- Fixes (`tasks/compliance.md`, review findings): the one-phone claim starts when the phone proves the label
+- Fixes (`docs/EVALUATION.md`, review findings): the one-phone claim starts when the phone proves the label
   (first transport message decrypts), so a replayed first message no longer locks the device out; the
   provisioned marker and its directory are fsynced before success is reported, and a failed write deletes the
   profile and reports an error; the NetworkManager profile has a fixed UUID, starts without autoconnect, gets it
@@ -321,7 +321,7 @@ review, and a measurement of the affected path. Document measurement limits.
   channel decision tree and alternatives, credential protection, 200-device changes, the path taken, evidence
   table. Five Mermaid diagrams rendered without error with mermaid-cli 11.4.2. `docs/SECURITY.md` now states
   the implemented protocol and its deviations.
-- Screens and video (`docs/architecture/`, `SIMULATION`): iOS Simulator "Teton 16 Pro" (iOS 27.0) running the
+- Screens and video (`docs/assets/architecture/`, `SIMULATION`): iOS Simulator "Teton 16 Pro" (iOS 27.0) running the
   Release app with a temporary harness, removed afterwards: fake radio and scripted taps; `TETON-DEMO-001`
   replays the snow transcript so the app's real Noise code runs; `TETON-DEMO-002` answers with a mismatched key.
   The harness is not in the repo; the real app was rebuilt and reinstalled on that simulator.
@@ -350,14 +350,14 @@ review, and a measurement of the affected path. Document measurement limits.
 
 - noe-lab: Ethernet (`eno1`, 192.168.1.13) is now the admin link; the NetworkManager sharing profile that ran a
   DHCP server on the home LAN no longer autoconnects. Service installed (`teton-device`, user `teton`).
-- Evidence (`ACTUAL`): offline hello against the systemd service (`demo/service-offline-hello.txt`); service
-  restart restores hello; two real setups with `btmon` recording (`demo/real-join.txt`). Run 1: the device joined
+- Evidence (`ACTUAL`): offline hello against the systemd service (`evidence/real/service-offline-hello.txt`); service
+  restart restores hello; two real setups with `btmon` recording (`evidence/real/real-join.txt`). Run 1: the device joined
   the site network but the phone never got the result: BlueZ's battery plugin read the iPhone's Battery Level,
   iOS required encryption, BlueZ sent an SMP Security Request, pairing failed, and BlueZ never answered the
   phone's next read. Fix: `bluetoothd --noplugin=battery` (drop-in written by `install.sh`) and a 2 min grace
   so Try again recovers a lost result. Run 2: **Device connected** with the address on the iPhone; the capture
   holds the credentials only in an encrypted 68-byte write and no SMP traffic; SSID bytes absent.
-- Not run: the password-bytes check (`demo/check_capture.py`, needs the user's password), wrong password and
+- Not run: the password-bytes check (`evidence/tools/check_capture.py`, needs the user's password), wrong password and
   absent network on hardware, reboot (waits for the user's jobs), Android. Known leak: message sizes reveal the
   SSID and password lengths; pad the Provision request to a fixed size if that matters.
 
@@ -381,7 +381,7 @@ review, and a measurement of the affected path. Document measurement limits.
   `SIMULATION`: iOS Simulator "Teton 16 Pro", Release build with a temporary harness (removed afterwards, not in
   the repository): 20 fake sensors, each a Noise `XX` responder in JavaScript with its own key and a certificate
   from a throwaway demo authority; one impostor (copied certificate) and one other-customer sensor; screens and
-  55 s video in `docs/architecture/`. The video exposed a bug: after a batch, **Set up all ready** offered the
+  55 s video in `docs/assets/architecture/`. The video exposed a bug: after a batch, **Set up all ready** offered the
   refused sensors again; fixed (Retry failed covers them).
 - Pending: staging noe-lab with a certificate (`~/noe-ws/stage-lab.sh`, needs the user's sudo), a code on the
   iPhone, and the real run; wrong password, absent network and rollback on hardware; reboot; Android.
@@ -411,7 +411,7 @@ review, and a measurement of the affected path. Document measurement limits.
   the floor write runs off the GATT runtime, `write_new` removes a partial file, a second sheet waits until the
   first is gone, the docs follow the version 2 token.
 - Performance (`d462ef4`,
-  [docs/BENCHMARKS.md](../docs/BENCHMARKS.md#configurator-with-200-sensors-in-range-2026-10-20)): memoized sensor
+  [docs/BENCHMARKS.md](../BENCHMARKS.md#configurator-with-200-sensors-in-range-2026-10-20)): memoized sensor
   cards and scan updates applied every 500 ms. With 200 fake sensors in the iOS Simulator (Release,
   Hermes): 15.6 to 1.9 renders/s, JS busy 45 % to 3-4 %, JS lag p95 unchanged at 17 ms.
 - Ship review (`d462ef4` and the working tree), three agents: five-axis code review **APPROVE** (0 critical,
@@ -431,16 +431,16 @@ review, and a measurement of the affected path. Document measurement limits.
   gitignored), so no link can carry the code; it reads codes only with its own camera or from a paste; a pasted code
   with the old prefix still works. The vectors carry the printed `code`, which `authority.test.ts` reads as is.
 - Evidence: Rust 40 default and 88 with `ble,stage` tests, clippy clean (noe-lab, throwaway copy, deleted); app 59
-  tests, typecheck, lint. `ACTUAL`: [demo/real-reconfigure.txt](../demo/real-reconfigure.txt), commit `52644b3` with a
+  tests, typecheck, lint. `ACTUAL`: [evidence/real/real-reconfigure.txt](../../evidence/real/real-reconfigure.txt), commit `52644b3` with a
   version 1 code opened through the old link: the iPhone gave noe-lab a new network, 5.8 s from request to success.
 - NOT_RUN: holder-bound codes and in-app import on hardware; a failed reconfiguration rolling back, wrong password
   and absent network on hardware; reboot; Android. Not done: clearing the clipboard after a paste (`expo-clipboard`
   is not a dependency), a Keychain round-trip test, tests for the `write_new` cleanup and the directory sync.
   `npm audit --omit=dev`: 25 findings (18 high), all in the build toolchain, none at runtime. Screenshot 3 and the
-  video in `docs/architecture/` still show the link.
+  video in `docs/assets/architecture/` still show the link.
 - Next owner: rebuild the app (the native project lost the scheme and has the new permission strings) and the
   device; `stage install` on noe-lab; issue a new code, print the bare QR, scan it in **provide.**, then the real run.
-  Commit `demo/real-reconfigure.txt` with this step (`git add`): it is untracked.
+  Commit `evidence/real/real-reconfigure.txt` with this step (`git add`): it is untracked.
 
 ## Step 18 - Overall of the sensors in range
 
@@ -455,7 +455,7 @@ review, and a measurement of the affected path. Document measurement limits.
 - Technician's feedback on that build: they like the original card list best. They want an overall with the same
   ergonomics, easy access to the sensors not set up, set up and with errors, no emoji, and the original design
   philosophy kept. The overview, the wall, the switch and their media were removed
-  ([decision 28](../docs/DECISIONS.md#28-overall-of-the-sensors-in-range)).
+  ([decision 28](../DECISIONS.md#28-overall-of-the-sensors-in-range)).
 - Built (uncommitted, on `dea35be`):
   - `configurator/src/wing.ts`, outside React like `flow.ts`: `groupOf(state, batchEntry)` puts each sensor in one
     group, set up, error or not set up: this session's result first, from a batch or a setup by hand; otherwise
@@ -483,13 +483,13 @@ review, and a measurement of the affected path. Document measurement limits.
   out). iPhone 16 Pro during the batch: 64 / 3 / 133, "3 in progress · 126 waiting · about 1 min left". Errors tab:
   only the refused sensors, each with its reason. iPhone SE with accessibility-large text, during the batch: 40 / 1 /
   159; the title, the line and "Not set up" wrap, the card stays on the first screen. Screens
-  `docs/architecture/08-overall-running.png` to `11-overall-se-large-text.png`, video `overall-200-sensors.mp4` (55 s
+  `docs/assets/architecture/08-overall-running.png` to `11-overall-se-large-text.png`, video `overall-200-sensors.mp4` (55 s
   at 2x speed: the batch, then the three tabs). Step 19 replaced these media with demo-mode captures and removed
   `09-overall-done.png`; the numbers above (64 / 3 / 133, "3 in progress") describe the step 18 build, which ran
   three links.
 - Evidence: app 61 tests at this step (2 in `wing.test.ts`; 68 after step 19), `npx tsc --noEmit` and `npx expo lint`
   clean, run again for these docs. Docs: `docs/ARCHITECTURE.md` (flow, 200 devices, what is proven, code map),
-  decision 28, README (demo step 6, evidence), `tasks/compliance.md`.
+  decision 28, README (demo step 6, evidence), `docs/EVALUATION.md`.
 - Limits: a sensor set up before but offline counts as an error; no Retry per cause (the Errors tab groups by cause,
   **Retry failed** covers them); the time left assumes a steady pace; screens 5 to 7 and `demo-simulator.mp4` still
   show the old filter pills.
@@ -504,8 +504,8 @@ review, and a measurement of the affected path. Document measurement limits.
 ## Step 19 - Batch at the pace of a wing, demo mode, test bench
 
 - Goal: set up a wing faster, show the app with a wing and no sensors, and measure it over real Bluetooth.
-  Decisions [29](../docs/DECISIONS.md#29-batch-at-the-pace-of-a-wing) and
-  [30](../docs/DECISIONS.md#30-demo-mode-in-the-app-and-the-lab-bench).
+  Decisions [29](../DECISIONS.md#29-batch-at-the-pace-of-a-wing) and
+  [30](../DECISIONS.md#30-demo-mode-in-the-app-and-the-lab-bench).
 - List and overall (`App.tsx`, `Summary.tsx`, uncommitted on `dea35be`):
   - The overall card shows only past 4 sensors in range (no longer "or after a batch"). A selected tab stays on (the
     deselect rule is gone); it keeps what it showed and adds the sensors that join its group. The list keeps the scan
@@ -559,14 +559,14 @@ review, and a measurement of the affected path. Document measurement limits.
 - Evidence: app 68 tests (12 in `batch.test.ts`, 3 in `demo.test.ts`), `npm run typecheck` and `npm run lint` clean,
   run for these docs. The 2-minute lock has no test. Docs: README (status, step 4 and 6, demo mode, test bench, tests,
   evidence), `docs/ARCHITECTURE.md`, decisions 26 to 30, `docs/SECURITY.md` (in-memory lock, demo authority, bench
-  identities, root simulator), `tasks/compliance.md`.
+  identities, root simulator), `docs/EVALUATION.md`.
 - Still open: measure six links and scanning during runs on the bench and with real sensors (iOS connects were
   thought more reliable without a concurrent scan); release the link during the join; a concurrency that adapts to
   failures. The models beyond one phone are documented in `docs/ARCHITECTURE.md` ("Beyond one phone"), none built.
 - NOT_RUN: the overall, six links and the scan during runs with many real sensors; the current protocol against the
   real device service with a holder-bound code.
 - Next owner: run a batch on the bench with real timing logs, then with real sensors; commit `Summary.tsx`, `wing.ts`,
-  `wing.test.ts`, `demo.ts`, `demo.test.ts`, `lab/` and the media in `docs/architecture/` (all untracked). Do not add
+  `wing.test.ts`, `demo.ts`, `demo.test.ts`, `lab/` and the media in `docs/assets/architecture/` (all untracked). Do not add
   the challenge PDF at the repository root.
 
 ## Desktop T3 — Tauri shell resumed in Codex, 2026-10-21
@@ -574,7 +574,7 @@ review, and a measurement of the affected path. Document measurement limits.
 - Preserved Claude's uncommitted Tauri 2 shell, CLI lockfile and the two sheet-key fixes in App.tsx. T1/T2 and
   checkpoint A (`7eb3d2a`) were not repeated. npm desktop scripts now enter `desktop/`, where Tauri finds its config.
 - `ACTUAL_HOST` PASS: existing `provide-desktop --demo` process, native Provide window 1280×800; window-only
-  [capture](../docs/desktop/t3-native-before.png). `--demo` reaches the shared React app. The native window exposes
+  [capture](../../evidence/checks/desktop/t3-native-before.png). `--demo` reaches the shared React app. The native window exposes
   the stretched mobile layout and a large empty radar area; these are T7 work, not evidence of a usable desktop UI.
 - Checks: 70 JS tests, typecheck, Expo lint, `cargo clippy --all-targets -- -D warnings` PASS. iPhone baseline captured
   locally before layout changes (real mode, no BLE on Simulator); the demo comparison follows at T7.
@@ -595,7 +595,7 @@ review, and a measurement of the affected path. Document measurement limits.
   `swift configurator/desktop/make-icons.swift` from the repository root.
 - PASS: icon generation, 70 JS tests, typecheck, lint, Tauri debug `.app` build; bundled ICNS byte-for-byte equals the
   source ICNS. Provide relaunched in demo mode; macOS's registered running icon was inspected and
-  [captured](../docs/desktop/icon-running-macos.png). On this macOS version the OS adds a glass surround to a legacy
+  [captured](../../evidence/checks/desktop/icon-running-macos.png). On this macOS version the OS adds a glass surround to a legacy
   packaged ICNS; the checked-in image itself is a white squircle with transparent margins. Dock is auto-hidden and its
   accessibility query timed out; a literal Dock screenshot is NOT_RUN. No Dock preferences were changed.
 - The first packaged build exposed TypeScript scanning compressed generated Tauri JavaScript: tsconfig now excludes
@@ -615,12 +615,12 @@ review, and a measurement of the affected path. Document measurement limits.
   32 ms. Frame captures (open at 40 ms, Test result, fold, opening during a batch) show sharp text; no console error.
 - Checks: 70 JS tests, typecheck, lint PASS. Not rerun: the iPhone Simulator (no change on iOS: `Platform.OS` guard and
   a `cell` that stays `undefined` there).
-- Still open from `tasks/desktop-ux-audit.md`: web ARIA expanded/selected, reveal of a lower row, toolbar height during a
+- Still open from `docs/development/desktop-ux-audit.md`: web ARIA expanded/selected, reveal of a lower row, toolbar height during a
   batch, list scroll on tab change, dialog height, short-window sidebar, double caption, then T4–T6, T8, checkpoint C.
 - Playwright playtest (`configurator/desktop/playtest.mjs`, Metro on 8081, Chrome) now also checks the opening: 20
   frames with no scaled card and Test at 44 px on its first frame. Full run PASS (open without distortion, Test,
   batch with six slots, Add, Retry, tabs, Refresh, widths 320 to 2560, keyboard dialogs, no console error); the
-  `docs/desktop/t7-*` captures and `playtest.json` were regenerated by this run.
+  `evidence/checks/desktop/t7-*` captures and `playtest.json` were regenerated by this run.
 - Installed on the MacBook: `npm run desktop:build -- --bundles app` (release, `expo export -p web` embedded, 8.7 MB)
   copied to `/Applications/Provide.app`; launched with `--demo`, the desktop layout shows (window capture checked). The
   build first refused `@tauri-apps/api` 2.12.4 against the `tauri` crate 2.11.6 (latest 2.x on crates.io): pinned
@@ -907,10 +907,38 @@ review, and a measurement of the affected path. Document measurement limits.
   (launch refused while the phone was locked); `/Applications/Provide.app` reinstalled. `desktop:install` now also
   unregisters the build copy from LaunchServices (`0760e77`), which had come back as a second Provide.
 
+## Tests completed for the desktop work (2026-10-23)
+
+- Rust bridge (`ble.rs`): `scan_filter`, `teton_service`, `scan_length` extracted and tested (test-first): only the
+  Teton service can be scanned for (an empty filter is refused), read or written; a scan round lasts 0.1 s to 60 s
+  (a huge value or NaN no longer panics the round's timer). 4 Rust tests.
+- CSP (`src/desktop-config.test.ts`): `tauri.conf.json` keeps a policy limited to the app's origin (no `unsafe-eval`,
+  no remote origin, scripts `'self'` + `'wasm-unsafe-eval'`) and what the app needs (inline styles with Tauri's
+  modification disabled, `mediastream:`, IPC, `devCsp` null). Proven against a weakened copy (`TAURI_CONF=`): fails.
+- Code card (`src/technicianCode.ts` + test): `pastedCode()` (empty, valid with name/customers/expiry, problem with
+  the reason) and `tokenProblem`/`expiryText`/`validity` moved out of TechnicianSheet.tsx (re-exported there). Tests
+  with the test-vector code: valid, expired, not Teton's, garbage, surrounding spaces, the holder key never in the card.
+- QR import (`src/qrImage.ts` + test): `firstImage()` (clipboard items or dropped files; text left to the paste
+  field) and `decodeImage()` with an injected decoder (bitmap always released; no code or no decoder → null);
+  QrImport.web.tsx uses them with `browserDecoder()`.
+- Layout and resize (`desktop/layout-check.mjs`, Chromium and WebKit, Metro running): layout per window size, live
+  resizes during a batch (right layout, compact phone radar with the list below, no fade), phone layout opened as such
+  then scrolled back up (no gap, large radar at the top), a 30-step drag (cards in their column and on their content),
+  CSS radar waves. Proven against the old web compact lock: gap 217 then 422 px, radar stuck at 48 px; passes fixed.
+  Run: `node desktop/layout-check.mjs <playwright module> [chrome]`.
+- Totals: 82 JS tests, 4 Rust tests, typecheck, lint, clippy, `cargo fmt --check`, playtest PASS. Not committed.
+
+## Desktop: a second setup on the same sensor failed every other time (2026-10-23)
+
+- Symptom: "Wi‑Fi setup failed. The Bluetooth link failed. Try again" on every other attempt (and on Set up right after Test), with nothing in the sensor's log.
+- Cause: btleplug's macOS backend forgets a peripheral when its link closes; the bridge's cached handle then fails at once ("Peripheral no longer available") until a scan hears the sensor again. A throwaway repro measured 1.2 to 38 s for that (after each link, BlueZ restarts advertising at 1.28 s).
+- Fix: `peripheral()` in `desktop/src-tauri/src/ble.rs` asks the adapter for the live handle, else CoreBluetooth's `retrievePeripheralsWithIdentifiers` (`retrieve_peripherals`, btleplug ≥ 0.13.5, now pinned). Repro: 8 of 8 back-to-back rounds connected, sensor retrieved in 0 ms (before: 1 of 10).
+- `desktop:install` no longer stops when the build bundle was never registered with Launchpad.
+
 ## Primary advertisement identity — approved and deployed, 2026-10-23
 
 - User explicitly confirmed the shared protocol correction and deployment. It supersedes the earlier decision
-  to rely on a renamed Bluetooth adapter. Scope: `tasks/sensor-identity-proposal.md`; SPEC records the exception
+  to rely on a renamed Bluetooth adapter. Scope: `docs/development/sensor-identity-proposal.md`; SPEC records the exception
   to the unchanged-iPhone/provisioning-logic boundaries.
 - Primary manufacturer data is `[state][5 SHA-256(public key) bytes]` under test company `0xFFFF`. Total legacy
   advertisement: 31/31 bytes. Default Rust tests cover the payload/budget; BLE tests pin advertisement options.
@@ -931,7 +959,7 @@ review, and a measurement of the affected path. Document measurement limits.
   in 4/4 reports despite absent advertised name and cached FLWR-O-019. Before: 6 reports with state only, no name.
 - ACTUAL_BLE / ACTUAL_WIFI: observed Mac UI hello at 12:59:48, Wi-Fi setup at 13:00:52, IP 192.168.1.15; device
   journal independently confirms hello, accepted technician and connected attempt. Deployment did not initiate
-  these UI operations or change the requested Wi-Fi. Evidence and hashes: `demo/identity-advertisement.txt`.
+  these UI operations or change the requested Wi-Fi. Evidence and hashes: `evidence/real/identity-advertisement.txt`.
 - Rollback artifacts: `/private/tmp/Provide.before-identity.app` on Mac;
   `/usr/local/bin/teton-device.before-identity-20261023` on FLWR-O-019. Firmware is hash-checked before install;
   deployment restores the binary if restart/active checks fail. These backups have not been restored in a drill.

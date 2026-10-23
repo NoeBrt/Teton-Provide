@@ -1,4 +1,4 @@
-# Desktop todo (tasks/desktop-plan.md)
+# Desktop todo (docs/development/desktop-plan.md)
 
 - [x] T1 Web build of the app, demo mode (react-native-web, web seams, browser screenshots)
 - [x] T2 Seams on iOS, nothing changed (Simulator screenshots side by side)

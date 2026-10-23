@@ -3,10 +3,10 @@
 How the iPhone configurator (`configurator/`, app name **provide.**) evolved from a bare BLE probe into the
 screen a facilities technician uses, and why each change was made. All screenshots come from the iOS
 Simulator with fake sensors (`SIMULATION`) unless stated otherwise; the real BLE run is recorded in
-[`demo/phone-hello.txt`](../../demo/phone-hello.txt) (`ACTUAL_BLE`).
+[`evidence/real/phone-hello.txt`](../../../evidence/real/phone-hello.txt) (`ACTUAL_BLE`).
 
 This history covers the hello-probe stage. The app now also sets up a sensor's Wi-Fi over the encrypted
-channel; those screens and a video are in [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md#the-technicians-flow).
+channel; those screens and a video are in [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md#the-technicians-flow).
 
 ## Evolution
 
@@ -46,7 +46,7 @@ Video of the whole flow (Simulator, 1206×2622, HEVC): [`simulator-flow.mp4`](si
   compact. Once in the list, `contentInset` makes the list's top the scroll edge, so a fling back up does
   not reopen the radar by accident (iOS only; Android keeps the simpler behaviour).
 - **Results where the finger is.** The outcome lives in the tested card; the log at the bottom is kept
-  for evidence (`demo/phone-hello.txt`).
+  for evidence (`evidence/real/phone-hello.txt`).
 - **No fake precision.** A BLE signal gives a rough distance, not a direction, so sensors are not drawn
   as dots on the radar. Proximity (sorting, signal bars) is deferred until real RSSI is measured.
 - **Accessibility.** The dot is a button with a 44 pt target and a VoiceOver label; captions are live

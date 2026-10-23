@@ -1,6 +1,6 @@
-# Plan: Provide on desktop (SPEC.md, D1 to D8)
+# Plan: Provide on desktop (docs/development/DESKTOP_SPEC.md, D1 to D8)
 
-macOS is validated on the MacBook; Windows and Linux are built and tested in CI only (SPEC.md, Decisions).
+macOS is validated on the MacBook; Windows and Linux are built and tested in CI only (docs/development/DESKTOP_SPEC.md, Decisions).
 
 ## Dependency graph
 

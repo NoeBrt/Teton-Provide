@@ -1,7 +1,7 @@
 """Checks a btmon capture of a real setup for plaintext credentials (constraint 3).
 
 Usage, on the device after `sudo btmon -w /tmp/provision.snoop` ran during a Set up:
-    python3 demo/check_capture.py /tmp/provision.snoop
+    python3 evidence/tools/check_capture.py /tmp/provision.snoop
 
 Asks for the SSID and password without echo (never in argv or shell history), then reports:
 - how many ATT write requests the capture holds, so an empty capture cannot pass for a clean one;

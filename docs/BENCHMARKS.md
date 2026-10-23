@@ -50,14 +50,14 @@ one process; throughput is the median of seven batch rates.
 All three processes exited successfully. These figures establish a baseline;
 no performance optimization or threshold is justified by the current challenge.
 The variation is visible in the raw per-batch results in
-[benchmark.txt](../demo/benchmark.txt).
+[benchmark.txt](../evidence/simulation/benchmark.txt).
 
 ## Baseline endurance and validation
 
 An independent review checked session cleanup, stale-reply rejection, benchmark
 percentiles, and error accounting. At the baseline checkpoint, 18 tests passed in debug and release modes;
 Rustfmt and Clippy with warnings denied pass. Release test evidence is in
-[tests-release.txt](../demo/tests-release.txt).
+[tests-release.txt](../evidence/checks/tests-release.txt).
 
 The endurance runner repeats five checked successful responses and seven expected
 error outcomes per cycle, including invalid input, connection rejection, dropped
@@ -83,12 +83,12 @@ reported 9.41 seconds user CPU, 45.67 seconds system CPU, and a 2,176 kB
 maximum RSS using its separate accounting interface. Retain both measurements
 rather than treating either as an exact memory limit.
 
-Raw evidence: [soak.txt](../demo/soak.txt),
-[resource snapshots](../demo/soak-samples.tsv), and
-[time resource report](../demo/soak-resources.txt).
+Raw evidence: [soak.txt](../evidence/simulation/soak.txt),
+[resource snapshots](../evidence/simulation/soak-samples.tsv), and
+[time resource report](../evidence/simulation/soak-resources.txt).
 
 A first resource sampler failed while reading an empty `/proc` field; that
-observation attempt is retained as [incomplete](../demo/incomplete-soak-notice.txt)
+observation attempt is retained as [incomplete](../evidence/simulation/incomplete-soak-notice.txt)
 and excluded from reported measurements. The sampler was corrected and the
 fresh run above completed successfully. The failure affected evidence collection;
 it establishes no result for the incomplete run.
@@ -129,9 +129,9 @@ no clear benefit for that workload, while observed service p95 increased from
 57.207-60.874 µs at four to 143.248-163.947 µs at eight. No implementation
 optimization or production-radio setting was chosen from these software timings.
 
-Evidence: [raw output](../demo/benchmark-scaled.txt),
-[CSV](../demo/benchmark-scaled.csv), [23-test debug/release checks](../demo/verification-tests.txt),
-and [review/TDD report](REVIEW.md). These follow-up measurements do not extend
+Evidence: [raw output](../evidence/simulation/benchmark-scaled.txt),
+[CSV](../evidence/simulation/benchmark-scaled.csv), [23-test debug/release checks](../evidence/checks/verification-tests.txt),
+and [review/TDD report](development/REVIEW.md). These follow-up measurements do not extend
 the duration of the separate five-minute endurance run.
 
 ## Limits
@@ -169,9 +169,9 @@ and nmcli are mocked. Commands run with a private PATH, C locale, and a private
 call-log variable. No compilation ran during measurement. Sequential samples
 have no warmup, CPU pinning, randomized interleaving, or confidence intervals.
 
-Evidence: [48 raw timings](../demo/benchmark-audit-deadline.csv),
-[unchanged before/after harness](../demo/bench-audit-deadline.py), and
-[red/green plus mutation trace](../demo/tdd-audit-deadline.txt). To replay, copy
+Evidence: [48 raw timings](../evidence/simulation/benchmark-audit-deadline.csv),
+[unchanged before/after harness](../evidence/tools/bench-audit-deadline.py), and
+[red/green plus mutation trace](../evidence/checks/tdd-audit-deadline.txt). To replay, copy
 the harness into a fresh private `/tmp` directory, then run
 `python3 bench-audit-deadline.py before /absolute/baseline/audit-host` and
 `python3 bench-audit-deadline.py after /absolute/corrected/audit-host` there.
@@ -208,9 +208,9 @@ passed directly through subprocess argv; `perf_counter_ns` surrounds launch and
 output collection. No compilation ran during measurement. There is no warmup,
 pinning, randomized interleaving, or confidence interval.
 
-Evidence: [84 timings and behavior flags](../demo/benchmark-cli-startup.csv),
-[unchanged harness](../demo/bench-cli-startup.py), and
-[public executable red/green trace](../demo/tdd-benchmark-cli.txt). Copy the
+Evidence: [84 timings and behavior flags](../evidence/simulation/benchmark-cli-startup.csv),
+[unchanged harness](../evidence/tools/bench-cli-startup.py), and
+[public executable red/green trace](../evidence/checks/tdd-benchmark-cli.txt). Copy the
 harness into a fresh private `/tmp` directory and run
 `python3 bench-cli-startup.py before /absolute/baseline/benchmark`, then
 `python3 bench-cli-startup.py after /absolute/corrected/benchmark`.
@@ -238,8 +238,8 @@ For 200 synthetic jobs, the median of three process-reported batch medians is
 checks 4,200 measured jobs across 21 batches; observed peaks are 1/4/8. These are
 batch measurements of thread/channel jobs, not pooled radio/device latencies.
 
-Evidence: [raw output](../demo/benchmark-scaled-continuation.txt) and
-[45 scenario rows](../demo/benchmark-scaled-continuation.csv). Reproduce with
+Evidence: [raw output](../evidence/simulation/benchmark-scaled-continuation.txt) and
+[45 scenario rows](../evidence/simulation/benchmark-scaled-continuation.csv). Reproduce with
 `target/release/examples/benchmark --scale` three times after the release build.
 The binary/source hashes are the startup-repair hashes above; runtime environment
 is PATH=/usr/bin:/bin, LC_ALL=C, LANG=C, RUST_BACKTRACE=0 on the same host.

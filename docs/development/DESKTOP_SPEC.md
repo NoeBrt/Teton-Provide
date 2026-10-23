@@ -96,7 +96,7 @@ export const BleManager = {
 - **Visual**: screenshots of the web build and the Tauri window at 1280×800 and 1920×1080, demo mode, before and after
   a batch, each tab; iOS Simulator screenshots to prove the phone app did not change.
 - **Playtest**: on each system, demo mode by hand (open rows, tabs, add during a batch, refresh), then real Bluetooth
-  against the noe-lab sensor and the lab bench. Results recorded in `tasks/compliance.md` with evidence tags.
+  against the noe-lab sensor and the lab bench. Results recorded in `docs/EVALUATION.md` with evidence tags.
 
 ## Boundaries
 
@@ -132,7 +132,7 @@ export const BleManager = {
 ## Approved protocol correction, 2026-10-23
 
 The user confirmed implementation and deployment of the shared sensor-identity correction after reviewing
-`tasks/sensor-identity-proposal.md`. This supersedes the earlier name/cache workaround and makes a scoped
+`docs/development/sensor-identity-proposal.md`. This supersedes the earlier name/cache workaround and makes a scoped
 exception to the unchanged-iPhone/provisioning-logic boundaries above: iPhone and desktop derive the claimed ID
 from `manufacturerData.ffff.bytes[1..6]`, with state at `[0]`. Neither OS nor scan-response names identify sensors.
 The certificate, proven-key and customer checks still precede the technician token. The demo and Python bench
