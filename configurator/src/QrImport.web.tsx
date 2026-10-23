@@ -4,41 +4,29 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { PASTE_KEY } from './pasteKey.ts';
+import { browserDecoder, decodeImage, firstImage } from './qrImage.ts';
 import { C, F } from './theme.ts';
 
 type Props = { onData?: (data: string) => void };
-type Detector = { detect(source: ImageBitmapSource): Promise<{ rawValue: string }[]> };
-
-async function decode(blob: Blob): Promise<string | null> {
-  const Barcode = (globalThis as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector;
-  if (!Barcode) return null;
-  const image = await createImageBitmap(blob);
-  try {
-    return (await new Barcode({ formats: ['qr_code'] }).detect(image))[0]?.rawValue ?? null;
-  } finally {
-    image.close();
-  }
-}
-
 export function QrImport({ onData }: Props) {
   const [note, setNote] = useState<string | null>(null);
   const read = async (blob: Blob | null | undefined) => {
     if (!blob || !blob.type.startsWith('image/')) return;
     setNote('Reading the image…');
-    const data = await decode(blob).catch(() => null);
+    const data = await decodeImage(blob, browserDecoder()).catch(() => null);
     setNote(data ? null : 'No QR code found in this image. Try a sharper or larger picture of the code.');
     if (data) onData?.(data);
   };
   // While the sheet is open: an image pasted anywhere, or dropped anywhere on the window.
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
-      const item = [...(event.clipboardData?.items ?? [])].find(i => i.type.startsWith('image/'));
-      if (!item) return; // text is for the paste field
+      const image = firstImage(event.clipboardData?.items ?? []);
+      if (!image) return; // text is for the paste field
       event.preventDefault();
-      read(item.getAsFile());
+      read(image);
     };
     const over = (event: DragEvent) => event.preventDefault();
-    const drop = (event: DragEvent) => { event.preventDefault(); read(event.dataTransfer?.files[0]); };
+    const drop = (event: DragEvent) => { event.preventDefault(); read(firstImage(event.dataTransfer?.files ?? [])); };
     document.addEventListener('paste', paste);
     window.addEventListener('dragover', over);
     window.addEventListener('drop', drop);

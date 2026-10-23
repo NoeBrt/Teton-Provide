@@ -46,7 +46,7 @@
     "lint": "expo lint",
     "desktop:dev": "cd desktop && tauri dev",
     "desktop:build": "rm -rf dist desktop/src-tauri/target/release/bundle && cd desktop && tauri build",
-    "desktop:install": "npm run desktop:build -- --bundles app && ditto desktop/src-tauri/target/release/bundle/macos/Provide.app /Applications/Provide.app.new && /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u desktop/src-tauri/target/release/bundle/macos/Provide.app && rm -rf /Applications/Provide.app desktop/src-tauri/target/release/bundle && mv /Applications/Provide.app.new /Applications/Provide.app",
+    "desktop:install": "npm run desktop:build -- --bundles app && ditto desktop/src-tauri/target/release/bundle/macos/Provide.app /Applications/Provide.app.new && (/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u desktop/src-tauri/target/release/bundle/macos/Provide.app || true) && rm -rf /Applications/Provide.app desktop/src-tauri/target/release/bundle && mv /Applications/Provide.app.new /Applications/Provide.app",
     "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});fs.copyFileSync(require.resolve('zxing-wasm/reader/zxing_reader.wasm',{paths:[require.resolve('barcode-detector')]}),'public/zxing_reader.wasm')\""
   },
   "private": true

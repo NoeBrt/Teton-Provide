@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as SecureStore from './secureStore';
-import { checkToken, parseTokenText, toHex, type Token } from './authority.ts';
+import { parseTokenText, toHex, type Token } from './authority.ts';
 import { QrCamera } from './QrCamera';
 import { Sheet } from './Sheet';
 import { PASTE_KEY } from './pasteKey.ts';
+import { expiryText, pastedCode, tokenProblem, validity } from './technicianCode.ts';
+
 import { C, F } from './theme.ts';
+
+export { expiryText, tokenProblem }; // App.tsx reads them from here
 
 // The technician code (token and holder private key) is a credential: its own Keychain entry behind
 // Face ID, on this device only (like site passwords). Its name, customers and expiry are not secret and sit beside
@@ -16,11 +20,6 @@ const OLD_INFO = 'technician-info'; // a version 1 code's info, deleted when a n
 const STORED = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
 export type TokenInfo = { name: string; customers: string[]; expires: number };
-const now = () => Math.floor(Date.now() / 1000);
-
-export const expiryText = (expires: number) =>
-  new Date(expires * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const validity = (expires: number) => `${expires <= now() ? 'expired on' : 'valid until'} ${expiryText(expires)}`;
 const codeText = (code: TokenInfo) => `${code.name} · ${code.customers.join(', ')} · ${validity(code.expires)}`;
 const infoOf = (token: Token): TokenInfo => ({ name: token.name, customers: token.customers, expires: token.expires });
 
@@ -48,14 +47,6 @@ async function saveToken(token: Token) {
   await SecureStore.deleteItemAsync(OLD_INFO, STORED).catch(() => {}); // not secret: a leftover is no reason to fail
 }
 
-/** Why a scanned or pasted code cannot be used, or null if it can. */
-export function tokenProblem(token: Token | null): string | null {
-  if (!token) return 'This is not a technician code. Scan the code IoT sent you, or paste it.';
-  const check = checkToken(token, now());
-  if (check === 'invalid') return 'This code was not issued by IoT.';
-  if (check === 'expired') return `This code expired on ${expiryText(token.expires)}. Ask IoT for a new one.`;
-  return null;
-}
 
 type Props = {
   visible: boolean;
@@ -128,7 +119,7 @@ export function TechnicianSheet({ visible, info, onClose, onSaved }: Props) {
         <CodeField text={text} onChangeText={setText} />
       )}
       {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
-      {!scanning && !replacing && !(text.trim() && tokenProblem(parseTokenText(text.trim()))) && ( // the card already says why
+      {!scanning && !replacing && pastedCode(text).kind !== 'problem' && ( // the card already says why
         <Pressable style={s.primary} onPress={() => accept(text)} accessibilityRole="button">
           <Text style={s.primaryText}>Save</Text>
         </Pressable>
@@ -150,18 +141,16 @@ export function TechnicianSheet({ visible, info, onClose, onSaved }: Props) {
 // Paste). Pasted: what the code is for (name, customers and expiry are not secret), or why it cannot be used.
 function CodeField({ text, onChangeText }: { text: string; onChangeText: (text: string) => void }) {
   const [focused, setFocused] = useState(false);
-  const code = text.trim();
-  if (code) {
-    const token = parseTokenText(code);
-    const problem = tokenProblem(token);
+  const card = pastedCode(text);
+  if (card.kind !== 'empty') {
     return (
-      <View style={[s.codeCard, problem ? s.codeCardWarn : s.codeCardOk]} accessibilityLiveRegion="polite">
+      <View style={[s.codeCard, card.kind === 'ok' ? s.codeCardOk : s.codeCardWarn]} accessibilityLiveRegion="polite">
         <View style={s.grow}>
-          {token && !problem ? (<>
-            <Text style={s.codeName}>✓ {token.name}</Text>
-            <Text style={s.codeLine}>{token.customers.join(', ')} · {validity(token.expires)}</Text>
-          </>) : <Text style={s.codeWarn}>{problem}</Text>}
-          <Text style={s.codeMeta}>{code.length} characters, hidden</Text>
+          {card.kind === 'ok' ? (<>
+            <Text style={s.codeName}>✓ {card.name}</Text>
+            <Text style={s.codeLine}>{card.line}</Text>
+          </>) : <Text style={s.codeWarn}>{card.message}</Text>}
+          <Text style={s.codeMeta}>{card.length} characters, hidden</Text>
         </View>
         <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear the pasted code">
           <Text style={s.codeClear}>Clear</Text>
