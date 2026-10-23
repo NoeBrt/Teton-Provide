@@ -73,12 +73,32 @@ try {
   }
   await page.screenshot({ path: `/private/tmp/iot-refresh-${engine}-${width}-progress.png` });
   await page.getByText(/Reports set up · connected to/).waitFor();
-  await page.evaluate(() => window.fixture.end());
+  const completion = await page.evaluate(() => new Promise(resolve => {
+    const frames = [];
+    const start = performance.now();
+    const sample = () => {
+      const list = document.querySelector('[data-refresh-done]');
+      frames.push(list ? { transform: getComputedStyle(list).transform, opacity: Number(getComputedStyle(list).opacity) } : null);
+      if (performance.now() - start < 650) requestAnimationFrame(sample);
+      else resolve(frames);
+    };
+    window.fixture.end();
+    requestAnimationFrame(sample);
+  }));
+  assert.ok(completion.some(Boolean), 'completion targets the existing list');
+  if (width >= 900) {
+    assert.ok(completion.some(frame => frame && frame.opacity < 0.95), 'completion gives visible fade feedback');
+    assert.ok(new Set(completion.filter(Boolean).map(frame => frame.transform)).size > 3, 'completion gives a small jump');
+    assert.equal(completion.at(-1)?.opacity, 1, 'list returns to full visibility');
+  } else {
+    assert.ok(completion.filter(Boolean).every(frame => frame.opacity === 1), 'Reduce Motion keeps the list fully visible');
+  }
   await page.getByText('List updated', { exact: true }).waitFor();
   assert.equal(await page.locator('[data-refresh-spin], [data-refresh-bounce]').count(), 0, 'motion ends with the refresh');
   await page.screenshot({ path: `/private/tmp/iot-refresh-${engine}-${width}-updated.png` });
   assert.equal(await refresh.isDisabled(), false);
   // The automatic next round is still starting when the user refreshes again.
+  await page.evaluate(() => window.fixture.end());
   await refresh.click();
   await page.getByText('Refreshing…', { exact: true }).waitFor();
   await page.waitForTimeout(400);
