@@ -902,3 +902,7 @@ review, and a measurement of the affected path. Document measurement limits.
 - Second review: APPROVE, ready. Two of its optional suggestions applied (event subscription failures logged; the fold
   waits for the list). Left for later: `capabilities/default.json` could narrow `core:default` to
   `core:event:default` (to test in the app with Bluetooth allowed); `Sheet` could take the measured layout from App.
+- Deployed (2026-10-23 02:14, pushed tip): FLWR-O-019 runs the committed device build (Ubuntu 22.04 container from
+  `git archive HEAD`), advertising IOT-7B09F20339, Name and Alias IOT-7B09F20339; iPhone Release build installed
+  (launch refused while the phone was locked); `/Applications/Provide.app` reinstalled. `desktop:install` now also
+  unregisters the build copy from LaunchServices (`0760e77`), which had come back as a second Provide.
