@@ -491,6 +491,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             adapter.name()
         )
     })?;
+    // Phones cache the device's name and fall back on it when a packet carries no name (the name travels only in the
+    // scan response): it should be this sensor's ID, not the host's (FLWR-O-019). The alias is kept by BlueZ after the
+    // service stops. The GATT name also needs bluetoothd without its hostname plugin (see tasks/HANDOFF.md).
+    if let Err(error) = adapter.set_alias(name.clone()).await {
+        println!("cannot name {} {name}: {error}", adapter.name());
+    }
 
     let hello = Arc::new(Pending::new(None));
     let mode = if staged {
