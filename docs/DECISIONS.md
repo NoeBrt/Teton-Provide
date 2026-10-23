@@ -10,6 +10,24 @@ earlier fallback guidance. Sections 19-20 require Android/iPhone coverage and
 preserve offline builds while the BLE dependency graph is unavailable.
 Radio acceptance remains pending.
 
+## The path we took (summary)
+
+| Step | What we did | What changed our mind |
+| --- | --- | --- |
+| 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match Teton's fleet ([decision 11](#11-rust-to-align-with-the-fleet)). |
+| 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([simulation measurements](../evidence/simulation/README.md)). |
+| 3 | Wrote `audit-host`, a read-only preflight of BlueZ and NetworkManager, then inventoried the real host. | Bluetooth was soft-blocked by rfkill and BlueZ reported it as a generic "busy"; the device now names rfkill when it cannot power the adapter. |
+| 4 | Compared channels. SoftAP looked best for a zero-install web page. | We excluded it to stay clear of "no shared local network" ([decision 18](#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
+| 5 | Reviewed security before sending any secret: Just Works, static passkey, LE Secure Connections OOB, SRP6a, Noise. | iOS apps cannot use out-of-band pairing, so the channel had to live above GATT: Noise NKpsk2 keyed by a QR label. |
+| 6 | Built the BlueZ hello peripheral, then an Expo app; first real exchange from an iPhone 15 Pro to Ubuntu. | Six exchanges and a reconnect after a service restart worked ([evidence/real/phone-hello.txt](../evidence/real/phone-hello.txt)). |
+| 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](media/ui-history/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
+| 8 | Added staging, the Noise channel on both sides, attempt IDs and NetworkManager over D-Bus. | Site Wi-Fi once per visit, then saved sites behind Face ID because a technician serves several facilities ([decision 26](#26-saved-sites-behind-face-id)). |
+| 9 | Ran two independent reviews. | Eight fixes: a double prompt, a double scan, a cached bad label, a replayed first message that locked the device, a non-durable "provisioned" marker, profiles that kept autoconnect, missed failure reasons. |
+| 10 | Installed the systemd service and ran the real setup from the iPhone, with SSH on Ethernet and `btmon` recording. | The device joined, but the phone never got the result: BlueZ's battery plugin read the iPhone's battery level, iOS asked to pair, and BlueZ stopped answering. `bluetoothd` now runs without that plugin; the second run showed **Device connected** ([evidence/real/real-join.txt](../evidence/real/real-join.txt)). |
+| 11 | Asked what blocks 200 sensors, then settled 24 requirement questions in one session. | Scanning 200 labels is the bottleneck, and a label secret in every patient room is a liability. Certificates and technician codes replaced labels; the batch, the reconfiguration with rollback and the advertised state followed ([decision 27](#27-certified-sensors-and-technician-codes-for-200-devices)). |
+
+A standalone HTML mockup (step 4, in the git history) showed the early design; the app has replaced it.
+
 ## Evidence collected
 
 | Check | Observed result |

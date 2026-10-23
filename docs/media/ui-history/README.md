@@ -6,7 +6,7 @@ Simulator with fake sensors (`SIMULATION`) unless stated otherwise; the real BLE
 [`evidence/real/phone-hello.txt`](../../../evidence/real/phone-hello.txt) (`ACTUAL_BLE`).
 
 This history covers the hello-probe stage. The app now also sets up a sensor's Wi-Fi over the encrypted
-channel; those screens and a video are in [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md#the-technicians-flow).
+channel; those screens and a video are in [`docs/ARCHITECTURE.md`](../../SETUP.md#use-provide).
 
 ## Evolution
 

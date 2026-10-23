@@ -10,6 +10,9 @@
 <p align="center">
   <a href="#watch-the-demo">Watch the demos</a> ·
   <a href="#try-it">Try it</a> ·
+  <a href="#tech-stack">Tech stack</a> ·
+  <a href="#compatibility">Compatibility</a> ·
+  <a href="#test-setup">Test setup</a> ·
   <a href="#requirements-map">Requirements map</a> ·
   <a href="#folder-tree">Folder tree</a> ·
   <a href="docs/SETUP.md">Ubuntu setup</a> ·
@@ -72,7 +75,70 @@ Short videos show one action at a time, with a **visible pointer and click highl
 - **Fix the exceptions.** Filter errors, read the reason and retry failed devices.
 - **See the actual result.** A successful device reports the IP address from that provisioning attempt.
 
-## How it works
+## Tech stack
+
+| Side | Stack | Why |
+| --- | --- | --- |
+| **Device** | **Rust** (1.88, `unsafe` forbidden) | Coherent with Teton's fleet, which runs Rust; memory safety for a daemon that parses radio input from anyone in range; one binary under systemd. |
+| | **BlueZ** through `bluer` | Ubuntu's own Bluetooth stack: GATT peripheral and advertising, async on Tokio. |
+| | **NetworkManager over D-Bus** (`dbus`) | What Ubuntu already uses to manage Wi-Fi, so the join is real (challenge constraint 2); the password never appears in a command line; failure reasons come from its signals. |
+| | **`snow`** (Noise) and **`ed25519-dalek`** | Established implementations: no home-made cryptography. |
+| **Configurator** (provide.) | **Expo / React Native**, TypeScript | One code base for the technician's phone, with native Bluetooth; the same screens run on desktop. |
+| | `react-native-ble-manager` on iPhone; **Tauri 2** with a Rust `btleplug` bridge on desktop | Native Bluetooth on each platform; a web page cannot do it (no Web Bluetooth on iPhone). |
+| | **`@noble`** curves, ciphers and hashes | Audited pure-JavaScript cryptography; the app replays the device's exact Noise bytes in its tests. |
+| | iOS Keychain behind Face ID (`expo-secure-store`) | The technician code and site passwords stay locked on a lost phone. |
+
+## Why an app, not a website
+
+A web page was the obvious zero-install option. It fails the challenge on four points:
+
+- **No Bluetooth on iPhone.** No browser on iOS supports Web Bluetooth (all of them run on Safari's engine), and the
+  technician's phone is often an iPhone.
+- **No scanning, one picker per device.** Where Web Bluetooth exists, the page cannot list nearby sensors by itself:
+  the user picks each device in a system dialog. Two hundred sensors would mean two hundred dialogs; the app scans and
+  sets up a whole wing in one tap.
+- **Offline.** The hallway has no Internet, and a page served by the device would need a shared network, which the
+  brief forbids at the start. An installed app works offline.
+- **Secrets at rest.** The technician code and site passwords live in the iOS Keychain behind Face ID, not in browser
+  storage.
+
+The browser still has a role: the [demo mode](#try-it) runs the same screens with simulated sensors.
+
+## Compatibility
+
+| Part | Tested on hardware | Supported by the stack, not tested | Not supported |
+| --- | --- | --- | --- |
+| **Device** | Ubuntu 22.04 on x86-64 (BlueZ 5.64, MediaTek MT7921) and on ARM64 (Jetson, kernel 5.15) | Other Linux distributions with BlueZ ≥ 5.64, NetworkManager and systemd; Ubuntu 24.04 | A Bluetooth adapter without BLE peripheral mode; Wi-Fi not managed by NetworkManager |
+| **Configurator** | iPhone 15 Pro, iOS 27; macOS (desktop app) | Android (same React Native code); Windows and Linux desktop (Tauri and `btleplug` support them) | A plain browser: demo only, no Bluetooth |
+| **Wi-Fi network** | WPA2-Personal | WPA3-Personal (NetworkManager handles it; not tried) | Enterprise (802.1X/EAP) and captive portals |
+
+On desktop, the technician code and sites are kept in memory only for now (lost when the app closes).
+
+## Test setup
+
+The real runs used these machines, each in the role it would have in the field.
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/media/setup/iphone.jpg" alt="iPhone running provide., one real sensor set up" width="400" /><br/><b>iPhone 15 Pro</b> · the technician's phone<br/><sub>provide. with the real sensor <code>TETON-7B09F20339</code>, set up and on the site Wi-Fi</sub></td>
+    <td align="center" width="50%"><img src="docs/media/setup/macbook.jpg" alt="MacBook running the provide. desktop app and the iOS Simulator" width="400" /><br/><b>MacBook</b> · desktop configurator + Teton workshop<br/><sub>provide. desktop with the real sensor; the iOS Simulator in demo mode with 200 sensors</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/setup/noe-lab.jpg" alt="noe-lab laptop, thermal printer and internet box, annotated" width="400" /><br/><b>noe-lab, printer and internet box</b><br/><sub>Ubuntu device and 200-sensor bench; the printer makes the technician QR stickers (blurred: a code is a credential); the box is the site Wi-Fi</sub></td>
+    <td align="center"><img src="docs/media/setup/jetson.jpg" alt="Jetson board labelled 019" width="400" /><br/><b>Jetson FLWR-O-019</b> · real sensor hardware<br/><sub>ARM64, Ubuntu 22.04, staged like a production sensor</sub></td>
+  </tr>
+</table>
+
+| Machine | Hardware and software | What it did |
+| --- | --- | --- |
+| **iPhone 15 Pro** | iOS 27, provide. Release build (standalone, no Metro) | The technician's phone: hello, code import, site Wi-Fi from its QR code, real setups. |
+| **MacBook** | macOS, Apple silicon; provide. desktop app (Tauri) | The desktop configurator. Also Teton's workshop: holds the authorities, certifies sensors, issues technician codes (`cargo authority`), builds the ARM64 device firmware in an Ubuntu 22.04 container. |
+| **noe-lab** | x86-64, Ubuntu 22.04.5, kernel 6.8, BlueZ 5.64, NetworkManager 1.36, MediaTek MT7921 (BLE + Wi-Fi) | The first real device: hello, then real Wi-Fi joins from the iPhone. Also the 200-sensor bench: simulated sensors advertised over its real Bluetooth chip ([tools/teton_sim.py](tools/teton_sim.py)). Administered over Ethernet, so provisioning its Wi-Fi never cut the session. |
+| **Jetson FLWR-O-019** | Floware sensor, ARM64, Ubuntu 22.04 (L4T), kernel 5.15, BlueZ 5.64 | Real sensor hardware, staged like a production sensor as `TETON-7B09F20339`: real setups from the Mac and the iPhone, reconfiguration, the identity-in-advertisement change. |
+| **Internet box** | Home router, WPA2-Personal | The facility network the sensors join; no Internet needed during setup. |
+| **Thermal printer** | Pocket printer (48 mm), paired with noe-lab | Prints the technician codes as QR stickers (`print-ticket`); the code goes in on stdin and no copy is kept. |
+
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -81,9 +147,46 @@ flowchart LR
     C -->|"WPA2 + DHCP"| D[Facility Wi-Fi]
 ```
 
-The sensor proves a certified key. The configurator proves authorization with a holder-bound technician token. Credentials travel only after those checks, inside the encrypted Noise channel. No operating-system pairing PIN or per-sensor QR scan is needed.
+- **Device.** One systemd service, `teton-device`, running as an unprivileged user. It advertises the sensor's ID and
+  state, and exposes one GATT service: **Hello** (a radio check) and **Provisioning** (Noise messages). The protocol
+  lives in a library (`device/src/`), the service and its NetworkManager client in `device/bin/`. Two alternating
+  Wi-Fi profiles let a failed join fall back to the previous network. Staging and authority tools run once, offline.
+- **Configurator.** One screen (`configurator/App.tsx`) over platform-free logic in `configurator/src/`: Noise
+  initiator, certificate and code checks, one sensor's setup, and a batch queue running six sensors at a time. Only
+  three adapters change per platform: Bluetooth, secure storage and camera.
 
-Read the [BLE trade-offs](docs/ARCHITECTURE.md#why-bluetooth-low-energy), [credential protection](docs/SECURITY.md) and [design for 200 devices](docs/ARCHITECTURE.md#200-devices-in-a-hospital-wing).
+Why BLE, the data flow, and the design for 200 devices: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Security
+
+No plaintext credentials over the air (challenge constraint 3), and no secret to a device that is not Teton's:
+
+- **Encrypted channel.** Noise XX (X25519, ChaCha20-Poly1305), fresh keys each session: a recorded session cannot be
+  read or replayed.
+- **The sensor proves it is genuine** with a certificate Teton's device authority signed for its key, ID and
+  customer. The app checks it before sending anything; an impostor receives only an ephemeral key.
+- **The technician proves authorization** with a code from Teton's technician authority: per customer, at most 30
+  days, bound to a key held by the phone, so a sensor that records it cannot reuse it.
+- **Then the SSID and password** travel, encrypted. They are never logged, and on iPhone they stay behind Face ID.
+- **Accepted for the demo:** the sensor's key is a file (no secure element), no revocation list, one shared WPA2
+  password per site. Details and threats: [docs/SECURITY.md](docs/SECURITY.md).
+
+## Tests
+
+What the automated tests check (commands in [docs/SETUP.md](docs/SETUP.md#tests)):
+
+- **Interoperability.** The device's Noise implementation produces reference messages; the app must replay them byte
+  for byte.
+- **Refusals.** A forged reply, a copied certificate, another authority, another customer, an expired code or a code
+  without its holder key: the session stops and neither the code nor the password leaves the phone.
+- **Device behaviour.** Request parsing and mutation, one phone at a time, the 31-byte advertisement, alternating
+  Wi-Fi profiles and failure messages, safe retries (the same attempt never joins twice), a read-only host audit.
+- **Scale.** A 200-device batch with bounded concurrency, on the device simulation and in the app's queue (six at a
+  time, retries, stop on a site-wide error).
+- **Desktop.** The Bluetooth bridge only reaches Teton's service; the page's security policy; layouts and resizes in
+  Chromium and WebKit.
+
+Automated tests do not replace the radio: the real runs are in [evidence/real/](evidence/real/).
 
 ## Try it
 
@@ -115,7 +218,7 @@ Each item of the challenge, where it is answered, and what the proof covers.
 | Challenge requirement | Where | Proof and limits |
 | --- | --- | --- |
 | **1. No internet** — local channel, no cloud relay, no shared network at the start | Bluetooth LE GATT ([why BLE](docs/ARCHITECTURE.md#why-bluetooth-low-energy)) | [Offline hello](evidence/real/service-offline-hello.txt): the phone, with networking off, exchanged hello with the device over BLE. A full offline encrypted setup is not recorded yet. |
-| **2. Real network connection** with the received credentials | NetworkManager on the device ([device/](device/)) | [Current protocol, macOS → Linux](evidence/real/identity-advertisement.txt): app result and device journal report the join. [Earlier protocol, iPhone → Ubuntu](evidence/real/real-join.txt). |
+| **2. Real network connection** with the received credentials | NetworkManager on the device ([device/](device/)) | Real joins from the iPhone and from macOS to a Linux device: [current protocol, macOS](evidence/real/identity-advertisement.txt), [iPhone → Ubuntu](evidence/real/real-join.txt). |
 | **3. No plaintext credentials over the air** | Noise XX, device certificates, holder-bound technician codes ([SECURITY.md](docs/SECURITY.md)) | Interoperability and rejection tests ([device/tests/](device/tests/), [configurator tests](configurator/src/)). The [earlier BLE capture](evidence/real/real-join.txt) checked the SSID is absent; a fresh capture of the current protocol is still to do. |
 | **4. Usable by a non-developer** | Automatic discovery, code import, saved sites, one sensor or a whole batch, errors and retry | [Videos above](#watch-the-demo), with simulated sensors. No usability study with a facilities team. |
 | **Working code**, configurator and device | [configurator/](configurator/), [device/](device/) | |
@@ -123,7 +226,7 @@ Each item of the challenge, where it is answered, and what the proof covers.
 | **Architecture writeup**: channel and trade-offs, protection in transit, 200 devices | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ([200 devices](docs/ARCHITECTURE.md#200-devices-in-a-hospital-wing)), [docs/SECURITY.md](docs/SECURITY.md) | The 200-sensor runs are simulations: [measurements](evidence/simulation/README.md). |
 | **Evidence of a successful run** | [evidence/](evidence/) | Real runs, simulations and test logs are kept apart. |
 
-Not verified: provisioning from a physical iPhone since the identity change, Android, the desktop app on Windows and Linux, 200 physical sensors, and reboot recovery on hardware. The desktop app keeps the technician code and sites in memory only (lost when it closes); the iPhone uses the system's secure storage.
+Not verified: Android, the desktop app on Windows and Linux, 200 physical sensors, and reboot recovery on hardware. The desktop app keeps the technician code and sites in memory only (lost when it closes); the iPhone uses the system's secure storage.
 
 ## Folder tree
 

@@ -1,4 +1,4 @@
-# Setup and evaluation guide
+# Setup, usage and tests
 
 **Send Wi-Fi credentials from a technician’s phone or laptop to a headless Linux device over Bluetooth, then confirm that the device joined the network.** No internet, cloud relay or shared network is needed during provisioning.
 
@@ -10,7 +10,7 @@ Technician → provide. → BLE + authenticated Noise XX → Linux device → Wi
                      ← result for this attempt + IP ←
 ```
 
-**Validation status, 23 October 2026.** The current protocol has completed a real Wi-Fi setup from the macOS configurator to a Linux device. An earlier protocol also completed an iPhone-to-Ubuntu setup. The current iPhone build is installed; its hardware provisioning run after the identity update remains unverified. The 200-device UI runs against simulated sensors. This is not a validation of 200 physical devices.
+**Validation status, 23 October 2026.** Real Wi-Fi setups to a Linux device have completed from the iPhone and from the macOS configurator. The 200-device UI runs against simulated sensors. This is not a validation of 200 physical devices.
 
 ## Start here
 
@@ -19,6 +19,7 @@ Technician → provide. → BLE + authenticated Noise XX → Linux device → Wi
 | See the technician experience | [42-second demo video](media/overall-200-sensors.mp4) — simulated sensors, no real Wi-Fi joins |
 | Explore the UI on Ubuntu without hardware | [Local preview](#preview-without-hardware) |
 | Reproduce a real Wi-Fi join | [Hardware and assumptions](#hardware-and-assumptions), then [Ubuntu setup](#prepare-the-ubuntu-device) |
+| Use the app as a technician | [Use provide.](#use-provide) |
 | Check the four challenge constraints | [Requirements map](../README.md#requirements-map) |
 | Review channel choice, security and 200-device deployment | [Architecture](ARCHITECTURE.md#why-bluetooth-low-energy), [security](SECURITY.md), [200-device design](ARCHITECTURE.md#200-devices-in-a-hospital-wing) |
 
@@ -78,11 +79,11 @@ The service runs as `teton`. Its private state lives in `/var/lib/teton-device`,
 
 ### 2. Create your evaluation authorities
 
-For a self-contained evaluation, generate new authorities in a private directory outside the checkout. In production these would be kept at the workshop, separate from deployed devices.
+For a self-contained evaluation, generate your own authorities. `cargo authority` (an alias in `device/.cargo/config.toml`) builds and runs the authority tool in one step; its short forms keep the authority in `~/teton-authority` (or `$TETON_AUTHORITY`), outside the checkout, and use the customer `DEMO`. In production these would be kept at the workshop, separate from deployed devices.
 
 ```sh
-target/release/authority init ~/teton-evaluation-authority
-target/release/authority public ~/teton-evaluation-authority
+cargo authority init        # creates ~/teton-authority (private keys 0600) and prints both public keys
+cargo authority public      # prints them again
 ```
 
 The output names two **public** keys. In `../configurator/src/authority.ts`, replace both `DEVICE_AUTHORITY` and `TECHNICIAN_AUTHORITY` with these values **before building the configurator**. The first verifies devices; the second verifies imported technician codes. The checked-in public keys belong to the existing test deployment; its private keys are not included.
@@ -98,7 +99,7 @@ sudo -u teton teton-stage init /var/lib/teton-device
 Copy the device public key printed by this command, then run:
 
 ```sh
-target/release/authority certify ~/teton-evaluation-authority <DEVICE_PUBLIC_KEY_HEX> DEMO
+cargo authority certify <DEVICE_PUBLIC_KEY_HEX>
 ```
 
 Copy the certificate hex and the technician authority public key from step 2:
@@ -114,10 +115,12 @@ Expected: a `TETON-XXXXXXXXXX` identifier and an advertising message. The identi
 ### 4. Issue a technician code
 
 ```sh
-target/release/authority issue ~/teton-evaluation-authority "Evaluator" DEMO 1
+cargo authority issue "Evaluator"
 ```
 
 This prints a QR code and a text code valid for one day, authorized for customer `DEMO`. The code contains a private holder key: treat it as a credential. Import it directly inside provide.; do not include it in screenshots or logs.
+
+One code per technician: run the command again with another name. The authority tool also runs on macOS (it needs no Bluetooth), so codes can be issued from the examiner's laptop. For several customers or a longer validity (30 days at most), use the full form: `cargo authority issue ~/teton-authority "Name" DEMO,OTHER 7`. `cargo authority` alone prints the usage.
 
 ## Prepare the configurator
 
@@ -136,13 +139,43 @@ The device instructions target Ubuntu. The desktop configurator’s Linux and Wi
 
 On iPhone, the technician code and site credentials use native secure storage with authentication. The desktop implementation currently keeps them **in memory only**: closing the app loses them. Persistent desktop keychain storage is not implemented.
 
-## Run a real provisioning session
+## Use provide.
 
-1. Open provide. in normal mode; there must be no **DEMO** indicator. Keep Bluetooth enabled. To demonstrate independence from networking, turn off the configurator’s Wi-Fi and mobile data, and ensure the device is not already on the target network.
-2. Add the technician code by scanning or pasting it inside the app.
-3. Wait for the device’s `TETON-XXXXXXXXXX` identifier. **Test** exchanges `hello` / `world`; this checks Bluetooth only.
+This is what the technician does; the [README videos](../README.md#how-to-use-provide) show each step with a pointer.
+
+<table>
+<tr>
+<td align="center"><img src="media/01-searching.png" width="160"><br><sub>The app scans as soon as it opens</sub></td>
+<td align="center"><img src="media/02-sensors-found.png" width="160"><br><sub>Sensors found; code and site Wi-Fi missing</sub></td>
+<td align="center"><img src="media/04-site-wifi.png" width="160"><br><sub>Site Wi-Fi, entered once per facility</sub></td>
+<td align="center"><img src="media/10-overall-errors.png" width="160"><br><sub>After a batch: errors by cause, Retry failed</sub></td>
+</tr>
+</table>
+<sub>iOS Simulator, simulated sensors, earlier build; the README videos show the current one.</sub>
+
+1. **Open the app.** It scans as soon as Bluetooth is on; each sensor appears with its `TETON-XXXXXXXXXX` ID, signal
+   and state (ready, online, not prepared).
+2. **Add the technician code** once: scan its QR code with the app's camera, or paste it. On the desktop, paste it, or
+   paste, drop or choose a screenshot of the QR code. The app shows the name, customers and expiry.
+3. **Choose the site Wi-Fi** once per facility: facility name, network and password, typed or scanned from the
+   network's Wi-Fi QR code.
+4. **Test** (optional) on a sensor's card exchanges `hello` / `world`: it checks the radio only.
+5. **Set up** one sensor from its card, or **Set up all ready (N)** for every ready sensor in range, six at a time.
+   Each sensor shows its step: connecting, securing the channel, sending the network, joining the Wi-Fi. Success
+   reads **Device connected** with the sensor's new address.
+6. **Fix the exceptions.** Past four sensors, one card counts set up, errors and not set up; its **Errors** tab
+   groups the failures by cause, each in plain words ("The Wi-Fi password was refused. Edit the site password, then
+   try again."), and **Retry failed** runs them again. A sensor already online offers **Reconfigure**.
+
+The sensor needs no screen, keyboard or SSH.
+
+### A real session, step by step
+
+1. Open provide. in normal mode; there must be no **DEMO** indicator. Keep Bluetooth enabled. To demonstrate independence from networking, turn off the configurator's Wi-Fi and mobile data, and ensure the device is not already on the target network.
+2. Add the technician code from [step 4](#4-issue-a-technician-code) by scanning or pasting it inside the app.
+3. Wait for the device's `TETON-XXXXXXXXXX` identifier. **Test** exchanges `hello` / `world`.
 4. Tap **Set up**, enter the facility name, target SSID and password, and confirm.
-5. Expect connecting → securing the channel → sending the network → joining Wi-Fi, then **Device connected** with the target SSID and the device’s new IPv4 address.
+5. Expect connecting → securing the channel → sending the network → joining Wi-Fi, then **Device connected** with the target SSID and the device's new IPv4 address.
 
 Check independently on the Linux device:
 
@@ -177,6 +210,15 @@ npm ci
 npm test
 npm run typecheck
 npm run lint
+```
+
+Desktop shell (Bluetooth bridge restrictions), then the browser checks of the desktop layout, with Metro running
+(`npm run web`) and Playwright installed:
+
+```sh
+cd configurator/desktop/src-tauri && cargo test && cd ../..
+node desktop/layout-check.mjs <path to the playwright module>   # layouts, resizes, scrolling, in Chromium and WebKit
+node desktop/playtest.mjs <path to the playwright module>       # demo batch, errors, retry, dialogs and keyboard
 ```
 
 Tests cover Rust/TypeScript Noise interoperability, certificate and technician-token rejection, malformed messages, attempt handling and the simulated batch queue. They complement the hardware evidence; they do not replace it.
