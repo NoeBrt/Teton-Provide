@@ -47,3 +47,24 @@ test('Test answers on a demo sensor', async () => {
     demo.stop();
   }
 });
+
+test('restarting a demo scan cancels its old deadline', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const demo = startDemo(random);
+  let stopped = 0;
+  demo.radio.onStopScan(() => { stopped++; });
+  try {
+    await demo.radio.scan();
+    context.mock.timers.tick(1000);
+    await demo.radio.stopScan();
+    await demo.radio.scan();
+    context.mock.timers.tick(2000);
+    assert.equal(stopped, 0, 'the stopped scan must not end its replacement');
+    context.mock.timers.tick(1000);
+    assert.equal(stopped, 1);
+    await demo.radio.scan();
+    demo.stop();
+    context.mock.timers.tick(3000);
+    assert.equal(stopped, 1, 'leaving the demo cancels the deadline too');
+  } finally { demo.stop(); }
+});

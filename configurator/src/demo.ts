@@ -122,6 +122,7 @@ export function startDemo(random: (n: number) => Uint8Array) {
   let discover: ((p: Peripheral) => void) | null = null;
   let stopped: (() => void) | null = null;
   let scanning = false;
+  let scanTimer: ReturnType<typeof setTimeout> | undefined;
   let startedAt = 0; // the first scan: the technician walks into the wing
   const advertising = (s: Sensor) => ({ localName: s.name, manufacturerData: { ffff: { bytes: [s.state, ...s.identity] } } });
   const advertise = (s: Sensor) => {
@@ -152,9 +153,10 @@ export function startDemo(random: (n: number) => Uint8Array) {
     scan: async () => {
       startedAt ||= Date.now();
       scanning = true;
-      setTimeout(() => { scanning = false; stopped?.(); }, 3000);
+      clearTimeout(scanTimer);
+      scanTimer = setTimeout(() => { scanning = false; stopped?.(); }, 3000);
     },
-    stopScan: async () => { scanning = false; },
+    stopScan: async () => { clearTimeout(scanTimer); scanning = false; },
     connect: async (id: string) => {
       const s = byId.get(id)!;
       await wait(s.kind === 'out-of-range' ? 400 : 180 + Math.random() * 220);
@@ -183,7 +185,7 @@ export function startDemo(random: (n: number) => Uint8Array) {
 
   return {
     radio, deviceAuthority: ed25519.getPublicKey(DEVICE_SEED), token: demoToken(), site: DEMO_SITE, password: DEMO_PASSWORD,
-    stop: () => clearInterval(timer),
+    stop: () => { clearInterval(timer); clearTimeout(scanTimer); },
     /** For tests: each simulated sensor's id and kind. */
     sensors: fleet.map(s => ({ id: s.id, name: s.name, kind: s.kind, advertising: advertising(s) })),
   };

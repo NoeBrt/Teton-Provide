@@ -938,3 +938,28 @@ review, and a measurement of the affected path. Document measurement limits.
 - NOT_RUN: real iPhone provisioning after update, Windows/Linux desktop radios, new bench batch, state-transition
   radio capture. Noe-lab left unchanged; updated apps need the new firmware for provisioning there too.
 - Limits: zero advertising headroom, static ID visible to passive listeners, company `0xFFFF` remains test-only.
+
+## Refresh feedback and scan restart — 2026-10-23
+
+- User reported a frozen list and no visible response to Refresh. RED browser regression confirmed that clicking
+  during an active search did not start a new scan: the handler only pruned stale rows and set an already-false
+  paused flag. Errors from scan startup were swallowed; the arrow's short rotation was the only visual feedback.
+- Refresh now restarts discovery and displays `Refreshing…` until that round ends, then `List updated`. Startup
+  rejection displays `Search failed · retry`; retry remains reachable with zero sensors on desktop and phone.
+  The button exposes busy/disabled state, has a 44-point target, uses contrasting muted text, and keeps textual
+  feedback with Reduce Motion. Existing rows and active/batch results are preserved.
+- Scan startup and cancellation share a promise chain. The old listener is removed before stopping, and the new
+  one is attached only after queued cancellation finishes. An in-flight start cannot outlive its cancellation.
+  Demo scan deadlines are cleared on restart, stop and mode exit, preventing old deadlines ending a new scan.
+- Review caught the old demo deadline, slow-start cancellation and empty-list retry cases. Each received a RED
+  regression and a fix; final independent review approved with no remaining blocker.
+- COMMAND_FIXTURE PASS: 87 JS tests, typecheck and lint. `desktop/refresh-check.mjs` runs the real UI with an isolated
+  fake Tauri radio in WebKit at 1280 px and Chromium at 390 px/Reduce Motion: restart, delayed old stop, pending
+  start, live card update, paused search, completion, rejection and empty-list recovery. No page errors.
+- Deployed the signed iPhone Release (installation and launch succeeded) and `/Applications/Provide.app`; iOS
+  Simulator Release built and demo launched. ACTUAL_BLE/UI: clicked Refresh in the installed Mac app against
+  TETON-7B09F20339; the cycle completed and the screenshot showed `List updated`. No Wi-Fi setup initiated.
+- Rollback: `/private/tmp/Provide.before-refresh.app`. No firmware or noe-lab changes. Existing Claude working-tree
+  changes retained outside this commit. NOT_RUN: physical iPhone Refresh interaction, Windows/Linux desktop.
+- Existing desktop storage remains memory-only (`secureStore.web.ts`, T5 pending); restarting the desktop app
+  loses its in-memory technician code/site. This limitation was surfaced to the user, not changed by this fix.
