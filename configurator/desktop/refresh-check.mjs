@@ -5,18 +5,20 @@ const engine = process.argv[3] || 'chromium';
 const browser = await pw[engine].launch({ headless: true });
 try {
   const width = Number(process.argv[4] || 1280);
-  const page = await browser.newPage({ viewport: { width, height: 800 }, reducedMotion: width < 900 ? 'reduce' : 'no-preference' });
+  const reducedMotion = process.argv[5] || (width < 900 ? 'reduce' : 'no-preference');
+  const page = await browser.newPage({ viewport: { width, height: 800 }, reducedMotion });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => {
     const listeners = new Map();
     const calls = [];
+    const scanSeconds = [];
     let fail = location.search.includes('fixture-empty');
     let starting = false;
-    window.fixture = { calls, end: () => listeners.get('ble-stop')?.({ payload: null }), fail: () => { fail = true; }, recover: () => { fail = false; } };
+    window.fixture = { calls, scanSeconds, end: () => listeners.get('ble-stop')?.({ payload: null }), fail: () => { fail = true; }, recover: () => { fail = false; } };
     window.__TAURI__ = {
       event: { listen: async (name, callback) => { listeners.set(name, callback); return () => { if (listeners.get(name) === callback) listeners.delete(name); }; } },
-      core: { invoke: async command => {
+      core: { invoke: async (command, args) => {
         calls.push(command);
         if (command === 'ble_state') return 'on';
         if (command === 'ble_stop_scan') {
@@ -28,6 +30,7 @@ try {
           }, 80));
         }
         if (command === 'ble_scan') {
+          scanSeconds.push(args.seconds);
           if (fail) throw new Error('fixture scan failure');
           starting = true;
           await new Promise(resolve => setTimeout(resolve, 150));
@@ -42,7 +45,7 @@ try {
     };
   });
   await page.goto('http://localhost:8081');
-  const refresh = page.getByRole('button', { name: 'Refresh the list', exact: true });
+  const refresh = page.getByRole('button', { name: /^(Refresh the list|Cancel refresh)$/ });
   await refresh.waitFor({ timeout: 30000 });
   await page.getByText('Ready to set up', { exact: true }).waitFor();
   await refresh.click();
@@ -51,23 +54,31 @@ try {
   assert.equal(calls.filter(c => c === 'ble_scan').length, 2, 'old stop event must not create an extra scan or complete refresh');
   assert.ok(calls.indexOf('stop-complete') < calls.lastIndexOf('ble_scan'), 'old stop must finish before the new scan');
   assert.equal(await refresh.getAttribute('aria-busy'), 'true');
-  assert.equal(await refresh.isDisabled(), true, 'one refresh at a time');
-  await page.getByText('Refreshing…', { exact: true }).waitFor();
+  assert.equal(await refresh.isDisabled(), false, 'refresh stays available for cancellation');
+  assert.equal(await refresh.getAttribute('aria-label'), 'Cancel refresh');
+  assert.equal(await page.evaluate(() => window.fixture.scanSeconds[1]), 2, 'manual refresh lasts two seconds');
+  await page.getByText('Refreshing… · cancel', { exact: true }).waitFor();
   const motion = await page.evaluate(() => new Promise(resolve => {
     const frames = [];
     const start = performance.now();
     const sample = () => {
       const icon = document.querySelector('[data-refresh-spin]');
       const list = document.querySelector('[data-refresh-bounce]');
-      frames.push({ ms: performance.now() - start, icon: icon && getComputedStyle(icon).transform, list: list && getComputedStyle(list).transform });
+      let viewport = list;
+      while (viewport && !/auto|scroll/.test(getComputedStyle(viewport).overflowY)) viewport = viewport.parentElement;
+      frames.push({ ms: performance.now() - start, icon: icon && getComputedStyle(icon).transform, list: list && getComputedStyle(list).transform, viewportTop: viewport?.getBoundingClientRect().top });
       if (performance.now() - start < 1100) requestAnimationFrame(sample);
       else resolve(frames);
     };
     requestAnimationFrame(sample);
   }));
-  if (width >= 900) {
+  if (reducedMotion === 'no-preference') {
     assert.ok(new Set(motion.filter(frame => frame.ms > 650).map(frame => frame.icon)).size > 3, 'icon keeps turning after the old one-shot animation');
     assert.ok(new Set(motion.map(frame => frame.list)).size > 3, 'list gives a small bounce');
+    if (width < 900) { // Desktop overview can change height when the sensor changes state.
+      const tops = motion.map(frame => frame.viewportTop).filter(value => typeof value === 'number');
+      assert.ok(tops.length > 3 && Math.max(...tops) - Math.min(...tops) < 0.25, 'scroll viewport stays fixed instead of exposing a white strip');
+    }
   } else {
     assert.ok(motion.every(frame => frame.icon === 'none' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(frame.list)), 'Reduce Motion has no rotation or translation');
   }
@@ -78,7 +89,9 @@ try {
     const start = performance.now();
     const sample = () => {
       const list = document.querySelector('[data-refresh-done]');
-      frames.push(list ? { transform: getComputedStyle(list).transform, opacity: Number(getComputedStyle(list).opacity) } : null);
+      let viewport = list;
+      while (viewport && !/auto|scroll/.test(getComputedStyle(viewport).overflowY)) viewport = viewport.parentElement;
+      frames.push(list ? { transform: getComputedStyle(list).transform, opacity: Number(getComputedStyle(list).opacity), viewportTop: viewport?.getBoundingClientRect().top } : null);
       if (performance.now() - start < 650) requestAnimationFrame(sample);
       else resolve(frames);
     };
@@ -86,10 +99,12 @@ try {
     requestAnimationFrame(sample);
   }));
   assert.ok(completion.some(Boolean), 'completion targets the existing list');
-  if (width >= 900) {
+  if (reducedMotion === 'no-preference') {
     assert.ok(completion.some(frame => frame && frame.opacity < 0.95), 'completion gives visible fade feedback');
     assert.ok(new Set(completion.filter(Boolean).map(frame => frame.transform)).size > 3, 'completion gives a small jump');
     assert.equal(completion.at(-1)?.opacity, 1, 'list returns to full visibility');
+    const tops = completion.filter(Boolean).map(frame => frame.viewportTop).filter(value => typeof value === 'number');
+    assert.ok(tops.length > 3 && Math.max(...tops) - Math.min(...tops) < 0.25, 'completion moves content under a fixed viewport');
   } else {
     assert.ok(completion.filter(Boolean).every(frame => frame.opacity === 1), 'Reduce Motion keeps the list fully visible');
   }
@@ -100,12 +115,16 @@ try {
   // The automatic next round is still starting when the user refreshes again.
   await page.evaluate(() => window.fixture.end());
   await refresh.click();
-  await page.getByText('Refreshing…', { exact: true }).waitFor();
+  await page.getByText('Refreshing… · cancel', { exact: true }).waitFor();
   await page.waitForTimeout(400);
   const lateCalls = await page.evaluate(() => window.fixture.calls);
   assert.equal(lateCalls.filter(c => c === 'stop-complete').length, 2, 'stop waits for an in-flight start');
+  await refresh.click();
+  await page.getByText('Refresh cancelled', { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-refresh-spin]').count(), 0, 'cancellation stops motion immediately');
+  await page.waitForFunction(() => window.fixture.calls.filter(c => c === 'stop-complete').length >= 3);
   await page.evaluate(() => window.fixture.end());
-  await page.getByText('List updated', { exact: true }).waitFor();
+  await page.getByText('Refresh cancelled', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Pause search', exact: true }).click();
   await page.getByRole('button', { name: 'Resume search', exact: true }).waitFor();
   const scans = await page.evaluate(() => window.fixture.calls.filter(c => c === 'ble_scan').length);
@@ -120,6 +139,7 @@ try {
   assert.equal(await refresh.isDisabled(), false, 'a failed scan can be retried');
   await page.goto('http://localhost:8081/?fixture-empty=1');
   await page.getByText('Search failed. Tap refresh to try again.', { exact: true }).first().waitFor();
+  await refresh.waitFor({ state: 'visible', timeout: 5000 });
   assert.equal(await refresh.isVisible(), true, 'an empty list must still offer retry');
   await page.evaluate(() => window.fixture.recover());
   await refresh.click();
@@ -128,5 +148,5 @@ try {
   await page.getByText('List updated', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   await page.screenshot({ path: '/private/tmp/teton-refresh-verified.png' });
-  console.log(`PASS ${engine} ${width}px: new scan, visible progress, sensor update, completion and recoverable failure`);
+  console.log(`PASS ${engine} ${width}px ${reducedMotion}: 2s refresh, cancellation, fixed viewport, completion and recovery`);
 } finally { await browser.close(); }

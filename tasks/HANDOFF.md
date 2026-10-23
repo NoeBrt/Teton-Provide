@@ -994,3 +994,27 @@ review, and a measurement of the affected path. Document measurement limits.
 - Mac and signed iPhone Release rebuilt, installed and launched; Simulator Release built and demo launched.
   Rollback Mac bundle: `/private/tmp/Provide.before-completion.app`. No firmware, credentials or storage changes.
 - NOT_RUN: visual animation check on the physical iPhone, Windows/Linux desktop.
+
+## Faster, cancellable refresh and fixed phone crop — 2026-10-23
+
+- User requested a faster refresh, second-tap cancellation and removal of the white strip exposed on clipped
+  phone components. Manual discovery now lasts 2 s (background rounds remain 5 s); the demo honors that duration.
+  Rotation is 600 ms/turn; start and completion feedback are shortened to about 220–260 ms on web.
+- Refresh remains enabled while busy, named `Cancel refresh`, with visible `Refreshing… · cancel`. Second tap
+  immediately ends feedback and announces `Refresh cancelled`, invalidates the old generation, waits for queued
+  stop and resumes ordinary background discovery. Old end events cannot emit false success; current rows remain.
+- Root cause of the white strip: transforming the ScrollView moved its clipping boundary. Both layouts now keep
+  that viewport fixed and animate one inner content view. The entire original content-container styles move to
+  that view (same gaps, padding, minimum height, y origin); no per-card coordinate or spacing workaround.
+- RED/GREEN: disabled cancellation, demo's ignored two-second duration and moving phone viewport each reproduced
+  before the fix. PASS: 88 JS tests, typecheck, lint; real UI fake-radio checks in WebKit 1280/390 px (motion on)
+  and Chromium 390 px (Reduce Motion); existing layout/resize/scroll/drag matrix in both browsers. Frame sampling
+  verifies the clipping boundary stays fixed during start/completion while content moves and fades.
+- SIMULATION (native iOS) PASS: Release on Teton 16 Pro, 200 demo sensors. Device Hub double tap showed
+  `Refresh cancelled`; normal cycle showed busy then `List updated`. Video and inspected frame sequence show the
+  faster rotation/fade with the partially cropped bottom card staying correctly drawn. Local evidence:
+  `/private/tmp/teton-cancel-native.mp4`, `/private/tmp/teton-cancel-native-detail.png`.
+- Independent review found no lifecycle, cancellation, spacing or coordinate blocker. Mac and physical iPhone
+  Release installed/launched successfully; installed Mac binary hash matches its build. Rollback bundle:
+  `/private/tmp/Provide.before-cancellable-refresh.app`. No firmware, Wi-Fi configuration or storage changes.
+- NOT_RUN: gesture/animation check on the physical iPhone; Windows/Linux desktop.

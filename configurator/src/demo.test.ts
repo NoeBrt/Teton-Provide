@@ -68,3 +68,17 @@ test('restarting a demo scan cancels its old deadline', async context => {
     assert.equal(stopped, 1, 'leaving the demo cancels the deadline too');
   } finally { demo.stop(); }
 });
+
+test('the demo honors the shorter manual refresh duration', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const demo = startDemo(random);
+  let stopped = 0;
+  demo.radio.onStopScan(() => { stopped++; });
+  try {
+    await demo.radio.scan({ seconds: 2 });
+    context.mock.timers.tick(1999);
+    assert.equal(stopped, 0);
+    context.mock.timers.tick(1);
+    assert.equal(stopped, 1);
+  } finally { demo.stop(); }
+});

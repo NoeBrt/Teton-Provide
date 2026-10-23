@@ -36,6 +36,7 @@ import { groupOf, minutesLeft, type Group } from './src/wing';
 const TEST_STEPS: [Step, string][] = [['connect', 'Connecting'], ['services', 'provide service'], ['write', 'Writing “hello”'], ['read', 'Reading the reply']];
 const SETUP_STEPS: [SetupStep, string][] = [['connect', 'Connecting'], ['secure', 'Securing the channel'], ['send', 'Sending the network'], ['join', 'Joining the Wi‑Fi']];
 const SCAN_SECONDS = 5;
+const REFRESH_SECONDS = 2;
 // With 200 sensors the scan reports hundreds of advertisements a second; cards redraw at most this often.
 const SCAN_FLUSH_MS = 500;
 const PAD = 20;
@@ -301,7 +302,8 @@ function Provide({ demo, onDemo }: Mode) {
   const [outcomes, setOutcomes] = useState<Record<string, CardOutcome>>({}); // latest result per sensor, shown in its card
   const [paused, setPaused] = useState(false);
   const [refreshRequest, setRefreshRequest] = useState(0);
-  const [refreshStatus, setRefreshStatus] = useState<'idle' | 'refreshing' | 'updated' | 'failed'>('idle');
+  const [refreshStatus, setRefreshStatus] = useState<'idle' | 'refreshing' | 'updated' | 'failed' | 'cancelled'>('idle');
+  const refreshPending = useRef(false);
   const scanWork = useRef(Promise.resolve());
   const [sites, setSites] = useState<Site[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -405,20 +407,21 @@ function Provide({ demo, onDemo }: Mode) {
   // A sensor that stops advertising stays listed until Refresh (STALE_MS).
   useEffect(() => {
     const ble = radio;
-    if (!ble || !scanning) { setRefreshStatus('idle'); return; }
+    if (!ble || !scanning) { refreshPending.current = false; setRefreshStatus('idle'); return; }
     let live = true;
-    let pendingRefresh = refreshRequest > 0;
+    let pendingRefresh = refreshPending.current;
     const round = () => {
       scanWork.current = scanWork.current.then(async () => {
-        if (live) await ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: SCAN_SECONDS, allowDuplicates: true });
+        if (live) await ble.scan({ serviceUUIDs: [SERVICE_UUID], seconds: pendingRefresh ? REFRESH_SECONDS : SCAN_SECONDS, allowDuplicates: true });
       }).catch(() => {
-        if (live) { pendingRefresh = false; setRefreshStatus('failed'); }
+        if (live) { pendingRefresh = false; refreshPending.current = false; setRefreshStatus('failed'); }
       });
     };
     const ended = () => {
       if (!live) return;
       if (pendingRefresh) {
         pendingRefresh = false;
+        refreshPending.current = false;
         setRefreshStatus('updated');
         AccessibilityInfo.announceForAccessibility('Sensor list updated');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -605,6 +608,14 @@ function Provide({ demo, onDemo }: Mode) {
   const togglePause = () => setPaused(value => !value);
   // Refresh: sensors gone quiet leave the list (not one in a batch), and the search resumes.
   const refresh = () => {
+    if (refreshPending.current) {
+      refreshPending.current = false;
+      setRefreshStatus('cancelled');
+      setRefreshRequest(request => request + 1);
+      AccessibilityInfo.announceForAccessibility('Refresh cancelled');
+      return;
+    }
+    refreshPending.current = true;
     const now = Date.now();
     // Nothing was heard while paused: resume before judging who is gone.
     const gone = paused ? [] : Object.keys(sensors).filter(id => !running[id] && !batch[id] && now - (heardAt.current.get(id) ?? 0) > STALE_MS);
@@ -698,14 +709,14 @@ function Provide({ demo, onDemo }: Mode) {
     refreshLift.value = 0;
     refreshOpacity.value = 1;
     if (refreshStatus === 'refreshing' && !reduceMotion && !WEB) {
-      refreshSpin.value = withRepeat(withTiming(1, { duration: 800, easing: Easing.linear }), -1, false);
-      refreshLift.value = withSequence(withTiming(-4, { duration: 100 }), withSpring(0, { damping: 12, stiffness: 200 }));
+      refreshSpin.value = withRepeat(withTiming(1, { duration: 600, easing: Easing.linear }), -1, false);
+      refreshLift.value = withSequence(withTiming(-4, { duration: 80 }), withSpring(0, { damping: 16, stiffness: 320 }));
     }
     if (refreshStatus === 'updated' && !reduceMotion && !WEB) {
       refreshLift.value = 6;
       refreshOpacity.value = 0.55;
-      refreshLift.value = withSpring(0, { damping: 12, stiffness: 200 });
-      refreshOpacity.value = withTiming(1, { duration: 380 });
+      refreshLift.value = withSpring(0, { damping: 16, stiffness: 320 });
+      refreshOpacity.value = withTiming(1, { duration: 220 });
     }
     return () => { cancelAnimation(refreshSpin); cancelAnimation(refreshLift); cancelAnimation(refreshOpacity); };
   }, [refreshStatus, reduceMotion, refreshSpin, refreshLift, refreshOpacity]);
@@ -938,11 +949,11 @@ function Provide({ demo, onDemo }: Mode) {
   // Progress lasts for the new scan round; success feedback happens only when that round finishes.
   const refreshButton = (found > 0 || refreshStatus !== 'idle') && ready && !anyRunning && (
     <Pressable onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }} onPress={refresh}
-      disabled={refreshStatus === 'refreshing'} style={s.refreshButton}
-      accessibilityRole="button" accessibilityLabel="Refresh the list" aria-busy={refreshStatus === 'refreshing'}
-      accessibilityHint="Removes the sensors no longer heard and searches again">
+      style={s.refreshButton}
+      accessibilityRole="button" accessibilityLabel={refreshStatus === 'refreshing' ? 'Cancel refresh' : 'Refresh the list'} aria-busy={refreshStatus === 'refreshing'}
+      accessibilityHint={refreshStatus === 'refreshing' ? 'Cancels this refresh and keeps the current list' : 'Removes the sensors no longer heard and searches again'}>
       {refreshStatus !== 'idle' && <Text style={s.refreshText} accessibilityLiveRegion="polite">
-        {refreshStatus === 'refreshing' ? 'Refreshing…' : refreshStatus === 'updated' ? 'List updated' : 'Search failed · retry'}
+        {refreshStatus === 'refreshing' ? 'Refreshing… · cancel' : refreshStatus === 'updated' ? 'List updated' : refreshStatus === 'cancelled' ? 'Refresh cancelled' : 'Search failed · retry'}
       </Text>}
       <RefreshIcon spin={refreshSpin} refreshing={refreshStatus === 'refreshing'} />
     </Pressable>
@@ -1102,9 +1113,11 @@ function Provide({ demo, onDemo }: Mode) {
                     text={refreshStatus !== 'failed' && ready && !paused ? 'Sensors show here as soon as they are heard. Stay within a few metres of them.' : caption} />
                 ) : (<>
                   <View style={s.overview}>{overview}</View>
-                  <Animated.ScrollView ref={scrollRef} style={s.sensorScroll} contentContainerStyle={s.desktopList}
-                    {...{ dataSet: refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : refreshStatus === 'updated' ? { refreshDone: 'true' } : undefined }}>
-                    {sensorList}
+                  <Animated.ScrollView ref={scrollRef} style={s.sensorScroll}>
+                    <Animated.View style={s.desktopList}
+                      {...{ dataSet: refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : refreshStatus === 'updated' ? { refreshDone: 'true' } : undefined }}>
+                      {sensorList}
+                    </Animated.View>
                   </Animated.ScrollView>
                 </>)}
               </View>
@@ -1112,12 +1125,14 @@ function Provide({ demo, onDemo }: Mode) {
           ) : (
             <>
               <Animated.ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} scrollEnabled={found > 0}
-                style={!WEB && refreshBounce} {...{ dataSet: WEB ? (refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : refreshStatus === 'updated' ? { refreshDone: 'true' } : undefined) : undefined }}
-                snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}
-                contentContainerStyle={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }]}>
-                {requirements}
-                {overview}
-                {sensorList}
+                snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}>
+                {/* Animate content under the fixed viewport so cropped rows reveal content, never a blank strip. */}
+                <Animated.View style={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }, !WEB && refreshBounce]}
+                  {...{ dataSet: WEB ? (refreshStatus === 'refreshing' ? { refreshBounce: 'true' } : refreshStatus === 'updated' ? { refreshDone: 'true' } : undefined) : undefined }}>
+                  {requirements}
+                  {overview}
+                  {sensorList}
+                </Animated.View>
               </Animated.ScrollView>
               {searchPanel}
             </>
