@@ -37,19 +37,19 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
    sensor without a certificate advertises **not staged** and offers no provisioning. A sensor staged by the first
    protocol kept its unused label secret after the key pair in `identity`; `stage install` rewrites the file without
    it (0600 temporary file, synced, renamed over it, directory synced) before storing the certificate.
-3. **Identity.** The sensor advertises `TETON-` and 10 hex digits of SHA-256 of its public key (40 bits), and one
-   state byte (not staged, ready, online, offline). The name is a hint only; the handshake decides.
+3. **Identity.** Primary manufacturer data under test company `0xFFFF` is `[state][5 identity bytes]`:
+   the first five bytes of SHA-256 of the sensor's public key, rendered as `TETON-` plus 10 uppercase hex digits.
+   Flags, service UUID and manufacturer data fill all 31 legacy advertising bytes. The scan-response name and
+   OS name caches are diagnostic only; neither identifies a sensor in the app. The static ID is visible to passive
+   listeners too; rotating the Bluetooth address cannot prevent tracking while this ID remains broadcast.
 4. **Handshake.** `Noise_XX_25519_ChaChaPoly_SHA256`, prologue `teton-provision/2`. Message 2 carries the sensor's
-   static key and its certificate, encrypted. The phone checks, before message 3: the device authority's signature
-   (`verify_strict` semantics, `zip215: false`), that the certified key is the key the sensor just proved, that the
-   certified ID is the sensor's name, and that the token covers the certified customer. Any failure ends the
-   session with **not a genuine Teton sensor** or **another customer's sensor**; the phone has sent nothing but an
-   ephemeral key. The name compared is the one the sensor advertised (its scan response), or, when no packet carried
-   it, the system's name for the device (on Apple platforms a cache of its GATT name). Both are device-declared and only
-   select which certified ID must match; with neither, the phone does not connect (**unidentified**, retried by a
-   batch). The device service therefore sets its Bluetooth adapter's alias to its ID (`device/main.rs`); on the
-   FLWR-O-019 test sensor the system Bluetooth name was also set to it by hand (`tasks/HANDOFF.md`), not yet by
-   `install.sh`.
+   static key and certificate, encrypted. Before message 3, the app checks the device authority's signature
+   (`verify_strict` semantics, `zip215: false`), the certified key against the Noise-proven key, the certified ID
+   against the primary manufacturer-data ID, and the certified customer against the token. Advertisement data
+   remains untrusted; a copied claim never bypasses these checks. Failure ends the session before the code or
+   credentials leave. Missing/malformed identity prevents connection (`unidentified`); the old state-only format
+   is `old-firmware`, requires a firmware update and is not retried by a batch. Apps and test firmware must be
+   updated together; no name fallback remains.
 5. **Technician code.** Message 3 carries the phone's token: `[2][expiry][holder X25519 public key][name][customers]`
    signed with the domain `teton-technician-token/2`. `authority issue` generates the holder key pair with each code,
    and the phone uses the holder's private key as its Noise static key. The sensor checks the signature, that its own

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { isUnsettled, setup, type SetupOptions, type SetupResult } from './setup.ts';
 import { RETRIED } from './batch.ts';
 import { decodeToken, fromHex, type Token } from './authority.ts';
-import type { BleLink } from './probe.ts';
+import type { Advertising, BleLink } from './probe.ts';
 
 // The device side of this conversation was produced by snow (tests/noise_vectors.rs).
 const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.meta.url), 'utf8'));
@@ -35,8 +35,10 @@ function device(replies: number[][]) {
   return { link, writes };
 }
 
+const advertising = (name: string): Advertising => ({ manufacturerData: { ffff: { bytes: [1, ...hex(name.slice('TETON-'.length))] } } });
+
 const run = (link: BleLink, extra: SetupOptions = {}, sensor: string = vectors.deviceId, holder: Token = token, steps: string[] = []): Promise<SetupResult> =>
-  setup(link, 'id', sensor, holder, 'Ward-3', 'correct horse', scripted(), step => steps.push(step), { ...options, ...extra });
+  setup(link, 'id', sensor ? advertising(sensor) : undefined, holder, 'Ward-3', 'correct horse', scripted(), step => steps.push(step), { ...options, ...extra });
 const sent = (writes: number[][], bytes: number[]) => writes.some(w => JSON.stringify(w).includes(JSON.stringify(bytes).slice(1, -1)));
 const password = Array.from(Buffer.from('correct horse'));
 
@@ -49,7 +51,7 @@ test('full setup against the device transcript: handshake, certificate, token, c
   assert.deepEqual(steps, ['connect', 'secure', 'send', 'join']);
 });
 
-test('an impostor never receives the token: forged reply, another name, another authority, another key', async () => {
+test('an impostor never receives the token: forged reply, another advertised ID, another authority, another key', async () => {
   const forged = m2.slice();
   forged[90] ^= 1; // inside the encrypted certificate
   const cases: [number[][], SetupOptions, string][] = [
@@ -113,7 +115,7 @@ test('a retry after an unknown result reuses the attempt, so the device answers 
   assert.equal(isUnsettled(lost), true);
   const { link, writes } = device([m2, accepted, response1, response2]);
   const keysOnly = scripted();
-  const result = await setup(link, 'id', vectors.deviceId, token, 'Ward-3', 'correct horse',
+  const result = await setup(link, 'id', advertising(vectors.deviceId), token, 'Ward-3', 'correct horse',
     n => { assert.equal(n, 32, 'no new attempt ID drawn'); return keysOnly(n); }, () => {},
     { ...options, attempt: !lost.ok ? lost.attempt : undefined });
   assert.deepEqual(writes[2], [1, ...request1], 'same attempt and credentials as before');
@@ -147,5 +149,39 @@ test('a sensor that has not advertised its ID yet is not contacted, and the atte
   const { link, writes } = device([m2]);
   assert.deepEqual(await run(link, {}, ''), { ok: false, step: 'connect', reason: 'unidentified' });
   assert.equal(writes.length, 0, 'nothing was written');
-  assert.ok(RETRIED.includes('unidentified'), 'a batch tries it again once its name is heard');
+  assert.ok(RETRIED.includes('unidentified'), 'a batch tries it again once its identity is heard');
+});
+
+
+test('stale local name cannot block a valid manufacturer identity and certificate', async () => {
+  const { link, writes } = device([m2, accepted, response1, response2]);
+  const result = await setup(link, 'id', { ...advertising(vectors.deviceId), localName: 'TETON-0000000000' },
+    token, 'Ward-3', 'correct horse', scripted(), () => {}, options);
+  assert.equal(result.ok, true);
+  assert.deepEqual(writes, [[0, ...m1], [1, ...m3], [1, ...request1], [1, ...request2]]);
+});
+
+test('missing or malformed manufacturer identity is rejected before connecting', async () => {
+  const cases: (Advertising | undefined)[] = [
+    undefined, { localName: vectors.deviceId },
+    { manufacturerData: { '004c': { bytes: [1, 0, 0, 0, 0, 1] } } },
+    ...[[1, 0, 0], [1, 0, 0, 0, 0, 256], [9, 0, 0, 0, 0, 1]].map(bytes => ({ manufacturerData: { ffff: { bytes } } })),
+  ];
+  for (const advertised of cases) {
+    const { link, writes } = device([m2]);
+    link.connect = async () => { assert.fail('unidentified sensor must not be contacted'); };
+    assert.deepEqual(await setup(link, 'id', advertised, token, 'Ward-3', 'correct horse', scripted(), () => {}, options),
+      { ok: false, step: 'connect', reason: 'unidentified' });
+    assert.equal(writes.length, 0);
+  }
+});
+
+test('old firmware with state only is rejected before connecting and is not retried', async () => {
+  const { link, writes } = device([m2]);
+  link.connect = async () => { assert.fail('old firmware must not be contacted'); };
+  assert.deepEqual(await setup(link, 'id', { manufacturerData: { ffff: { bytes: [1] } } },
+    token, 'Ward-3', 'correct horse', scripted(), () => {}, options),
+    { ok: false, step: 'connect', reason: 'old-firmware' });
+  assert.equal(writes.length, 0);
+  assert.equal(RETRIED.some(reason => reason === 'old-firmware'), false);
 });

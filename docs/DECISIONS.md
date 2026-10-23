@@ -924,3 +924,12 @@ measured ones.
 the real `setup()`, demo sensors refused under the real authority, Test on a demo sensor); screens 8 to 11 and
 `docs/architecture/overall-200-sensors.mp4` (`SIMULATION`); bench runs (`ACTUAL_BLE`, run log on noe-lab, not in the
 repository).
+
+## Sensor identity carrier correction — approved 2026-10-23
+
+The repeated FLWR-O-019/not-genuine failure came from using an OS name cache when the scan-response name was
+missing. Rename/alias and process-memory workarounds did not survive cache lifetime changes. The user approved
+moving all five identity bytes into the existing primary manufacturer record after the state byte (31/31 legacy
+bytes), with one shared parser for display, saved-site lookup and setup. Names remain diagnostic. No certificate
+or Noise binding is weakened. Older state-only firmware requires an update; no fallback reintroduces the missing
+scan-response dependency. Scope, regressions and evidence limits: `tasks/sensor-identity-proposal.md` and HANDOFF.

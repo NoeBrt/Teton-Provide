@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changed, keepAdvertised, probe, sensorState, type BleLink } from './probe.ts';
+import { changed, keepAdvertised, probe, sensorId, sensorLabel, sensorState, type Advertising, type BleLink } from './probe.ts';
 
 const text = (data: number[]) => String.fromCharCode(...data);
 
@@ -77,25 +77,44 @@ test('the advertised state byte (manufacturer data 0xFFFF) tells what a sensor i
   assert.equal(sensorState(undefined), null, 'older firmware advertises nothing');
 });
 
-test('a rediscovered sensor is redrawn only when its state, name or signal (5 dB or more) changed', () => {
-  const seen = (rssi: number, state?: number, localName?: string) =>
-    ({ rssi, advertising: { localName, manufacturerData: state === undefined ? undefined : { ffff: { bytes: [state] } } } });
-  assert.equal(changed(undefined, seen(-50, 1)), true, 'first sighting');
-  assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-52, 1, 'TETON-DEMO-001')), false, 'same state, small signal change');
-  assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-56, 1, 'TETON-DEMO-001')), true, 'signal moved 6 dB');
-  assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-50, 2, 'TETON-DEMO-001')), true, 'set up');
-  assert.equal(changed(seen(-50, 1), seen(-50, 1, 'TETON-DEMO-001')), true, 'name from the scan response');
+test('identity requires a complete manufacturer record and ignores names', () => {
+  const adv = (bytes: number[]) => ({ localName: 'TETON-0000000000', manufacturerData: { ffff: { bytes } } });
+  for (const state of [0, 1, 2, 3]) assert.equal(sensorId(adv([state, 0x7b, 9, 0xf2, 3, 0x39])), 'TETON-7B09F20339');
+  for (const bytes of [[], [1], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7], [4, 1, 2, 3, 4, 5],
+    [1, -1, 2, 3, 4, 5], [1, 256, 2, 3, 4, 5], [1, 1.5, 2, 3, 4, 5], [1, NaN, 2, 3, 4, 5]]) {
+    assert.equal(sensorId(adv(bytes)), null, `invalid record: ${bytes}`);
+  }
+  assert.equal(sensorId({ localName: 'TETON-7B09F20339' }), null);
+  assert.equal(sensorId({ manufacturerData: { '004c': { bytes: [1, 0x7b, 9, 0xf2, 3, 0x39] } } }), null);
+  assert.equal(sensorId(undefined), null);
+  assert.equal(sensorLabel({ name: 'TETON-7B09F20339', advertising: { localName: 'TETON-7B09F20339' } }), 'Unnamed sensor');
+  assert.equal(sensorLabel({ name: 'FLWR-O-019', advertising: adv([1, 0x7b, 9, 0xf2, 3, 0x39]) }), 'TETON-7B09F20339');
 });
 
-test('a packet without the name or the state keeps the ones last advertised (scan response vs advertisement)', () => {
-  type Heard = { id: string; name?: string; rssi: number; advertising: { localName?: string; manufacturerData?: Record<string, { bytes: number[] }> } };
-  const named: Heard = { id: 'A', name: 'FLWR-O-019', rssi: -50, advertising: { localName: 'TETON-7B09F20339', manufacturerData: { ffff: { bytes: [1] } } } };
-  const bare: Heard = { id: 'A', name: 'FLWR-O-019', rssi: -44, advertising: {} };
-  const merged = keepAdvertised(named, bare);
-  assert.equal(merged.advertising.localName, 'TETON-7B09F20339', 'not the cached host name');
+test('redraw follows identity, state and signal, ignoring cached names', () => {
+  const seen = (rssi: number, state = 1, id = 1, localName?: string) =>
+    ({ rssi, advertising: { localName, manufacturerData: { ffff: { bytes: [state, 0, 0, 0, 0, id] } } } });
+  assert.equal(changed(undefined, seen(-50)), true);
+  assert.equal(changed(seen(-50), seen(-52)), false);
+  assert.equal(changed(seen(-50), seen(-56)), true);
+  assert.equal(changed(seen(-50), seen(-50, 2)), true);
+  assert.equal(changed(seen(-50), seen(-50, 1, 2)), true);
+  assert.equal(changed(seen(-50, 1, 1, 'old'), seen(-50, 1, 1, 'new')), false);
+});
+
+test('packets without manufacturer identity retain the last complete record atomically', () => {
+  const before: { rssi: number; advertising: Advertising } = { rssi: -50, advertising: { localName: 'old', manufacturerData: { ffff: { bytes: [1, 0, 0, 0, 0, 1] } } } };
+  const bare: { rssi: number; advertising: Advertising } = { rssi: -44, advertising: { localName: 'new', manufacturerData: { '004c': { bytes: [2] } } } };
+  const merged = keepAdvertised(before, bare);
+  assert.equal(sensorId(merged.advertising), 'TETON-0000000001');
   assert.equal(sensorState(merged.advertising), 'ready');
-  assert.equal(merged.rssi, -44, 'the signal is the newest');
-  const update: Heard = { id: 'A', rssi: -40, advertising: { localName: 'TETON-7B09F20339', manufacturerData: { ffff: { bytes: [2] } } } };
-  assert.equal(sensorState(keepAdvertised(named, update).advertising), 'online', 'a new state replaces the old one');
+  assert.equal(merged.rssi, -44);
+  assert.equal(merged.advertising.manufacturerData?.['004c'], undefined, 'unrelated manufacturer records are not retained');
+  const update = { rssi: -40, advertising: { manufacturerData: { ffff: { bytes: [2, 0, 0, 0, 0, 2] } } } };
+  const replaced = keepAdvertised(before, update);
+  assert.equal(sensorState(replaced.advertising), 'online');
+  assert.equal(sensorId(replaced.advertising), 'TETON-0000000002');
+  const malformed = { rssi: -40, advertising: { manufacturerData: { ffff: { bytes: [1] } } } };
+  assert.equal(sensorId(keepAdvertised(before, malformed).advertising), null, 'a new record is not patched with an old ID');
   assert.equal(keepAdvertised(undefined, bare), bare);
 });

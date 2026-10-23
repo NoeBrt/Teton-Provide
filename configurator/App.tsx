@@ -7,7 +7,7 @@ import { Onest_400Regular } from '@expo-google-fonts/onest/400Regular';
 import { Onest_500Medium } from '@expo-google-fonts/onest/500Medium';
 import { Onest_600SemiBold } from '@expo-google-fonts/onest/600SemiBold';
 import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
-import { changed, keepAdvertised, probe, SERVICE_UUID, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
+import { changed, keepAdvertised, probe, SERVICE_UUID, sensorLabel as nameOf, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
 import { startDemo, type Demo } from './src/demo';
 import { ask } from './src/ask';
@@ -116,6 +116,7 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
     case 'AlreadyProvisioned': return 'This sensor is already set up.';
     case 'Busy': return 'The sensor is busy with another phone. Wait a minute, then try again.';
     case 'unidentified': return 'This sensor has not announced its ID yet. Nothing was sent to it; try again in a moment.';
+    case 'old-firmware': return 'Update this sensor’s software before setting up its Wi-Fi. Nothing was sent to it.';
     case 'not-genuine': return 'This is not a genuine Teton sensor. Nothing was sent to it.';
     case 'other-customer': return 'This sensor belongs to a customer your technician code does not cover.';
     case 'token-invalid': return 'The sensor refused your technician code. Ask Teton for a new one.';
@@ -132,7 +133,6 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
 type Kind = 'test' | 'setup';
 type CardOutcome = { ok: boolean; title: string; text: string };
 type Attempt = { key: number; at: string; name: string; ok: boolean; detail: string };
-const nameOf = (p: Peripheral) => p.advertising?.localName ?? p.name ?? 'Unnamed sensor';
 
 type CardActions = {
   test: (sensor: Peripheral) => void; setUp: (sensor: Peripheral) => void; toggle: (id: string) => void;
@@ -457,7 +457,7 @@ function Provide({ demo, onDemo }: Mode) {
     const single = !batchActive.current; // decided at the start: a batch may begin while this run lasts
     const done = radio && token && await run<SetupResult>(sensor, 'setup', async onStep => {
       try {
-        result = await setup(radio, sensor.id, sensor.advertising?.localName ?? sensor.name, token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority });
+        result = await setup(radio, sensor.id, sensor.advertising, token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority });
       } finally {
         flow.current.finished(sensor.id, result);
       }

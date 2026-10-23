@@ -48,9 +48,16 @@ impl std::error::Error for AuthorityError {}
 /// `TETON-` and 10 upper-case hex digits of SHA-256(static public key): unique without a registry (40 bits keep
 /// collisions unlikely across millions of sensors), and only the holder of that key can prove it.
 pub fn device_id(public_key: &[u8; KEY_LEN]) -> String {
-    let digest = Sha256::digest(public_key);
-    let hex: String = digest[..5].iter().map(|b| format!("{b:02X}")).collect();
+    let hex: String = device_id_bytes(public_key)
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect();
     format!("TETON-{hex}")
+}
+
+/// The identity in primary BLE manufacturer data, without its constant text prefix.
+pub fn device_id_bytes(public_key: &[u8; KEY_LEN]) -> [u8; 5] {
+    Sha256::digest(public_key)[..5].try_into().unwrap()
 }
 
 /// A technician code as the authority prints it (text and QR) and the app imports it, by in-app scan or paste only:
@@ -462,6 +469,16 @@ mod tests {
         assert_eq!(id, device_id(&[7; 32]));
         assert_ne!(id, device_id(&[8; 32]));
         assert_eq!(id.len(), "TETON-".len() + 10);
+        assert_eq!(
+            id,
+            format!(
+                "TETON-{}",
+                device_id_bytes(&[7; 32])
+                    .iter()
+                    .map(|b| format!("{b:02X}"))
+                    .collect::<String>()
+            )
+        );
         assert!(
             id.starts_with("TETON-")
                 && id[6..]

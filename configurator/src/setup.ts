@@ -6,7 +6,7 @@ import { x25519 } from '@noble/curves/ed25519.js';
 import { initiator } from './noise.ts';
 import { DEVICE_AUTHORITY, deviceId, verifyCertificate, type Token } from './authority.ts';
 import { ATTEMPT_ID_LEN, decodeResponse, PROVISION_CHARACTERISTIC_UUID, provisionRequest, statusRequest, type Failure, type Outcome } from './provision.ts';
-import { SERVICE_UUID, TimeoutError, withTimeout, type BleLink } from './probe.ts';
+import { SERVICE_UUID, TimeoutError, withTimeout, sensorId, sensorState, type Advertising, type BleLink } from './probe.ts';
 
 // First byte of every write (src/provision.rs FRAME_*): start a handshake, or continue the session.
 const FRAME_HANDSHAKE = 0;
@@ -20,6 +20,7 @@ const REFUSED_EXPIRED = 3;
 export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
 /**
  * `unidentified`: the sensor has not advertised its ID yet (nothing was sent; try again once it is heard);
+ * `old-firmware`: state-only firmware requires an update (not contacted or retried);
  * `not-genuine`: no valid Teton certificate for the key and ID it shows (nothing secret was sent);
  * `other-customer`: a genuine sensor of a customer this token does not cover;
  * `token-invalid` / `token-expired`: the sensor refused the token (or the app holds the wrong key for it, nothing sent);
@@ -27,7 +28,7 @@ export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
  * `locked`: not tried, the app had locked the token or the site password again.
  */
 export type SetupFailure =
-  | Failure | 'timeout' | 'rejected' | 'unidentified' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed' | 'locked';
+  | Failure | 'timeout' | 'rejected' | 'unidentified' | 'old-firmware' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed' | 'locked';
 /** The phone cannot tell what happened: retrying must reuse this attempt so the device can answer it. */
 export const isUnsettled = (result: SetupResult) =>
   !result.ok && result.attempt !== undefined && (result.reason === 'timeout' || result.reason === 'rejected');
@@ -51,8 +52,8 @@ const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every(
 export async function setup(
   ble: BleLink,
   id: string,
-  /** The sensor's name: the one it advertised, or the system's; it must be the certificate's ID. Missing: not contacted. */
-  sensorName: string | undefined,
+  /** Primary manufacturer data supplies the claimed ID; names and OS caches never identify a sensor. */
+  advertising: Advertising | undefined,
   token: Token,
   ssid: string,
   password: string,
@@ -63,7 +64,9 @@ export async function setup(
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), deviceAuthority = DEVICE_AUTHORITY,
   }: SetupOptions = {},
 ): Promise<SetupResult> {
-  if (!sensorName) return { ok: false, step: 'connect', reason: 'unidentified' };
+  const claimed = sensorId(advertising);
+  if (!claimed) return { ok: false, step: 'connect', reason:
+    advertising?.manufacturerData?.ffff?.bytes.length === 1 && sensorState(advertising) !== null ? 'old-firmware' : 'unidentified' };
   let step: SetupStep = 'connect';
   let attempt: Uint8Array | undefined;
   const at = (next: SetupStep) => { step = next; onStep(next); };
@@ -100,7 +103,7 @@ export async function setup(
       return { ok: false, step, reason: 'not-genuine' }; // its reply does not prove any key
     }
     const certificate = verifyCertificate(device.payload, deviceAuthority);
-    if (!certificate || !same(certificate.publicKey, device.deviceStatic) || deviceId(certificate.publicKey) !== sensorName) {
+    if (!certificate || !same(certificate.publicKey, device.deviceStatic) || deviceId(certificate.publicKey) !== claimed) {
       return { ok: false, step, reason: 'not-genuine' }; // the token never left the phone
     }
     if (!token.customers.includes(certificate.customer)) return { ok: false, step, reason: 'other-customer' };

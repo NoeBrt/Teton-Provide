@@ -42,7 +42,9 @@ The device exposes one GATT service with two characteristics. **Hello** answers 
 carries credentials; it lets a technician check the radio link. **Provisioning** carries Noise messages, one per
 acknowledged write, and exists once the sensor is staged. Each sensor advertises its ID, `TETON-` and 10 hex
 digits of the hash of its key, and one state byte that the app shows on its card: not staged, ready, online, or
-Wi-Fi not connected.
+Wi-Fi not connected. Primary manufacturer data is `[state][5 key-hash identity bytes]` under test company
+`0xFFFF`; the app derives the same `TETON-` ID from those bytes. The scan-response and cached names are diagnostic
+only. Flags, service UUID and this record consume exactly 31 legacy advertising bytes.
 
 ## The technician's flow
 

@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bridge, type Tauri } from './ble.web.ts';
+import { sensorId } from './probe.ts';
 
 function fakeTauri() {
   const calls: [string, unknown][] = [];
@@ -20,13 +21,14 @@ test('an advertisement reaches the app as a react-native-ble-manager peripheral'
   const heard: unknown[] = [];
   ble.onDiscoverPeripheral(p => heard.push(p));
   await new Promise(resolve => setTimeout(resolve));
-  emit('ble-discover', { id: 'A', name: 'FLWR-O-019', advertised: 'TETON-AFD042F349', rssi: -61, manufacturer: { ffff: [1] } });
+  emit('ble-discover', { id: 'A', name: 'FLWR-O-019', advertised: 'TETON-AFD042F349', rssi: -61, manufacturer: { ffff: [1, 0x7b, 9, 0xf2, 3, 0x39] } });
   emit('ble-discover', { id: 'B', name: 'FLWR-O-019', advertised: null, rssi: null, manufacturer: {} });
   assert.deepEqual(heard, [
-    { id: 'A', name: 'FLWR-O-019', rssi: -61, advertising: { localName: 'TETON-AFD042F349', manufacturerData: { ffff: { bytes: [1] } } } },
+    { id: 'A', name: 'FLWR-O-019', rssi: -61, advertising: { localName: 'TETON-AFD042F349', manufacturerData: { ffff: { bytes: [1, 0x7b, 9, 0xf2, 3, 0x39] } } } },
     // The system's cached name is never passed off as the advertised one.
     { id: 'B', name: 'FLWR-O-019', rssi: 127, advertising: { localName: undefined, manufacturerData: {} } },
   ]);
+  assert.equal(sensorId((heard[0] as { advertising: Parameters<typeof sensorId>[0] }).advertising), 'TETON-7B09F20339');
 });
 
 test('scan, write, read and state go to the matching commands; remove stops listening', async () => {

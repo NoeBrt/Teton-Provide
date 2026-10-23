@@ -7,7 +7,7 @@ export type Tauri = {
   core: { invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> };
   event: { listen<T>(name: string, cb: (event: { payload: T }) => void): Promise<() => void> };
 };
-// `advertised`: the sensor's own name (its scan response), preferred as its ID; `name`: the system's (cached), the fallback.
+// Names are diagnostics only; shared identity parsing reads manufacturer data, never these caches.
 type Heard = { id: string; name: string | null; advertised?: string | null; rssi: number | null; manufacturer: Record<string, number[]> };
 
 const toPeripheral = ({ id, name, advertised, rssi, manufacturer }: Heard) => ({

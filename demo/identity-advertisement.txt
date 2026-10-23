@@ -1,0 +1,74 @@
+Sensor identity deployment evidence — 2026-10-23
+
+COMMAND_FIXTURE PASS: 86 JS tests; 85 Linux Rust tests with ble,stage
+(33 library + 2 authority + 20 device + 17 audit + 1 Noise vector + 4 security + 8 simulation).
+4 desktop Rust tests; typecheck, lint, Rustfmt, Clippy; Python simulator selftest PASS.
+Independent implementation review: no blocker.
+Initial Mac host-audit integration failures are Linux-shell/platform-specific;
+all 17 host-audit fixtures pass in Ubuntu 22.04 ARM64. The first container run
+lacked the public Noise-vector fixture; it was copied and the complete suite rerun.
+
+ACTUAL_BLE — Mac CoreBluetooth scan BEFORE (20 s):
+0.094s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+0.094s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+10.377s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+10.377s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+19.374s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+19.376s manufacturer=ffff02 advertisedName=absent cachedName=FLWR-O-019
+reports=6 identityMatches=0
+
+ACTUAL_BLE — Mac CoreBluetooth scan AFTER (20 s):
+4.698s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
+4.698s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
+13.701s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
+13.702s manufacturer=ffff027b09f20339 advertisedName=absent cachedName=FLWR-O-019
+reports=4 identityMatches=4
+
+ACTUAL_HOST — deployment to FLWR-O-019:
+Final btmon check: properties 0x0013, Connectable + Scannable, legacy ADV_IND.
+/home/floware/teton-factory/target/release/device.identity: OK
+active
+3361419b2f3dbf6b8e8bc96813dfd2ed21ccdc494a1ac2f65fb5ef83007888d2  /usr/local/bin/teton-device
+      LE Set Extended Advertising Data (0x08|0x0037) ncmd 2
+        Status: Success (0x00)
+< HCI Command: Read Local Name (0x03|0x0014) plen 0         #16 [hci0] 1.953844
+> HCI Event: Command Complete (0x0e) plen 252               #17 [hci0] 1.969804
+      Read Local Name (0x03|0x0014) ncmd 2
+        Status: Success (0x00)
+        Name: TETON-7B09F20339
+< HCI Command: LE Set Extended Adv.. (0x08|0x0037) plen 35  #18 [hci0] 1.969839
+        Handle: 0x01
+        Operation: Complete extended advertising data (0x03)
+        Fragment preference: Minimize fragmentation (0x01)
+        Data length: 0x1f
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Company: internal use (65535)
+          Data: 027b09f20339
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+> HCI Event: Command Complete (0x0e) plen 4                 #19 [hci0] 1.971799
+      LE Set Extended Advertising Data (0x08|0x0037) ncmd 2
+        Status: Success (0x00)
+< HCI Command: LE Set Extended Adve.. (0x08|0x0039) plen 6  #20 [hci0] 1.971831
+        Extended advertising: Enabled (0x01)
+        Number of sets: 1 (0x01)
+
+ACTUAL_BLE / ACTUAL_WIFI — observed after deployment:
+Mac Provide UI: TETON-7B09F20339; hello success at 12:59:48;
+Wi-Fi setup success at 13:00:52, IP 192.168.1.15.
+Device journal independently: hello exchanged; provisioning session (MTU 517);
+technician accepted; attempt pending, then connected at 13:00:52.
+These UI operations were observed, not initiated by this deployment script.
+
+Mac installed binary SHA256:
+7d4d73e6328a3036f60e80ce6862df69006f025a22cea837380a5a8982986810
+Firmware SHA256 (build and installed file match):
+3361419b2f3dbf6b8e8bc96813dfd2ed21ccdc494a1ac2f65fb5ef83007888d2
+Physical iPhone 15 Pro: signed Release installed and launched successfully.
+SIMULATION PASS: Release iOS Simulator demo launched; sensor IDs and list render.
+
+NOT_RUN: physical iPhone provisioning after this update, Windows/Linux desktop,
+new 200-sensor radio batch, advertisement capture during a state transition.
+Noe-lab was not changed. No credentials or authorities were regenerated.

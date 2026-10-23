@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { startDemo, DEMO_SIZE } from './demo.ts';
 import { setup } from './setup.ts';
-import { probe } from './probe.ts';
+import { probe, sensorId } from './probe.ts';
 
 const random = (n: number) => Uint8Array.from(randomBytes(n));
 
@@ -12,8 +12,9 @@ test('the demo wing against the real setup(): the expected outcome for every sim
   const demo = startDemo(random);
   try {
     assert.equal(demo.sensors.length, DEMO_SIZE);
+    for (const sensor of demo.sensors) assert.equal(sensorId(sensor.advertising), sensor.name);
     const tried = demo.sensors.filter(s => s.kind !== 'not-staged');
-    const results = await Promise.all(tried.map(s => setup(demo.radio, s.id, s.name, demo.token, demo.site.ssid, demo.password, random, () => {},
+    const results = await Promise.all(tried.map(s => setup(demo.radio, s.id, s.advertising, demo.token, demo.site.ssid, demo.password, random, () => {},
       { deviceAuthority: demo.deviceAuthority, pollMs: 5 })));
     const outcome = (kind: string) => results.filter((_, i) => tried[i].kind === kind).map(r => (r.ok ? 'ok' : r.reason));
     assert.ok(outcome('genuine').every(r => r === 'ok'));
@@ -31,7 +32,7 @@ test('the demo sensors are only trusted with the demo authority', async () => {
   const demo = startDemo(random);
   try {
     const s = demo.sensors.find(sensor => sensor.kind === 'genuine')!;
-    const result = await setup(demo.radio, s.id, s.name, demo.token, demo.site.ssid, demo.password, random); // real authority
+    const result = await setup(demo.radio, s.id, s.advertising, demo.token, demo.site.ssid, demo.password, random); // real authority
     assert.deepEqual(result.ok ? 'ok' : result.reason, 'not-genuine');
   } finally {
     demo.stop();

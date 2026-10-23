@@ -313,7 +313,7 @@ class Sensor:
 
     def advertising_data(self):  # BlueZ 5.64 order: service UUIDs, manufacturer data, then flags
         return (b'\x11\x07' + bytes.fromhex(SERVICE_UUID.replace('-', ''))[::-1]
-                + bytes([4, 0xFF, 0xFF, 0xFF, self.state()]) + b'\x02\x01\x02')
+                + bytes([9, 0xFF, 0xFF, 0xFF, self.state()]) + bytes.fromhex(self.name[6:]) + b'\x02\x01\x02')
 
     def scan_response_data(self):
         return bytes([len(self.name) + 1, 0x09]) + self.name.encode()
@@ -542,6 +542,11 @@ def selftest(vectors_path):
     sensor.certificate, sensor.technician_authority = bytes.fromhex(v['certificate']), bytes.fromhex(v['technicianAuthority'])
     sensor.static_private, sensor.records, sensor.busy_done = key(0x10), {}, False
     sensor.ipv4 = bytes([192, 168, 1, 40])
+    sensor.online, sensor.provisioned = False, False
+    advertisement = sensor.advertising_data()
+    assert len(advertisement) == 31
+    assert advertisement[22] == 1
+    assert advertisement[23:28] == bytes.fromhex(v['deviceId'][6:])
     assert x25519_public(sensor.static_private).hex() == v['devicePublic']
     assert device_id(bytes.fromhex(v['devicePublic'])) == v['deviceId']
     assert parse_certificate(sensor.certificate) == (bytes.fromhex(v['devicePublic']), v['customer'])

@@ -6,7 +6,7 @@
 //!   the sensor then receives Wi-Fi credentials and reports the NetworkManager outcome (src/provision.rs,
 //!   docs/SECURITY.md). It stays open: a technician may reconfigure a provisioned sensor.
 //!
-//! The advertised name is the sensor's ID, derived from its key; one byte of manufacturer data tells its state.
+//! Primary manufacturer data carries state then five key-derived identity bytes; the scan-response name is diagnostic.
 //! State directory: `$STATE_DIRECTORY` (systemd `StateDirectory=`), else `./state`.
 //! `TETON_WIFI_INTERFACE` pins the Wi-Fi device to provision (default: the first Wi-Fi device).
 
@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use teton_provisioning::authority::{checked_now, device_id};
+use teton_provisioning::authority::{checked_now, device_id, device_id_bytes};
 use teton_provisioning::protocol::{
     self, CHARACTERISTIC_UUID, SERVICE_UUID, STATE_COMPANY_ID, STATE_NOT_STAGED, STATE_OFFLINE,
     STATE_ONLINE, STATE_READY,
@@ -333,10 +333,10 @@ fn sensor_state(staged: bool, provisioned: bool, online: bool) -> u8 {
     }
 }
 
-fn advertisement(state: u8, name: &str) -> Advertisement {
+fn advertisement(state: u8, name: &str, id: Option<[u8; 5]>) -> Advertisement {
     Advertisement {
         service_uuids: [Uuid::from_u128(SERVICE_UUID)].into(),
-        manufacturer_data: [(STATE_COMPANY_ID, vec![state])].into(),
+        manufacturer_data: [(STATE_COMPANY_ID, protocol::manufacturer_data(state, id))].into(),
         discoverable: Some(true),
         local_name: Some(name.to_string()),
         ..Default::default()
@@ -453,11 +453,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let unreadable =
         |error: std::io::Error| format!("cannot read {}: {error}", state_dir.display());
     let identity = Identity::load(&state_dir).map_err(unreadable)?;
-    let name = match (&identity, KeyPair::load(&state_dir).map_err(unreadable)?) {
-        (Some(identity), _) => identity.device_id(),
-        (None, Some(keys)) => device_id(&keys.public_key), // keyed, waiting for its certificate
-        (None, None) => "TETON-UNSTAGED".to_string(),
-    };
+    let keys = KeyPair::load(&state_dir).map_err(unreadable)?;
+    let public_key = identity
+        .as_ref()
+        .map(|identity| &identity.keys.public_key)
+        .or_else(|| keys.as_ref().map(|keys| &keys.public_key));
+    let name = public_key
+        .map(device_id)
+        .unwrap_or_else(|| "TETON-UNSTAGED".to_string());
+    let id = public_key.map(device_id_bytes);
     let (current, known) = startup_profile(&state_dir, wifi::profile_active);
     let staged = identity.is_some();
     let changed = Arc::new(Notify::new());
@@ -491,13 +495,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             adapter.name()
         )
     })?;
-    // Phones cache the device's name and fall back on it when a packet carries no name (the name travels only in the
-    // scan response): it should be this sensor's ID, not the host's (FLWR-O-019). The alias is kept by BlueZ after the
-    // service stops. The GATT name also needs bluetoothd without its hostname plugin (see tasks/HANDOFF.md).
-    if let Err(error) = adapter.set_alias(name.clone()).await {
-        println!("cannot name {} {name}: {error}", adapter.name());
-    }
-
     let hello = Arc::new(Pending::new(None));
     let mode = if staged {
         "accepts hello and encrypted provisioning"
@@ -514,7 +511,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|context| *context.current.lock().unwrap())
     };
     let mut state = sensor_state(staged, current.is_some(), online(current).await);
-    let mut adv: AdvertisementHandle = adapter.advertise(advertisement(state, &name)).await?;
+    let mut adv: AdvertisementHandle = adapter.advertise(advertisement(state, &name, id)).await?;
     println!("{name} advertising on {}; {mode}", adapter.name());
 
     let mut terminate = signal(SignalKind::terminate())?;
@@ -543,7 +540,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let next = sensor_state(staged, profile.is_some(), online(profile).await);
         if next != state {
             drop(adv);
-            adv = adapter.advertise(advertisement(next, &name)).await?;
+            adv = adapter.advertise(advertisement(next, &name, id)).await?;
             state = next;
             println!(
                 "advertised state: {}",
@@ -760,13 +757,27 @@ mod tests {
 
     #[test]
     fn the_state_rides_in_manufacturer_data_beside_the_service_and_the_sensor_id() {
-        let adv = advertisement(STATE_ONLINE, "TETON-3F9A2C81D4");
+        let adv = advertisement(
+            STATE_ONLINE,
+            "TETON-3F9A2C81D4",
+            Some([0x3f, 0x9a, 0x2c, 0x81, 0xd4]),
+        );
         assert_eq!(
             adv.manufacturer_data.get(&STATE_COMPANY_ID),
-            Some(&vec![STATE_ONLINE])
+            Some(&vec![STATE_ONLINE, 0x3f, 0x9a, 0x2c, 0x81, 0xd4])
         );
         assert!(adv.service_uuids.contains(&Uuid::from_u128(SERVICE_UUID)));
         assert_eq!(adv.local_name.as_deref(), Some("TETON-3F9A2C81D4"));
+        assert_eq!(adv.service_uuids.len(), 1);
+        assert_eq!(adv.manufacturer_data.len(), 1);
+        assert_eq!(adv.discoverable, Some(true));
+        assert!(adv.service_data.is_empty());
+        assert!(adv.system_includes.is_empty());
+        assert!(adv.solicit_uuids.is_empty());
+        assert!(adv.advertising_data.is_empty());
+        assert!(adv.appearance.is_none());
+        assert!(adv.secondary_channel.is_none());
+        assert!(adv.min_interval.is_none() && adv.max_interval.is_none());
     }
 
     #[test]
