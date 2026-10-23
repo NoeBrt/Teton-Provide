@@ -256,7 +256,7 @@ pre { margin: 0; font: 8pt/1.45 var(--font-mono); background: var(--surface); bo
       <tr><td><code>device/systemd/iot-device.service</code></td><td>Démarrage au boot, utilisateur dynamique, suit BlueZ</td><td>Écrit, non installé</td></tr>
       <tr><td><code>device/audit.rs</code></td><td>Pré-vol de l'hôte en lecture seule, délais bornés</td><td>Hôte réel : 4/4</td></tr>
       <tr><td><code>src/simulation.rs</code>, <code>batch.rs</code></td><td>Transport simulé, pannes injectées, lots bornés</td><td>Testé, mesuré</td></tr>
-      <tr><td><code>docs/architecture-demo.html</code></td><td>Maquette de l'interface technicien, hors ligne</td><td>91 contrôles Playwright</td></tr>
+      <tr><td><code>docs/development/archive/architecture-demo.html</code></td><td>Maquette de l'interface technicien, hors ligne</td><td>91 contrôles Playwright</td></tr>
       <tr><td><code>configurator/</code></td><td>Application Android et iPhone</td><td>Absente : framework non choisi</td></tr>
     </tbody>
   </table>
@@ -411,9 +411,9 @@ pre { margin: 0; font: 8pt/1.45 var(--font-mono); background: var(--surface); bo
   <table>
     <thead><tr><th style="width:22%">Classe</th><th style="width:16%">État</th><th>Contenu</th><th style="width:28%">Fichier</th></tr></thead>
     <tbody>
-      <tr><td>SIMULATION</td><td><span class="chip ok">Réussi</span></td><td>Transport simulé, pannes, soak de 300 s ; maquette testée par Playwright</td><td><code>demo/benchmark*.txt</code>, <code>demo/mockup-playwright.txt</code></td></tr>
-      <tr><td>COMMAND_FIXTURE</td><td><span class="chip ok">Réussi</span></td><td>46 tests Rust, mutations du service BLE, 4 cas CLI</td><td><code>demo/tdd-ble-device.txt</code></td></tr>
-      <tr><td>ACTUAL_HOST</td><td><span class="chip ok">Réussi 4/4</span></td><td>Adaptateur allumé, annonce et service publiés puis libérés à l'arrêt</td><td><code>demo/host-ble-endpoint.txt</code>, <code>demo/host-inventory.txt</code></td></tr>
+      <tr><td>SIMULATION</td><td><span class="chip ok">Réussi</span></td><td>Transport simulé, pannes, soak de 300 s ; maquette testée par Playwright</td><td><code>evidence/benchmark*.txt</code>, <code>evidence/checks/mockup-playwright.txt</code></td></tr>
+      <tr><td>COMMAND_FIXTURE</td><td><span class="chip ok">Réussi</span></td><td>46 tests Rust, mutations du service BLE, 4 cas CLI</td><td><code>evidence/checks/tdd-ble-device.txt</code></td></tr>
+      <tr><td>ACTUAL_HOST</td><td><span class="chip ok">Réussi 4/4</span></td><td>Adaptateur allumé, annonce et service publiés puis libérés à l'arrêt</td><td><code>evidence/real/host-ble-endpoint.txt</code>, <code>evidence/real/host-inventory.txt</code></td></tr>
       <tr><td>ACTUAL_BLE</td><td><span class="chip idle">Non exécuté</span></td><td>Échange avec Android et iPhone</td><td>—</td></tr>
       <tr><td>Canal sécurisé</td><td><span class="chip idle">Non exécuté</span></td><td>Conçu et revu, pas codé</td><td><code>docs/SECURITY.md</code></td></tr>
       <tr><td>ACTUAL_WIFI</td><td><span class="chip idle">Non exécuté</span></td><td>Connexion réelle au réseau cible</td><td>—</td></tr>

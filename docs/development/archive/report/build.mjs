@@ -1,5 +1,5 @@
 // Captures the technician mockup screens with Playwright, then prints rapport.html to PDF.
-// Usage from the repo: PLAYWRIGHT=<dir>/node_modules/playwright/index.mjs node docs/report/build.mjs
+// Usage from the repo: PLAYWRIGHT=<dir>/node_modules/playwright/index.mjs node docs/development/archive/report/build.mjs
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -51,4 +51,4 @@ await page.pdf({
   footerTemplate: '<div style="width:100%;font:8px sans-serif;color:#646c74;padding:0 16mm;display:flex;justify-content:space-between"><span>Provisioning Wi-Fi par BLE · rapport de solution</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>',
 });
 await browser.close();
-console.log('wrote docs/rapport-solution.pdf');
+console.log('wrote docs/development/archive/rapport-solution.pdf');

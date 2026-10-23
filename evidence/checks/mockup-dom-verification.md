@@ -1,6 +1,6 @@
 # Interactive architecture mockup — DOM verification
 
-Date: 2026-10-17. Target: `docs/architecture-demo.html`.
+Date: 2026-10-17. Target: `docs/development/archive/architecture-demo.html`.
 
 SHA-256 of the tested file:
 `b8a0276825c5b0fc9bd2718cebc80f0fd482766780ce30ea9e5abbbb6011e801`.

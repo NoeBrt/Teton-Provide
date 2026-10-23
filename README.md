@@ -1,209 +1,133 @@
-# IoT provisioning
+<p align="center">
+  <img src="configurator/desktop/src-tauri/icons/icon.png" alt="provide. logo" width="112" />
+</p>
 
-A technician's phone gives headless Ubuntu devices their Wi-Fi credentials over Bluetooth Low Energy, with no
-Internet and no shared network, one sensor or every ready sensor in range at once. In a Noise `XX` handshake each
-sensor proves it is a genuine IoT sensor with a certificate IoT signed for its key, and the phone proves its
-technician holds a code IoT issued; only then does the password travel, encrypted. The device joins the network
-through NetworkManager and reports the IPv4 address it received for that attempt.
+<h1 align="center">provide.</h1>
 
-- **Why BLE, how credentials are protected, 200 devices:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), with
-  diagrams, screens and a [55 s video](docs/architecture/demo-simulator.mp4) with 20 sensors.
-- **Security design and tests:** [docs/SECURITY.md](docs/SECURITY.md).
-- **Every decision and its alternatives:** [docs/DECISIONS.md](docs/DECISIONS.md).
-- **Requirement-by-requirement status:** [tasks/compliance.md](tasks/compliance.md).
+<p align="center"><strong>From an offline sensor to a connected hospital wing.</strong></p>
+<p align="center">Give headless IoT devices their Wi-Fi credentials over Bluetooth.<br />One technician. One app. No internet required during setup.</p>
 
-| Side | Code |
+<p align="center">
+  <a href="#watch-the-demo">Watch the demos</a> ·
+  <a href="#try-it">Try it</a> ·
+  <a href="docs/SETUP.md">Ubuntu setup</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="docs/SECURITY.md">Security</a>
+</p>
+
+## The challenge
+
+A technician arrives at a healthcare facility with headless devices that have no network connection. They need to send the facility’s Wi-Fi credentials securely and know which devices actually connected — without a terminal, a cloud relay or an existing shared network.
+
+**provide.** discovers nearby sensors, authenticates both sides, sends encrypted credentials and reports the result of each Wi-Fi join. The same application serves an iPhone or a desktop, with a batch view for an entire wing.
+
+## Watch the demo
+
+Start with the original overview videos: a whole wing, 200 simulated sensors, batch progress and errors.
+
+<table>
+  <tr>
+    <th>Mobile · original demo</th>
+    <th>Desktop · 200 sensors</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="docs/assets/architecture/overall-200-sensors.mp4">
+        <img src="docs/assets/demos/mobile-200-preview.png" alt="Watch the original mobile demo with 200 simulated sensors" width="165" />
+      </a>
+    </td>
+    <td align="center">
+      <a href="docs/assets/demos/desktop-200-sensors.mp4">
+        <img src="docs/assets/demos/desktop-200-preview.png" alt="Watch the desktop overview with 200 simulated sensors" width="640" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/assets/architecture/overall-200-sensors.mp4">▶ Mobile overview · 41 s</a></td>
+    <td align="center"><a href="docs/assets/demos/desktop-200-sensors.mp4">▶ Desktop overview · 25 s</a></td>
+  </tr>
+</table>
+
+### How to use provide.
+
+Short videos show one action at a time, with a **visible pointer and click highlight**. Open a clip to view it at its original resolution: mobile 390 × 844, desktop 1280 × 800, at the source recording’s 25 fps. These MP4 tutorials preserve full colour and text detail.
+
+| Step | Mobile | Desktop |
+| --- | --- | --- |
+| **1. Add the technician code** — paste, verify, save | [▶ Watch](docs/assets/demos/mobile-technician-code.mp4) | [▶ Watch](docs/assets/demos/desktop-technician-code.mp4) |
+| **2. Set up the site Wi-Fi** — site, SSID, password, save | [▶ Watch](docs/assets/demos/mobile-site-wifi.mp4) | [▶ Watch](docs/assets/demos/desktop-site-wifi.mp4) |
+| **3. Open and test a sensor** — Test → “world” received | [▶ Watch](docs/assets/demos/mobile-sensor-test.mp4) | [▶ Watch](docs/assets/demos/desktop-sensor-test.mp4) |
+| **4. Configure one sensor** — Set up → Device connected | [▶ Watch](docs/assets/demos/mobile-sensor-setup.mp4) | [▶ Watch](docs/assets/demos/desktop-sensor-setup.mp4) |
+| **5. Configure all ready sensors** — batch, errors, retry | [▶ Watch](docs/assets/demos/mobile-configure-all.mp4) | [▶ Watch](docs/assets/demos/desktop-configure-all.mp4) |
+
+**Demo scope:** the original mobile overview was recorded in the iOS Simulator. The desktop overview and both tutorial layouts use a browser. All fleet results are simulated. Setup tutorials use a public test code and fictitious Wi-Fi details; the sensor tutorials use the app’s separate demo mode. The batch tutorial accelerates the middle of the run 4×. No real credentials are shown and these videos do not prove 200 physical devices were provisioned. [Recording details](docs/assets/demos/README.md).
+
+## Built for the technician
+
+- **Discover automatically.** Nearby sensors appear with their identity, signal and setup state.
+- **Authorize once.** Import a technician code and enter or scan the facility’s Wi-Fi details.
+- **Set up one or a whole wing.** A queue runs up to six sessions at a time, with progress for every sensor.
+- **Fix the exceptions.** Filter errors, read the reason and retry failed devices.
+- **See the actual result.** A successful device reports the IP address from that provisioning attempt.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["provide.<br/>iPhone / desktop"] <-->|"BLE · Noise XX<br/>authenticated + encrypted"| B["IoT device<br/>Rust · BlueZ"]
+    B -->|"D-Bus"| C[NetworkManager]
+    C -->|"WPA2 + DHCP"| D[Facility Wi-Fi]
+```
+
+The sensor proves a certified key. The configurator proves authorization with a holder-bound technician token. Credentials travel only after those checks, inside the encrypted Noise channel. No operating-system pairing PIN or per-sensor QR scan is needed.
+
+Read the [BLE trade-offs](docs/ARCHITECTURE.md#why-bluetooth-low-energy), [credential protection](docs/SECURITY.md) and [design for 200 devices](docs/ARCHITECTURE.md#200-devices-in-a-hospital-wing).
+
+## Try it
+
+### Explore the app without hardware
+
+With Node.js 22.18 or later:
+
+```sh
+git clone https://github.com/NoeBrt/iot-provisioning.git
+cd iot-provisioning/configurator
+npm ci
+npm run web
+```
+
+Open the local URL printed by Expo with `?demo=1`, or tap the **provide.** logo to enter demo mode. Try **Set up all ready**, the error filter and **Retry failed**. The simulated sensors appear progressively over about a minute.
+
+### Provision a real device
+
+You need an Ubuntu device with BLE peripheral support and NetworkManager-managed Wi-Fi, a WPA2-Personal network, and an iPhone or macOS configurator prepared beforehand.
+
+**[Follow the Ubuntu setup and real-device walkthrough →](docs/SETUP.md#hardware-and-assumptions)**
+
+The guide covers installation, your own authorities, device staging, app builds, expected results and tests. A plain browser supports the simulation only; real Bluetooth requires a native app. Internet may be needed to prepare dependencies and builds before the offline visit.
+
+## What has been demonstrated
+
+| Run | Evidence |
 | --- | --- |
-| Device service (Rust) | `device/main.rs` (BLE peripheral), `device/wifi.rs` (NetworkManager), `src/provision.rs` (Noise, protocol), `src/authority.rs` (certificates, technician codes), `device/stage.rs` (staging) |
-| the authority tool (Rust) | `device/authority.rs`: certifies sensors, issues technician codes |
-| Configurator app **provide.** (Expo, React Native) | `configurator/` |
+| **Current protocol, real hardware:** macOS configurator → Linux device → real Wi-Fi connection | [App result and device journal, 23 October 2026](evidence/real/identity-advertisement.txt) |
+| **Earlier protocol, real hardware:** iPhone → Ubuntu → real Wi-Fi connection | [Successful run and BLE capture summary](evidence/real/real-join.txt) |
+| **Offline BLE:** phone networking disabled, device service answers hello | [Offline radio check](evidence/real/service-offline-hello.txt) |
+| **200 simulated sensors:** batch progress, grouped errors and retries | Mobile and desktop videos above |
 
-**Status.** With the first protocol (a QR label per sensor), an iPhone set up the Wi-Fi of the Ubuntu device end to
-end on real hardware: encrypted BLE exchange, NetworkManager join, **Device connected** with the address
-([demo/real-join.txt](demo/real-join.txt)); a `btmon` capture shows the credentials only inside an encrypted write.
-The current protocol (certificates, technician codes, batch of 200) passes its tests on both sides. The app runs it
-in its own demo mode (200 simulated sensors, no radio) and over real Bluetooth against a test bench on noe-lab that
-shows 200 simulated sensors; its run with real sensors is pending. Not run yet: wrong-password and
-absent-network cases on hardware, a reboot test, Android. See [What is proven](docs/ARCHITECTURE.md#what-is-proven).
+The current iPhone build is installed; provisioning on a physical iPhone after the identity update remains unverified. Android, desktop Windows/Linux runtime and 200 physical sensors remain unverified. Desktop secrets currently live in memory and are lost when the app closes; iPhone uses native secure storage.
 
-## Hardware and assumptions
+For the four challenge constraints, exact evidence scope and remaining checks, see the [evaluation table](docs/SETUP.md#evidence-and-limits).
 
-| Role | Requirement | Tested with |
+## Under the hood
+
+| Part | Stack | Code |
 | --- | --- | --- |
-| Device | Ubuntu 22.04 or 24.04, x86-64; one adapter with **BLE peripheral** support and one **Wi-Fi** interface managed by NetworkManager | Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MediaTek MT7921 (Wi-Fi + Bluetooth) |
-| Device admin link | Ethernet or console if you administer over SSH: provisioning moves the Wi-Fi interface to the new network | Ethernet (`eno1`) |
-| Target network | WPA2-Personal (SSID and passphrase, 8 to 63 characters). Enterprise Wi-Fi (EAP) is out of scope. | |
-| Configurator | iPhone with the app installed beforehand; Android builds from the same code | iPhone 15 Pro, iOS 27.0; Android not run |
+| Configurator | Expo / React Native / TypeScript | [configurator/](configurator) |
+| Desktop shell and Bluetooth bridge | Tauri / Rust | [configurator/desktop/](configurator/desktop) |
+| Linux device and Wi-Fi activation | Rust / BlueZ / NetworkManager | [device/](device) |
+| Protocol and authorization | Noise XX / Ed25519 certificates | [src/](src) |
+| Integration tests | Rust and shared Noise vectors | [tests/](tests) |
+| BLE simulation bench | Python / Bumble; simulated Wi-Fi | [lab/](lab) |
 
-Ubuntu 24.04 is expected to work (the polkit rule for it is included) but has not been run.
-
-## Set up the device (Ubuntu)
-
-Prepare once, with Internet:
-
-```sh
-sudo apt install build-essential pkg-config libdbus-1-dev bluez network-manager curl
-curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0 --profile minimal
-. ~/.cargo/env
-cargo build --release --features ble,stage --locked
-```
-
-Install the service, which starts at boot and needs no screen, keyboard or SSH afterwards:
-
-```sh
-rfkill list bluetooth                        # if "Soft blocked: yes": sudo rfkill unblock bluetooth
-sudo device/systemd/install.sh wlo1          # your Wi-Fi interface (nmcli device); omit to use the first one
-```
-
-The script creates the system user `iot`, installs `iot-device` and `iot-stage` in `/usr/local/bin`, the
-unit [`iot-device.service`](device/systemd/iot-device.service), and a polkit rule that lets `iot` manage its
-own NetworkManager profile ([22.04](device/systemd/iot-device.pkla), [24.04](device/systemd/50-iot-device.rules)).
-
-the authorities, once, on a machine you keep offline (the demo used noe-lab, outside the repository). The private
-keys are written 0600 and never leave that directory:
-
-```sh
-target/release/authority init ~/iot-authority      # prints both public keys
-```
-
-The device authority's public key goes into the app (`DEVICE_AUTHORITY` in `configurator/src/authority.ts`); the
-technician authority's goes onto each sensor below.
-
-Stage each sensor once. `stage init` creates its key and prints its public key; the workshop certifies that key for
-one customer; `stage install` stores the certificate and the technician authority's public key:
-
-```sh
-sudo -u iot iot-stage init /var/lib/iot-device             # "IOT-XXXXXXXXXX keyed …", then the public key
-target/release/authority certify ~/iot-authority <public key> DEMO     # prints the certificate (hex)
-target/release/authority public ~/iot-authority                        # the technician authority's key
-sudo -u iot iot-stage install /var/lib/iot-device <certificate> <technician authority key>
-sudo systemctl restart iot-device
-journalctl -u iot-device -f      # "IOT-XXXXXXXXXX advertising on hci0; accepts hello and encrypted provisioning"
-```
-
-Nothing on these command lines is secret. A key is never regenerated; `stage install` refuses a certificate for
-another key.
-
-Issue a technician code (valid 30 days by default and at most, for one or more customers) and give it to the
-technician only, printed or over a channel you trust; it is a credential:
-
-```sh
-target/release/authority issue ~/iot-authority "Noé" DEMO 30      # prints a QR code and the code <token hex>.<holder key hex>
-```
-
-The code has no link: the technician scans it, or pastes it, inside the app.
-
-## Set up the configurator (phone)
-
-Install the app before the visit; it needs no network afterwards. Build and install steps for an iPhone, with a
-free Apple ID from a Mac or with EAS, are in [configurator/README.md](configurator/README.md). Android uses the same
-code through `npx expo run:android`; we have not run it on a device.
-
-## Run the demo
-
-1. Open **provide.**, tap **Technician code › Add** (or **Set up**, which asks for the code first) and scan the QR
-   code `authority issue` printed with the app's camera, or paste the code. The app checks it and keeps it behind
-   Face ID.
-2. Turn off Wi-Fi and mobile data on the phone if you want to show that no network is involved.
-3. **provide.** scans by itself and lists each sensor by ID with its state (ready, online…).
-4. Tap **Set up all ready (N)**, or **Set up** on one card. The first time, enter the site: a name, the Wi-Fi
-   network and its password, typed or read from the network's standard Wi-Fi QR code (`WIFI:T:WPA;S:…;P:…;;`, as
-   Android shares it). The password stays in the Keychain behind Face ID. Once unlocked, the code and the password
-   stay in memory; back in the app after more than 2 minutes away, Face ID asks again.
-5. Each card shows the steps: connecting, securing the channel, sending the network, joining the Wi-Fi. Expect
-   **Device connected** with the network name and the sensor's new IPv4 address; a failed card says why.
-6. With more than four sensors in range, each sensor becomes a one-line row (its group's shape, one status line,
-   its signal); a tap opens it in place into the full card, a second tap folds it. A card above the list reads
-   "N set up of M in range", with the batch's progress and the time left. Its tabs **Set up**, **Errors** and
-   **Not set up** show only that group; tap the tab again for all. **Not set up** puts the sensors being set up in
-   an **IN PROGRESS** block on top; **Errors** groups the failures by cause. Sensors found during a batch join it
-   with **Add N to the batch**; **Retry failed** sets up the failed ones again. The refresh icon beside the list
-   header drops the sensors not heard for 15 s.
-
-On the device, check the result:
-
-```sh
-nmcli -f NAME,UUID,DEVICE connection show --active    # iot-provisioned, one of the two fixed profile UUIDs
-journalctl -u iot-device                            # "attempt <id> connected": no SSID, password or address
-```
-
-A wrong password, an absent network or a timeout shows an actionable message in the app; the device deletes the
-failed profile and goes back to its previous network, if it had one. A set-up sensor shows **Reconfigure**: any
-phone with a valid code can give it a new network. To return the machine to **ready**, remove the record of its
-working profile; at startup the service deletes the old profile:
-
-```sh
-sudo systemctl stop iot-device
-sudo rm /var/lib/iot-device/provisioned
-sudo systemctl start iot-device
-```
-
-Each sensor card also has **Test**, which writes `hello` and expects `world`: a radio check that carries no
-credentials.
-
-### Demo mode, without sensors
-
-Tap the **provide.** logo and confirm: the app swaps the radio for 200 simulated sensors and the chip reads **DEMO**.
-Each one runs the sensor side of Noise `XX` with a certificate from a demo authority, so the app runs its real
-handshake, checks and encryption. Among them: sensors set up before, not prepared, out of Wi-Fi range, impostors and
-another customer's. The demo uses its own code and site, in memory; it reads and writes nothing saved and sends
-nothing over Bluetooth. Tap the logo or the chip to leave. In the iOS Simulator,
-`xcrun simctl launch booted dev.iotchallenge.configurator -demo 1` opens the app in demo mode.
-
-### Test bench: 200 simulated sensors over real Bluetooth
-
-`lab/` holds a bench for noe-lab, kept out of the app. `iot_sim.py` (Bumble, Python) takes `hci0` through the HCI
-user channel and advertises 200 sensors in turn over the advertising sets the controller enables at once, keeping 6
-free for the phone's links (the MT7921 reports 20 sets and enabled 16). Each sensor answers GATT and Noise like the
-device service, byte for byte, and simulates its Wi-Fi join: most join in 5.5 s; some are slow, out of range, busy,
-time out, are online or offline, or are clones (a copied certificate without its key). The password
-`wrong-password` makes every join fail with a refused password.
-
-```sh
-sh lab/mint-lab.sh           # on noe-lab, as noe: 200 identities, keys 0600, customer LAB (194-196: OTHER)
-sudo sh ~/noe-ws/sim-lab.sh  # copy of lab/sim-lab.sh: stops iot-device and bluetooth, gives hci0 back on exit
-.venv/bin/python iot_sim.py --selftest noise-vectors.json  # in ~/noe-ws/iot-sim, a copy of the phone's vectors
-```
-
-`mint-lab.sh` uses the `stage` and `authority` binaries in `~/noe-ws/iot-dev/target/release` and the authorities in
-`~/noe-ws/iot-authority`; `sim-lab.sh` expects `iot_sim.py` and a virtual environment with Bumble in
-`~/noe-ws/iot-sim`. The identities are certified by the real device authority, so the phone needs a technician code
-that covers `LAB`. Use a throwaway site: the bench never joins Wi-Fi, but it receives the password.
-
-## Tests
-
-```sh
-cargo test --all-targets --locked                         # protocol and simulation, no Bluetooth: 40 tests
-cargo test --features ble,stage --all-targets --locked    # adds the device, NetworkManager, Noise and authority tests: 88 tests
-cargo clippy --features ble,stage --all-targets --locked -- -D warnings
-cd configurator && npm ci && npm test && npm run typecheck && npm run lint   # 68 tests
-```
-
-The Noise tests replay a transcript produced by the device's `snow` implementation against the phone's
-JavaScript one, byte for byte, with the certificate and the technician code (`tests/noise_vectors.rs`,
-`configurator/src/noise.test.ts`). The phone tests also check that a sensor failing the certificate checks never
-receives the code or the password (`configurator/src/setup.test.ts`), run 200 fake sensors through the batch
-(`configurator/src/batch.test.ts`), and check that demo sensors are refused under the real device authority
-(`configurator/src/demo.test.ts`).
-
-Development tools, kept from the first milestone: a dependency-free simulation
-(`cargo run --example simulation --locked`), benchmarks ([docs/BENCHMARKS.md](docs/BENCHMARKS.md)), and a
-read-only host preflight (`cargo run --bin audit-host --locked`) that checks BlueZ, the adapter and
-NetworkManager without changing anything.
-
-## Evidence
-
-| What | Where | Class |
-| --- | --- | --- |
-| iPhone to Ubuntu over real BLE: discovery, six exchanges, reconnect after a service restart | [demo/phone-hello.txt](demo/phone-hello.txt) | `ACTUAL_BLE` |
-| Encrypted protocol, test-first trace | [demo/tdd-provision.txt](demo/tdd-provision.txt) | `COMMAND_FIXTURE` |
-| Technician flow with 20 sensors, real app code against fake Noise responders, fake radio | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-technicians-flow) | `SIMULATION` |
-| 200 sensors in demo mode: overall card, compact rows, batch with sensors added, tabs | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-technicians-flow), [42 s video](docs/architecture/overall-200-sensors.mp4) | `SIMULATION` |
-| iPhone to 200 simulated sensors over real BLE (test bench): 84 provisioning sessions and 79 simulated joins in one run | `lab/`; run log on noe-lab, not in the repository | `ACTUAL_BLE` |
-| Real setup from the iPhone (first protocol): encrypted exchange, Wi-Fi join, Device connected; capture without the SSID | [demo/real-join.txt](demo/real-join.txt) | `ACTUAL` |
-| Offline hello against the systemd service | [demo/service-offline-hello.txt](demo/service-offline-hello.txt) | `ACTUAL_BLE` |
-| Current protocol on hardware; wrong password, absent network and rollback on hardware; the overall, six links and scanning during runs with many real sensors; reboot; Android | | `NOT_RUN` |
-
-Earlier material: [solution report (PDF, French)](docs/rapport-solution.pdf) and the
-[first interactive mockup](docs/architecture-demo.html); the step-by-step engineering log is in
-[tasks/HANDOFF.md](tasks/HANDOFF.md).
+**Further reading:** [setup and tests](docs/SETUP.md) · [architecture](docs/ARCHITECTURE.md) · [security](docs/SECURITY.md) · [decisions](docs/DECISIONS.md) · [benchmarks](docs/BENCHMARKS.md)

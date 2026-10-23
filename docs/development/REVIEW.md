@@ -28,7 +28,7 @@ Not checked: physical radios, service restart/reboot, or later working-tree chan
 
 No concrete Spec findings in the fixed diff `b4aaae8...4e1b9fa`.
 
-(a) Missing or partial requirements: none identified within the authorized software checkpoint. The exact-input contract, bounded queues, payload rejection before copying, explicit failure results, session invalidation, fresh retries, and worker joining match `docs/ARCHITECTURE.md:78-88` and `tasks/todo.md:55-59`. Pending BLE, credentials, Wi-Fi, service installation, and UI follow the explicit instruction, “Stop after the software checkpoint until hardware is available” (`tasks/plan.md:60`).
+(a) Missing or partial requirements: none identified within the authorized software checkpoint. The exact-input contract, bounded queues, payload rejection before copying, explicit failure results, session invalidation, fresh retries, and worker joining match `docs/ARCHITECTURE.md:78-88` and `docs/development/todo.md:55-59`. Pending BLE, credentials, Wi-Fi, service installation, and UI follow the explicit instruction, “Stop after the software checkpoint until hardware is available” (`docs/development/plan.md:60`).
 
 (b) Unasked scope creep: none identified. The dependency-free simulator, fault injection, examples, benchmark, and evidence support the requested milestone without adding a transport framework or external-service dependency.
 
@@ -43,7 +43,7 @@ Not checked: a fresh Ubuntu installation, hardware, or another long soak. Concur
 Tests use the public byte handler, device/session API, and
 `simulation::batch::run_batch(device_count, concurrency)`. No new private test
 seam or transport mock was introduced. The sequence is retained in
-[the actual red/green trace](../demo/tdd-scaled.txt):
+[the actual red/green trace](../../evidence/checks/tdd-scaled.txt):
 
 1. RED: bounded batch API absent. GREEN: every queued task completes once with
    an observed peak within the client limit.
@@ -77,9 +77,9 @@ Not checked: forced thread-spawn failure/panic, physical transport, or later con
 ## Results and limits
 
 All 23 tests pass in debug and release; formatting, Clippy with warnings denied,
-and release builds pass. See [validation output](../demo/verification-tests.txt).
+and release builds pass. See [validation output](../../evidence/checks/verification-tests.txt).
 Three independent scaling processes checked 80,073 timed jobs across 45 scenario
-summaries; no process failed. The [benchmark report](BENCHMARKS.md) defines
+summaries; no process failed. The [benchmark report](../BENCHMARKS.md) defines
 warmup, queue-inclusive completion, service time, and all measurements.
 
 The formal fixed-snapshot axes have **0 Standards findings and 0 Spec findings**;
@@ -106,17 +106,17 @@ process group at four seconds fixes this; the public regression passes. BlueZ
 source review caught a capacity interpretation error: SupportedInstances already
 counts free slots. A positive regression prevents subtracting active slots again.
 All six actual red/green traces are retained in
-[the TDD evidence](../demo/tdd-host-audit.txt).
+[the TDD evidence](../../evidence/checks/tdd-host-audit.txt).
 
 Both agents reviewed the corrected commit and reported no remaining concrete
 defect. The Standards agent reran targeted argument/deadline checks; the Spec
 follow-up was static. The complete 38-test suite passes in debug/release,
 alongside Rustfmt, Clippy, and release builds; see
-[the commands and source hashes](../demo/host-audit-verification.txt).
+[the commands and source hashes](../../evidence/checks/host-audit-verification.txt).
 
 The prepared release binary was also run against the actual environment at
 `1c2d62e`; it returns exit 1 with failed BlueZ/NetworkManager service access.
-[This actual result](../demo/host-preflight.txt) is separate from fixture tests.
+[This actual result](../../evidence/real/host-preflight.txt) is separate from fixture tests.
 No registration, radio exchange, phone compatibility, or real Wi-Fi join was
 validated. Baseline simulation benchmarks were not repeated because the simulated
 transport and benchmark code did not change.
@@ -140,10 +140,10 @@ removing Bash `-p` makes the new environment regression fail.
 All 40 Rust tests pass in debug and release; Rustfmt and Clippy with warnings
 denied pass. The separate benchmark agent checked 48 before/after CLI runs;
 normal startup costs about 7 ms more, while the pipe-holder case now returns a
-correct timeout. See [measurement method](BENCHMARKS.md#audit-supervision-repair-command-fixtures)
-and [TDD evidence](../demo/tdd-audit-deadline.txt).
+correct timeout. See [measurement method](../BENCHMARKS.md#audit-supervision-repair-command-fixtures)
+and [TDD evidence](../../evidence/checks/tdd-audit-deadline.txt).
 
-The corrected binary's [actual host run](../demo/host-preflight-continuation.txt)
+The corrected binary's [actual host run](../../evidence/real/host-preflight-continuation.txt)
 still fails because BlueZ/NetworkManager access is blocked. Fixture success does
 not establish radio or Wi-Fi acceptance. External cross-model CLI review was
 skipped for this autonomous pass; agents used separate contexts.
@@ -161,13 +161,13 @@ A fresh-context reviewer inspected the parser, entry point, connected unit
 tests, and real-executable regression; no concrete issue remained. It then ran
 the four CLI cases and all four existing benchmark unit tests successfully.
 The benchmark agent independently checked 84 before/after startup calls; no
-speed claim follows from overlapping ranges. See [method and raw timings](BENCHMARKS.md#benchmark-cli-argument-repair-startup-only)
-and [red/green evidence](../demo/tdd-benchmark-cli.txt).
+speed claim follows from overlapping ranges. See [method and raw timings](../BENCHMARKS.md#benchmark-cli-argument-repair-startup-only)
+and [red/green evidence](../../evidence/checks/tdd-benchmark-cli.txt).
 
 The patch changes argv conversion only; it adds no Rust dependency or transport
 behavior. It provides no BLE, mobile-client, credential, or real-Wi-Fi evidence.
 Three independent release `--scale` processes also pass 45 scenario summaries
-and 80,073 measured jobs; [raw results](../demo/benchmark-scaled-continuation.txt)
+and 80,073 measured jobs; [raw results](../../evidence/simulation/benchmark-scaled-continuation.txt)
 verify valid dispatch without a before/after throughput claim.
 
 ## Dual-platform requirements review
@@ -182,7 +182,7 @@ The follow-up review closes P2 with no remaining concrete issue.
 
 The reviewer also checked current counts, evidence labels, source hashes, and
 the retained CLI startup evidence without claiming physical acceptance. The
-[final verification summary](../demo/continuation-verification.txt) and
-[per-step handoff](../tasks/HANDOFF.md) keep the software PASS, actual-host BLOCKED,
+[final verification summary](../../evidence/checks/continuation-verification.txt) and
+[per-step handoff](HANDOFF.md) keep the software PASS, actual-host BLOCKED,
 and radio/mobile/security/Wi-Fi NOT_RUN gates distinct. This documentation step
 adds no runtime behavior; static review and whitespace checks apply.

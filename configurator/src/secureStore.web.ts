@@ -1,6 +1,6 @@
 // Secret storage seam, desktop: same calls as expo-secure-store. `requireAuthentication` is ignored on purpose: the
-// system keychain's own lock protects the secrets (SPEC.md, decision on unlocking).
-// ponytail: kept in memory until the Tauri keychain bridge (tasks/desktop-plan.md T5); nothing survives a restart.
+// system keychain's own lock protects the secrets (docs/development/DESKTOP_SPEC.md, decision on unlocking).
+// ponytail: kept in memory until the Tauri keychain bridge (docs/development/desktop-plan.md T5); nothing survives a restart.
 type Options = { keychainAccessible?: unknown; requireAuthentication?: boolean; authenticationPrompt?: string };
 
 export const WHEN_UNLOCKED_THIS_DEVICE_ONLY = 'when-unlocked-this-device-only';
