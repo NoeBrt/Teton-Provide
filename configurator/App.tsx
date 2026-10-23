@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, AppState, Image, Platform, Pressable, Settings, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, Image, Platform, Pressable, ScrollView, Settings, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -7,12 +7,13 @@ import { Onest_400Regular } from '@expo-google-fonts/onest/400Regular';
 import { Onest_500Medium } from '@expo-google-fonts/onest/500Medium';
 import { Onest_600SemiBold } from '@expo-google-fonts/onest/600SemiBold';
 import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
-import { changed, probe, SERVICE_UUID, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
+import { changed, keepAdvertised, probe, SERVICE_UUID, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
 import { startDemo, type Demo } from './src/demo';
 import { ask } from './src/ask';
 import * as Crypto from 'expo-crypto';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as Haptics from 'expo-haptics';
 import { setup, type SetupFailure, type SetupResult, type SetupStep } from './src/setup';
 import { expired, SetupFlow, type Action } from './src/flow';
 import { runBatch, type BatchControl, type BatchEntry, type BatchSummary } from './src/batch';
@@ -20,13 +21,15 @@ import type { Token } from './src/authority';
 import { expiryText, loadTokenInfo, TechnicianSheet, tokenProblem, unlockToken, type TokenInfo } from './src/TechnicianSheet';
 import { loadSetups, loadSites, saveSetups, setActiveSite, SitesSheet, unlockPassword } from './src/SiteSheet';
 import { stateText, type Setups, type Site, type SiteNetwork } from './src/sites';
-import { C } from './src/theme';
+import { C, DESKTOP_MIN_WIDTH } from './src/theme';
 import Animated, {
   cancelAnimation, Easing, FadeIn, FadeOut, interpolate, LinearTransition, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
-  useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withDelay, withSpring, withTiming,
+  useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withDelay, withSpring, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { Radar, RESIZE, SIZES } from './src/Radar';
+import './src/feedback';
+import './src/viewport';
 import { Summary, Swatch } from './src/Summary';
 import { groupOf, minutesLeft, type Group } from './src/wing';
 
@@ -52,12 +55,22 @@ const LOCK_AFTER = 8; // pt into the list before compact mode holds
 const MIN_PROGRESS_MS = 700; // an instant failure still shows progress briefly instead of flashing
 const SUCCESS_SHOWN_MS = 8000; // then the card folds back; its state line and the log keep the result
 // The radar's resize, its move into the row and the list's arrival share one curve, on the UI thread.
-const layout = LinearTransition.duration(RESIZE.duration).easing(RESIZE.easing);
+// None on the web: Reanimated's web LinearTransition scales the view to its new box, which stretches the text and the
+// buttons while a card opens (measured: Test 17 px high instead of 44 for 28 frames). SensorCard clips instead.
+const layout = Platform.OS === 'web' ? undefined : LinearTransition.duration(RESIZE.duration).easing(RESIZE.easing);
+// A card unfolding on desktop answers a click: short and decelerating, where iOS follows the finger's slower pace.
+const UNFOLD = { duration: 220, easing: Easing.out(Easing.cubic) };
+const SPIN = { duration: 550, easing: Easing.out(Easing.back(1.2)) }; // the refresh arrow's turn, a slight overshoot
 const appear = FadeIn.duration(RESIZE.duration).delay(RESIZE.duration / 2);
 // Launch order: the title and the dot, then the code and site Wi-Fi rows (they can be set before any sensor is found),
 // then the sensors heard meanwhile.
 const afterDot = FadeIn.duration(RESIZE.duration).delay(700);
+const WEB = Platform.OS === 'web';
 const INTRO_MS = 1400;
+// A resize across the desktop width rebuilds the screen in the other layout: what is already there resizes and moves
+// into place, it does not fade in again. Set by Provide when its layout changes (one screen per app).
+let switchedAt = 0;
+const unlessSwitched = <T,>(animation: T) => (Date.now() - switchedAt < 600 ? undefined : animation);
 // A card opened or started by hand is scrolled into view while it grows, then let go: a later layout change elsewhere
 // in the list never scrolls to it again.
 const FOCUS_MS = 1500;
@@ -102,6 +115,7 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
     case 'NmcliError': return 'The sensor could not apply the network settings. Try again.';
     case 'AlreadyProvisioned': return 'This sensor is already set up.';
     case 'Busy': return 'The sensor is busy with another phone. Wait a minute, then try again.';
+    case 'unidentified': return 'This sensor has not announced its ID yet. Nothing was sent to it; try again in a moment.';
     case 'not-genuine': return 'This is not a genuine Teton sensor. Nothing was sent to it.';
     case 'other-customer': return 'This sensor belongs to a customer your technician code does not cover.';
     case 'token-invalid': return 'The sensor refused your technician code. Ask Teton for a new one.';
@@ -169,11 +183,20 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
       {sensor.rssi !== 127 && <Text style={s.small}>Signal {sensor.rssi} dBm</Text>}
     </View>
   );
-  return (
-    <Animated.View entering={!compact || Date.now() - seen < FRESH_MS ? appear : undefined} layout={layout}
-      style={[folded ? s.sensorRow : s.card, s.clip, folded && group === 'failed' && s.requirementTodo, tight && s.tight]}
-      // Measured once, before any result drawer opens, so a result never resizes the radar.
-      onLayout={event => { const box = event.nativeEvent.layout; actions.placed(sensor.id, first, box.y + box.height, box.height); }}>
+  // On the web the frame grows and shrinks with its content in UNFOLD, by clipping: a layout transition there
+  // scales the card, which stretches its text. The first measure sets the height without animating.
+  const height = useSharedValue(0);
+  const frame = useAnimatedStyle(() => (height.value ? { height: height.value } : {}));
+  // Only a change of the card itself animates (open, fold, link, result): a resize of the window re-wraps the text,
+  // and the frame follows that at once instead of trailing behind it.
+  const shape = `${folded}|${active}|${!!outcome}`;
+  const shapeWas = useRef({ shape, at: 0 });
+  if (shapeWas.current.shape !== shape) shapeWas.current = { shape, at: Date.now() };
+  const box = [folded ? s.sensorRow : s.card, folded && group === 'failed' && s.requirementTodo];
+  const entering = unlessSwitched(!compact || Date.now() - seen < FRESH_MS ? appear : undefined);
+  // Measured once, before any result drawer opens, so a result never resizes the radar.
+  const placed = (event: LayoutChangeEvent) => { const at = event.nativeEvent.layout; actions.placed(sensor.id, first, at.y + at.height, at.height); };
+  const body = (<>
       {/* The same pressable folded and open, so VoiceOver keeps its place. */}
       {compact ? (
         <Pressable onPress={() => actions.toggle(sensor.id)} accessibilityRole="button" accessibilityState={{ expanded: open }}
@@ -199,13 +222,13 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
             {(active || outcome) && (
               <Animated.View style={s.drawer} exiting={FadeOut.duration(200)}>
                 {active ? (
-                  <Animated.View key="progress" entering={FadeIn.duration(200)} style={[s.drawerBody, s.progressCard]} accessibilityLiveRegion="polite">
+                  <Animated.View key="progress" entering={unlessSwitched(FadeIn.duration(200))} style={[s.drawerBody, s.progressCard]} accessibilityLiveRegion="polite">
                     <Text style={s.drawerTitle}>{STEPS[step][1]}…</Text>
                     <Text style={s.small}>Step {step + 1} of {STEPS.length}</Text>
                     <View style={s.bar}>{STEPS.map(([key], index) => <View key={key} style={[s.segment, index <= step && s.segmentOn]} />)}</View>
                   </Animated.View>
                 ) : outcome && (
-                  <Animated.View key="result" entering={FadeIn.duration(300)} exiting={FadeOut.duration(200)} style={[s.drawerBody, outcome.ok ? s.okCard : s.warnCard]} accessibilityRole="summary">
+                  <Animated.View key="result" entering={unlessSwitched(FadeIn.duration(300))} exiting={FadeOut.duration(200)} style={[s.drawerBody, outcome.ok ? s.okCard : s.warnCard]} accessibilityRole="summary">
                     <Text style={s.drawerTitle}>{outcome.title}</Text>
                     <Text style={outcome.ok ? s.okText : s.warnText}>{outcome.text}</Text>
                   </Animated.View>
@@ -214,17 +237,52 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
             )}
         </>
       )}
+  </>);
+  return Platform.OS === 'web' ? (
+    <Animated.View entering={entering} style={[s.frame, box[1], tight && s.tight, frame]} onLayout={placed}>
+      <View style={box} onLayout={event => {
+        const next = event.nativeEvent.layout.height;
+        height.value = height.value && Date.now() - shapeWas.current.at < 400 ? withTiming(next, UNFOLD) : next;
+      }}>{body}</View>
     </Animated.View>
+  ) : (
+    <Animated.View entering={entering} layout={layout} style={[...box, s.clip, tight && s.tight]} onLayout={placed}>{body}</Animated.View>
   );
 });
 
-// A clockwise arrow drawn with views (the app has no icon library): an open ring and its arrowhead.
-function RefreshIcon() {
+// A clockwise arrow drawn with views (the app has no icon library): an open ring and its arrowhead. `spin` counts
+// turns: each tap adds one, on the UI thread.
+function RefreshIcon({ spin }: { spin: SharedValue<number> }) {
+  const turning = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
   return (
-    <View style={s.refreshIcon} importantForAccessibility="no-hide-descendants">
+    <Animated.View style={[s.refreshIcon, turning]} importantForAccessibility="no-hide-descendants">
       <View style={s.refreshRing} />
       <View style={s.refreshHead} />
-    </View>
+    </Animated.View>
+  );
+}
+
+function SensorGrid({ desktop, children }: { desktop: boolean; children: React.ReactNode }) {
+  return desktop ? <View style={s.grid}>{children}</View> : <>{children}</>;
+}
+
+// Desktop, before the first sensor: the list's place shows the search instead of an empty half window. The rows are
+// placeholders, pulsing while the search runs (src/feedback.web.ts), replaced by the sensors as they are heard.
+function Waiting({ text, searching }: { text: string; searching: boolean }) {
+  return (
+    // Arrives with the code and site rows, after the title and the dot (the launch order).
+    <Animated.View entering={unlessSwitched(afterDot)} style={s.waiting}>
+      <Text style={[s.label, s.listLabel]} maxFontSizeMultiplier={1.3}>SENSORS · 0</Text>
+      <Text style={s.small} accessibilityLiveRegion="polite">{text}</Text>
+      <View style={s.grid} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {Array.from({ length: 6 }, (_, i) => (
+          <View key={i} style={[s.sensorRow, s.placeholderRow]} {...{ dataSet: searching ? { pulse: String(i % 3) } : undefined }}>
+            <View style={[s.placeholderBar, s.placeholderName]} />
+            <View style={[s.placeholderBar, s.placeholderLine]} />
+          </View>
+        ))}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -320,13 +378,13 @@ function Provide({ demo, onDemo }: Mode) {
       const heard = [...latest.values()];
       latest.clear();
       setSensors(found => {
-        const updates = heard.filter(peripheral => changed(found[peripheral.id], peripheral));
+        const updates = heard.map(peripheral => keepAdvertised(found[peripheral.id], peripheral)).filter(peripheral => changed(found[peripheral.id], peripheral));
         return updates.length ? { ...found, ...Object.fromEntries(updates.map(peripheral => [peripheral.id, peripheral])) } : found;
       });
     }, SCAN_FLUSH_MS);
     const subscriptions = [
       ble.onDidUpdateState(({ state }) => setBle(state)),
-      ble.onDiscoverPeripheral(peripheral => { latest.set(peripheral.id, peripheral); heardAt.current.set(peripheral.id, Date.now()); }),
+      ble.onDiscoverPeripheral(peripheral => { latest.set(peripheral.id, keepAdvertised(latest.get(peripheral.id), peripheral)); heardAt.current.set(peripheral.id, Date.now()); }),
     ];
     radioStarted.then(() => ble.checkState()).then(setBle).catch(() => setBle(BleState.Unsupported));
     return () => { clearInterval(flush); subscriptions.forEach(subscription => subscription.remove()); };
@@ -360,7 +418,7 @@ function Provide({ demo, onDemo }: Mode) {
     if (!batchActive.current) {
       focused.current = { id: sensor.id, until: Date.now() + FOCUS_MS };
       setOpenId(sensor.id); // stays open if the list turns compact during the run
-      if (y.get() < travel - 1) fold(RESIZE);
+      if (!desktop && y.get() < travel - 1) fold(RESIZE);
     }
     setRunning(map => ({ ...map, [sensor.id]: { kind, step: 'connect' } }));
     try {
@@ -399,7 +457,7 @@ function Provide({ demo, onDemo }: Mode) {
     const single = !batchActive.current; // decided at the start: a batch may begin while this run lasts
     const done = radio && token && await run<SetupResult>(sensor, 'setup', async onStep => {
       try {
-        result = await setup(radio, sensor.id, nameOf(sensor), token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority });
+        result = await setup(radio, sensor.id, sensor.advertising?.localName ?? sensor.name, token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority });
       } finally {
         flow.current.finished(sensor.id, result);
       }
@@ -474,7 +532,7 @@ function Provide({ demo, onDemo }: Mode) {
   const startBatch = (ids: string[]) => withCredentials(async () => {
     if (batchActive.current || ids.length === 0) return;
     batchActive.current = true;
-    if (y.get() < travel - 1) fold(FOLD); // slowly, as at discovery: nothing waits on it
+    if (!desktop && y.get() < travel - 1) fold(FOLD); // slowly, as at discovery: nothing waits on it
     setSummary(null);
     setBatchStarted({ ms: Date.now(), size: ids.length });
     try {
@@ -556,7 +614,14 @@ function Provide({ demo, onDemo }: Mode) {
 
   // Scroll-driven radar: its size, position, title and captions are pure functions of the scroll offset, computed on
   // the UI thread every frame. It follows the finger (including the iOS bounce) and never triggers an animation itself.
-  const { width } = useWindowDimensions();
+  const reported = useWindowDimensions();
+  // Web: the screen's measured width, not the window's reported one, which the macOS app's WebKit updates late on a
+  // resize (src/viewport.web.ts); the layout follows what the browser actually laid out.
+  const [bodyW, setBodyW] = useState(0);
+  const width = WEB && bodyW ? bodyW : reported.width;
+  const desktop = WEB && width >= DESKTOP_MIN_WIDTH;
+  const layoutWas = useRef(desktop);
+  if (layoutWas.current !== desktop) { layoutWas.current = desktop; switchedAt = Date.now(); } // before the new tree mounts
   const [bodyH, setBodyH] = useState(0);
   const [titleH, setTitleH] = useState(0);
   const [siteH, setSiteH] = useState(48); // measured; defaults until the first layout
@@ -570,10 +635,10 @@ function Provide({ demo, onDemo }: Mode) {
   // included) once there is one.
   const peek = siteH + GAP + (found > 0 ? firstH + GAP : 0);
   const room = bodyH - titleH - 2 * LARGE_GAP - CAPTION_H - peek;
-  const large = Math.round(Math.min(SIZES[1], Math.max(MIN_LARGE, room)));
+  const large = desktop ? 180 : Math.round(Math.min(SIZES[1], Math.max(MIN_LARGE, room)));
   const largeH = titleH + LARGE_GAP + large + LARGE_GAP + CAPTION_H; // panel height in large mode
   const travel = Math.max(largeH - COMPACT_H, 1); // scroll distance from large to compact
-  const panelW = width - 2 * PAD;
+  const panelW = desktop ? 320 : width - 2 * PAD;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const y = useSharedValue(0);
   const base = useSharedValue(0); // large panel height
@@ -596,6 +661,7 @@ function Provide({ demo, onDemo }: Mode) {
   const titleIn = useSharedValue(0);
   const radarIn = useSharedValue(0);
   const captionIn = useSharedValue(0);
+  const refreshSpin = useSharedValue(0);
   useEffect(() => {
     if (!measured) return;
     const timer = setTimeout(() => setIntroDone(true), reduceMotion ? 0 : INTRO_MS);
@@ -620,7 +686,47 @@ function Provide({ demo, onDemo }: Mode) {
     }));
   };
   // Crowded is also when the overall card and the compact rows appear: folding at once shows the card whole.
-  useEffect(() => { if (crowded) fold(FOLD); }, [crowded]); // eslint-disable-line react-hooks/exhaustive-deps -- once, when the list gets crowded
+  // A window narrowed past the desktop width while crowded opens the phone layout already folded: animating it there
+  // would first show the large radar, then shrink it.
+  const wasDesktop = useRef(desktop);
+  useEffect(() => {
+    const resized = wasDesktop.current !== desktop;
+    wasDesktop.current = desktop;
+    if (desktop) return;
+    if (!resized) { if (crowded) fold(FOLD); return; }
+    // A new phone list mounts at its top: the radar starts from there, not from the old list's offset (which left it
+    // compact above an unscrolled list). Folding it is the resize's job below.
+    y.value = 0;
+  }, [crowded, desktop]); // eslint-disable-line react-hooks/exhaustive-deps -- when the list gets crowded, or the layout changes
+
+  // Web: after a window resize the phone layout shows the list, the circle compact above it (the default view after
+  // a resize; a large circle pushed the sensors down). Through the list itself, once laid out: a new list mounted by
+  // a layout switch is not yet the one the UI-thread scroll targets. Scrolling back up still brings the circle back.
+  // A late re-measure (the title re-wraps at the new width) moves `travel` after that: a list resting at the compact
+  // offset follows it.
+  const sizeWas = useRef('');
+  const travelWas = useRef(travel);
+  const foldPending = useRef(false); // a resize's fold, kept until the list has really reached the compact offset
+  useEffect(() => {
+    const size = `${width}x${bodyH}`;
+    if (sizeWas.current && sizeWas.current !== size && WEB && !desktop && found > 0) foldPending.current = true;
+    const resting = Math.abs(y.get() - travelWas.current) <= 1;
+    sizeWas.current = size;
+    travelWas.current = travel;
+    if (!WEB || desktop || found === 0 || !(foldPending.current || resting)) return;
+    let frame = 0;
+    let tries = 10; // a list just mounted by a layout switch may not be laid out yet: its scroll is then lost
+    const settle = () => {
+      const list = scrollRef.current?.getScrollableNode?.() as HTMLElement | undefined;
+      if (!list) { if (--tries > 0) frame = requestAnimationFrame(settle); return; } // not mounted yet: the radar waits
+      if (Math.abs(list.scrollTop - travel) > 1) scrollRef.current?.scrollTo({ y: travel, animated: false });
+      if (Math.abs(list.scrollTop - travel) > 1 && --tries > 0) { frame = requestAnimationFrame(settle); return; }
+      foldPending.current = false;
+      y.value = list.scrollTop; // where the list really is: the radar never claims a fold that did not land
+    };
+    frame = requestAnimationFrame(settle);
+    return () => cancelAnimationFrame(frame);
+  }, [width, bodyH, desktop, travel]); // eslint-disable-line react-hooks/exhaustive-deps -- on a resize, or a moved compact offset
 
   // Compact mode is sticky: scrolling back up the list stops at its top (native rubber band, radar unchanged).
   // Only a new drag started from that top unlocks it, so a second gesture brings the large radar back.
@@ -634,6 +740,7 @@ function Provide({ demo, onDemo }: Mode) {
   // When a card opens its drawer below the fold, scroll just enough to show it whole; the radar follows the scroll.
   // Up as well: a card opened while another one above it folds back can land under the folded radar.
   const reveal = (bottom: number, height: number) => {
+    if (desktop) return; // the desktop list scrolls independently; no mobile radar offset
     const top = bottom - height - COMPACT_H - GAP; // its top, clear of the folded radar
     const target = bottom + GAP + BOTTOM_INSET - bodyH; // its bottom, clear of the home indicator and the rounded corners
     if (top < y.get() - 1) scrollRef.current?.scrollTo({ y: Math.max(top, travel), animated: true });
@@ -657,7 +764,9 @@ function Provide({ demo, onDemo }: Mode) {
   });
 
   const geometry = useDerivedValue(() => {
-    const offset = lock.value ? Math.max(y.value, travel) : y.value; // the rubber band at a locked top moves nothing
+    // The rubber band at a locked top moves nothing. Not on the web: without contentInset the list scrolls past that
+    // top, so the radar follows the scroll there and grows back as the list comes down (no gap above the list).
+    const offset = desktop ? 0 : lock.value && !WEB ? Math.max(y.value, travel) : y.value;
     const progress = Math.min(Math.max(offset / travel, 0), 1); // 0 large, 1 compact
     const pull = Math.max(-offset, 0); // finger dragging past the top
     const top = base.value + pull; // the large panel stretches with the pull
@@ -766,7 +875,9 @@ function Provide({ demo, onDemo }: Mode) {
   const codeGone = useGone(codeShown);
   const siteShown = choosingSite && codeGone;
 
-  if (!fontsLoaded && !fontError) return null;
+  // Not on the web: expo-font's load detector hangs in the desktop window's WebKit (its user agent says no Safari) until
+  // a 12 s timeout, a blank window all that time. The fonts are local there and in place before the intro ends.
+  if (!fontsLoaded && !fontError && Platform.OS !== 'web') return null;
   const successes = attempts.filter(attempt => attempt.ok).length;
   const caption = (
     !ready ? 'Search paused.'
@@ -775,12 +886,139 @@ function Provide({ demo, onDemo }: Mode) {
       : found === 0 ? 'Looking for Teton sensors…'
       : `${found} sensor${found > 1 ? 's' : ''} nearby · still searching`
   );
+  // The reward: a tap on the finger, the arrow turns once (to the nearest whole turn, so a second tap mid-turn carries
+  // on without a jump; none with Reduce Motion), and a success tap once the list is refreshed. iOS only: on the desktop
+  // the haptics find no vibration and do nothing.
+  const tapRefresh = () => {
+    refresh();
+    if (!reduceMotion) refreshSpin.value = withTiming(Math.round(refreshSpin.value) + 1, SPIN);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); // a build without the module stays silent
+  };
   const refreshButton = found > 0 && ready && !anyRunning && (
-    <Pressable onPress={refresh} hitSlop={13} accessibilityRole="button" accessibilityLabel="Refresh the list"
-      accessibilityHint="Removes the sensors no longer heard and searches again">
-      <RefreshIcon />
+    <Pressable onPressIn={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }} onPress={tapRefresh} hitSlop={13}
+      accessibilityRole="button" accessibilityLabel="Refresh the list" accessibilityHint="Removes the sensors no longer heard and searches again">
+      <RefreshIcon spin={refreshSpin} />
     </Pressable>
   );
+
+  const requirements = (<>
+    {measured && (
+      // Compact requirements, not cards: the room goes to the sensors. Shown from launch, after the dot.
+      <Animated.View entering={unlessSwitched(afterDot)} layout={layout} style={s.requirements} onLayout={event => setSiteH(event.nativeEvent.layout.height)}>
+        <Pressable style={[s.requirement, !liveToken && s.requirementTodo]} disabled={!!demo} onPress={() => setTokenSheet(sheet => ({ open: true, asked: false, n: sheet.n + 1 }))}
+          accessibilityRole="button" accessibilityLabel={liveToken ? `Technician code of ${liveToken.name}, valid until ${expiryText(liveToken.expires)}. Change`
+            : tokenInfo ? `Technician code expired on ${expiryText(tokenInfo.expires)}. Change` : 'Technician code required. Add it'}>
+          <Text style={[s.check, liveToken ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{liveToken ? '✓' : '!'}</Text>
+          <Text style={[s.requirementText, s.grow]} numberOfLines={desktop ? undefined : 1}>
+            {liveToken ? `${liveToken.name} · until ${expiryText(liveToken.expires)}` : tokenInfo ? 'Technician code expired' : 'Technician code required'}
+          </Text>
+          {!demo && <Text style={s.requirementAction}>{tokenInfo ? 'Change' : 'Add'}</Text>}
+        </Pressable>
+        <Pressable style={[s.requirement, !activeSite && s.requirementTodo]} disabled={!!demo} onPress={() => setChoosingSite(true)}
+          accessibilityRole="button" accessibilityLabel={activeSite ? `Site Wi-Fi: ${activeSite.name}. Change` : 'Site Wi-Fi required. Choose a site'}>
+          <Text style={[s.check, activeSite ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{activeSite ? '✓' : '!'}</Text>
+          <Text style={[s.requirementText, s.grow]} numberOfLines={desktop ? undefined : 1}>{activeSite ? activeSite.name : 'Site Wi‑Fi required'}</Text>
+          {!demo && <Text style={s.requirementAction}>{activeSite ? 'Change' : 'Choose'}</Text>}
+        </Pressable>
+      </Animated.View>
+    )}
+  </>);
+  const overview = (<>
+    {found > 0 && overall && (
+      // Fades in once the cards have moved down for it, instead of appearing under them.
+      <Animated.View entering={unlessSwitched(appear)} layout={layout}><Summary counts={counts} line={overallLine} filter={shownGroup} onFilter={pickFilter} /></Animated.View>
+    )}
+    {found > 0 && (readyIds.length > 0 || failedIds.length > 0 || summary?.stopReason) && (
+      <Animated.View entering={unlessSwitched(appear)} layout={layout} style={[s.batch, desktop && s.desktopBatch]}>
+        {readyIds.length > 0 && !summary?.stopReason && (!batching || batchControl.current.add) && (
+          <Pressable style={s.primary} onPress={() => (batching ? addToBatch(readyIds) : startBatch(readyIds))} accessibilityRole="button">
+            <Text style={s.primaryText}>{batching ? `Add ${readyIds.length} to the batch` : `Set up all ready (${readyIds.length})`}</Text>
+          </Pressable>
+        )}
+        {summary?.stopReason && <Text style={s.warnText} accessibilityRole="alert">Stopped: {reasonText(summary.stopReason, 'join')}</Text>}
+        {!batching && failedIds.length > 0 && (
+          <Pressable style={s.secondary} onPress={() => startBatch(failedIds)} accessibilityRole="button">
+            <Text style={s.secondaryText}>Retry failed ({failedIds.length})</Text>
+          </Pressable>
+        )}
+      </Animated.View>
+    )}
+  </>);
+  const sensorList = (<>
+    {inProgress.length > 0 && <Text style={[s.label, s.listLabel]} maxFontSizeMultiplier={1.3}>IN PROGRESS · {inProgress.filter(Boolean).length}</Text>}
+    <SensorGrid desktop={desktop}>
+    {Array.from(inProgress, (sensor, index) => !sensor ? (
+      // A slot between two sensors, freed until the next one starts: kept, so the rows below do not move.
+      <View key={`slot-${index}`} style={[s.sensorRow, s.emptySlot, !desktop && index > 0 && s.tight]} />
+    ) : (
+      // Fixed slots, one per link: their content changes in place (a freshly mounted row shows blank for a moment).
+      <SensorCard key={`slot-${index}`} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={false}
+        outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
+        siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null} compact open={sensor.id === openId}
+        group={groups[sensor.id]} tight={!desktop && index > 0 && sensor.id !== openId && inProgress[index - 1]?.id !== openId} />
+    ))}
+    </SensorGrid>
+    {found > 0 && introDone && (
+      <View style={s.listHead}>
+        <Text style={[s.label, s.listLabel, s.grow]} maxFontSizeMultiplier={1.3}>{LIST_LABELS[shownGroup]} · {shown.length}</Text>
+        {refreshButton}
+      </View>
+    )}
+    <SensorGrid desktop={desktop}>
+    {shown.map((sensor, index) => (
+      <SensorCard key={sensor.id} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={!compact && index === 0}
+        outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
+        siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null}
+        compact={compact} open={sensor.id === openId} group={groups[sensor.id]} seen={seenAt.current.get(sensor.id)}
+        tight={!desktop && compact && index > 0 && sensor.id !== openId && shown[index - 1].id !== openId} />
+    ))}
+
+    </SensorGrid>
+    {attempts.length > 0 && (
+      <View style={s.log}>
+        <Text style={s.label}>LOG · {successes} OF {attempts.length} SUCCEEDED</Text>
+        {attempts.map(attempt => (
+          <Text key={attempt.key} style={s.logLine}>
+            {attempt.at}  {attempt.name}  {attempt.detail}
+          </Text>
+        ))}
+      </View>
+    )}
+  </>);
+  const searchPanel = (<>
+    {/* Touches pass through to the list except on the dot; once compact, the panel acts like a bar. */}
+    <Animated.View style={[s.panel, panelStyle, desktop && s.desktopPanel, !measured && s.hidden]} pointerEvents={desktop || !collapsed ? 'box-none' : 'auto'}>
+      <View style={[s.panelInner, desktop && { left: 0, right: 0 }]} pointerEvents="box-none">
+        <Animated.View style={[s.titleBlock, titleStyle]} pointerEvents="none" onLayout={event => setTitleH(event.nativeEvent.layout.height)}>
+          <Text style={s.label} maxFontSizeMultiplier={1.3}>ENCRYPTED BLUETOOTH LINK</Text>
+          <Text style={s.title} maxFontSizeMultiplier={1.3}>Set up sensors. <Text style={s.tone}>Each proves it is a Teton sensor, then joins the site Wi‑Fi.</Text></Text>
+          {!radio && (
+            <View style={[s.card, s.warnCard]} accessibilityRole="alert">
+              <Text style={s.warnText}>{Platform.OS === 'web' ? 'Open the Provide desktop app to use Bluetooth.' : 'Bluetooth is unavailable in Expo Go. Install the development build to test a sensor.'}</Text>
+            </View>
+          )}
+
+          {radio && !ready && ble !== BleState.Unknown && (
+            <View style={[s.card, s.warnCard]} accessibilityRole="alert">
+              <Text style={s.warnText}>{BLE_HELP[ble] ?? 'Bluetooth is unavailable right now.'}</Text>
+            </View>
+          )}
+        </Animated.View>
+        {radio && (
+          <>
+            <Animated.View style={[s.floating, radarStyle]}>
+              <Radar active={ready && !paused} color={C.ink} size={radarSize} onPress={togglePause} label={paused ? 'Resume search' : 'Pause search'} />
+            </Animated.View>
+            {/* Only the visible caption takes touches: the hidden one sits over the list. */}
+            <Animated.Text style={[s.small, s.center, s.largeCaption, largeCaption]} maxFontSizeMultiplier={1.3} numberOfLines={2} pointerEvents="none" accessibilityLiveRegion="polite">{caption}</Animated.Text>
+            <Animated.View style={[s.compactCaption, compactCaption]} pointerEvents="none">
+              <Text style={s.small} maxFontSizeMultiplier={1.3} numberOfLines={2} importantForAccessibility="no">{caption}</Text>
+            </Animated.View>
+          </>
+        )}
+      </View>
+    </Animated.View>
+  </>);
 
   return (
     <SafeAreaProvider>
@@ -803,119 +1041,39 @@ function Provide({ demo, onDemo }: Mode) {
           ) : <Text style={s.chip} maxFontSizeMultiplier={1.2}>WI‑FI SETUP</Text>}
         </View>
 
-        <View style={s.body} onLayout={event => setBodyH(event.nativeEvent.layout.height)}>
-          {/* The list scrolls under the panel; snapping settles the radar fully large or fully compact. */}
-          <Animated.ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} scrollEnabled={found > 0}
-            snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}
-            contentContainerStyle={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }]}>
-          {measured && (
-            // Compact requirements, not cards: the room goes to the sensors. Shown from launch, after the dot.
-            <Animated.View entering={afterDot} layout={layout} style={s.requirements} onLayout={event => setSiteH(event.nativeEvent.layout.height)}>
-              <Pressable style={[s.requirement, !liveToken && s.requirementTodo]} disabled={!!demo} onPress={() => setTokenSheet(sheet => ({ open: true, asked: false, n: sheet.n + 1 }))}
-                accessibilityRole="button" accessibilityLabel={liveToken ? `Technician code of ${liveToken.name}, valid until ${expiryText(liveToken.expires)}. Change`
-                  : tokenInfo ? `Technician code expired on ${expiryText(tokenInfo.expires)}. Change` : 'Technician code required. Add it'}>
-                <Text style={[s.check, liveToken ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{liveToken ? '✓' : '!'}</Text>
-                <Text style={[s.requirementText, s.grow]} numberOfLines={1}>
-                  {liveToken ? `${liveToken.name} · until ${expiryText(liveToken.expires)}` : tokenInfo ? 'Technician code expired' : 'Technician code required'}
-                </Text>
-                {!demo && <Text style={s.requirementAction}>{tokenInfo ? 'Change' : 'Add'}</Text>}
-              </Pressable>
-              <Pressable style={[s.requirement, !activeSite && s.requirementTodo]} disabled={!!demo} onPress={() => setChoosingSite(true)}
-                accessibilityRole="button" accessibilityLabel={activeSite ? `Site Wi-Fi: ${activeSite.name}. Change` : 'Site Wi-Fi required. Choose a site'}>
-                <Text style={[s.check, activeSite ? s.checkDone : s.checkTodo]} maxFontSizeMultiplier={1.3}>{activeSite ? '✓' : '!'}</Text>
-                <Text style={[s.requirementText, s.grow]} numberOfLines={1}>{activeSite ? activeSite.name : 'Site Wi‑Fi required'}</Text>
-                {!demo && <Text style={s.requirementAction}>{activeSite ? 'Change' : 'Choose'}</Text>}
-              </Pressable>
-            </Animated.View>
-          )}
-          {found > 0 && overall && (
-            // Fades in once the cards have moved down for it, instead of appearing under them.
-            <Animated.View entering={appear} layout={layout}><Summary counts={counts} line={overallLine} filter={shownGroup} onFilter={pickFilter} /></Animated.View>
-          )}
-          {found > 0 && (readyIds.length > 0 || failedIds.length > 0 || summary?.stopReason) && (
-            <Animated.View entering={appear} layout={layout} style={s.batch}>
-              {readyIds.length > 0 && !summary?.stopReason && (!batching || batchControl.current.add) && (
-                <Pressable style={s.primary} onPress={() => (batching ? addToBatch(readyIds) : startBatch(readyIds))} accessibilityRole="button">
-                  <Text style={s.primaryText}>{batching ? `Add ${readyIds.length} to the batch` : `Set up all ready (${readyIds.length})`}</Text>
-                </Pressable>
-              )}
-              {summary?.stopReason && <Text style={s.warnText} accessibilityRole="alert">Stopped: {reasonText(summary.stopReason, 'join')}</Text>}
-              {!batching && failedIds.length > 0 && (
-                <Pressable style={s.secondary} onPress={() => startBatch(failedIds)} accessibilityRole="button">
-                  <Text style={s.secondaryText}>Retry failed ({failedIds.length})</Text>
-                </Pressable>
-              )}
-            </Animated.View>
-          )}
-          {inProgress.length > 0 && <Text style={[s.label, s.listLabel]} maxFontSizeMultiplier={1.3}>IN PROGRESS · {inProgress.filter(Boolean).length}</Text>}
-          {Array.from(inProgress, (sensor, index) => !sensor ? (
-            // A slot between two sensors, freed until the next one starts: kept, so the rows below do not move.
-            <View key={`slot-${index}`} style={[s.sensorRow, s.emptySlot, index > 0 && s.tight]} />
+        <View style={[s.body, desktop && s.workspace]} onLayout={event => { setBodyH(event.nativeEvent.layout.height); if (WEB) setBodyW(event.nativeEvent.layout.width); }}>
+          {desktop ? (
+            <>
+              {/* Scrolls only in a window too short for it, so the code and site rows stay reachable. */}
+              <ScrollView style={s.sidebar} contentContainerStyle={s.sidebarContent}>
+                {searchPanel}
+                {requirements}
+              </ScrollView>
+              <View style={s.main}>
+                {found === 0 && radio ? (
+                  <Waiting searching={ready && !paused}
+                    text={ready && !paused ? 'Sensors show here as soon as they are heard. Stay within a few metres of them.' : caption} />
+                ) : (<>
+                  <View style={s.overview}>{overview}</View>
+                  <Animated.ScrollView ref={scrollRef} style={s.sensorScroll} contentContainerStyle={s.desktopList}>
+                    {sensorList}
+                  </Animated.ScrollView>
+                </>)}
+              </View>
+            </>
           ) : (
-            // Fixed slots, one per link: their content changes in place (a freshly mounted row shows blank for a moment).
-            <SensorCard key={`slot-${index}`} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={false}
-              outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
-              siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null} compact open={sensor.id === openId}
-              group={groups[sensor.id]} tight={index > 0 && sensor.id !== openId && inProgress[index - 1]?.id !== openId} />
-          ))}
-          {found > 0 && introDone && (
-            <View style={s.listHead}>
-              <Text style={[s.label, s.listLabel, s.grow]} maxFontSizeMultiplier={1.3}>{LIST_LABELS[shownGroup]} · {shown.length}</Text>
-              {refreshButton}
-            </View>
+            <>
+              <Animated.ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={16} scrollEnabled={found > 0}
+                snapToOffsets={[0, travel]} snapToEnd={false} contentInset={{ top: locked ? -travel : 0 }}
+                contentContainerStyle={[s.content, { paddingTop: largeH, minHeight: found > 0 ? bodyH + travel : 0 }]}>
+                {requirements}
+                {overview}
+                {sensorList}
+              </Animated.ScrollView>
+              {searchPanel}
+            </>
           )}
-          {shown.map((sensor, index) => (
-            <SensorCard key={sensor.id} sensor={sensor} mine={running[sensor.id]} entry={batch[sensor.id]} first={!compact && index === 0}
-              outcome={running[sensor.id] ? undefined : outcomes[sensor.id]} batching={batching} actions={cardActions}
-              siteName={sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null}
-              compact={compact} open={sensor.id === openId} group={groups[sensor.id]} seen={seenAt.current.get(sensor.id)}
-              tight={compact && index > 0 && sensor.id !== openId && shown[index - 1].id !== openId} />
-          ))}
 
-          {attempts.length > 0 && (
-            <View style={s.log}>
-              <Text style={s.label}>LOG · {successes} OF {attempts.length} SUCCEEDED</Text>
-              {attempts.map(attempt => (
-                <Text key={attempt.key} style={s.logLine}>
-                  {attempt.at}  {attempt.name}  {attempt.detail}
-                </Text>
-              ))}
-            </View>
-          )}
-          </Animated.ScrollView>
-
-          {/* Touches pass through to the list except on the dot; once compact, the panel acts like a bar. */}
-          <Animated.View style={[s.panel, panelStyle, !measured && s.hidden]} pointerEvents={collapsed ? 'auto' : 'box-none'}>
-            <View style={s.panelInner} pointerEvents="box-none">
-              <Animated.View style={[s.titleBlock, titleStyle]} pointerEvents="none" onLayout={event => setTitleH(event.nativeEvent.layout.height)}>
-                <Text style={s.label} maxFontSizeMultiplier={1.3}>ENCRYPTED BLUETOOTH LINK</Text>
-                <Text style={s.title} maxFontSizeMultiplier={1.3}>Set up sensors. <Text style={s.tone}>Each proves it is a Teton sensor, then joins the site Wi‑Fi.</Text></Text>
-                {!radio && (
-                  <View style={[s.card, s.warnCard]} accessibilityRole="alert">
-                    <Text style={s.warnText}>Bluetooth is unavailable in Expo Go. Install the development build (see configurator/README.md) to test a sensor.</Text>
-                  </View>
-                )}
-
-                {radio && !ready && ble !== BleState.Unknown && (
-                  <View style={[s.card, s.warnCard]} accessibilityRole="alert">
-                    <Text style={s.warnText}>{BLE_HELP[ble] ?? 'Bluetooth is unavailable right now.'}</Text>
-                  </View>
-                )}
-              </Animated.View>
-              {radio && (
-                <>
-                  <Animated.View style={[s.floating, radarStyle]}>
-                    <Radar active={ready && !paused} color={C.ink} size={radarSize} onPress={togglePause} label={paused ? 'Resume search' : 'Pause search'} />
-                  </Animated.View>
-                  {/* Only the visible caption takes touches: the hidden one sits over the list. */}
-                  <Animated.Text style={[s.small, s.center, s.largeCaption, largeCaption]} maxFontSizeMultiplier={1.3} numberOfLines={2} pointerEvents="none" accessibilityLiveRegion="polite">{caption}</Animated.Text>
-                  <Animated.View style={[s.compactCaption, compactCaption]} pointerEvents="none">
-                    <Text style={s.small} maxFontSizeMultiplier={1.3} numberOfLines={2} importantForAccessibility="no">{caption}</Text>
-                  </Animated.View>
-                </>
-              )}
-            </View>
-          </Animated.View>
         </View>
         <SitesSheet key={choosingSite ? 'sites-open' : 'sites-closed'} visible={siteShown} sites={sites} activeId={activeId} newId={Crypto.randomUUID}
           onClose={closeSites} onPick={pick} onSaved={saved} onForgotten={forgotten} />
@@ -930,6 +1088,23 @@ const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: PAD, paddingBottom: 48, gap: GAP },
   body: { flex: 1 },
+  workspace: { flexDirection: 'row', gap: 24, padding: 20, minHeight: 0 },
+  sidebar: { width: 320, flexGrow: 0, flexShrink: 0 },
+  sidebarContent: { gap: 20, paddingBottom: 4 },
+  main: { flex: 1, minWidth: 0, minHeight: 0 },
+  overview: { gap: 14, paddingBottom: 16 },
+  desktopBatch: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  desktopPanel: { position: 'relative', left: 0, right: 0, flexShrink: 0 },
+  sensorScroll: { flex: 1, minHeight: 0 },
+  waiting: { gap: 12 },
+  placeholderRow: { gap: 8 },
+  placeholderBar: { backgroundColor: C.line },
+  placeholderName: { width: 150, height: 12, borderRadius: 6 },
+  placeholderLine: { width: 96, height: 10, borderRadius: 5 },
+  desktopList: { gap: GAP, paddingBottom: 24 },
+  // Desktop columns in CSS: the browser re-flows them on every frame of a window resize (a width computed here
+  // trailed a frame behind and made the cards jump). react-native-web passes these styles through.
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 8, alignItems: 'start' } as unknown as ViewStyle,
   hidden: { opacity: 0 }, // until the first layout pass, so the radar appears in its final place
   panel: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: C.bg, overflow: 'hidden' },
   panelInner: { position: 'absolute', top: 0, bottom: 0, left: PAD, right: PAD },
@@ -949,6 +1124,7 @@ const s = StyleSheet.create({
   tone: { color: C.tone },
   card: { backgroundColor: C.card, borderRadius: 10, padding: 16, gap: 6 },
   okCard: { backgroundColor: C.mint },
+  frame: { backgroundColor: C.card, borderRadius: 10, overflow: 'hidden' }, // the web card's clipping frame (SensorCard)
   clip: { overflow: 'hidden' }, // the drawer is revealed by the card growing, never drawn over the next card
   drawer: { marginTop: 6, minHeight: 84 },
   drawerBody: { flex: 1, gap: 4, borderRadius: 8, padding: 12, justifyContent: 'center' },

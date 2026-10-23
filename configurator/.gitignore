@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# copied from zxing-wasm by the postinstall script
+public/zxing_reader.wasm

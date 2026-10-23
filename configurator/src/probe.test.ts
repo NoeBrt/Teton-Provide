@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changed, probe, sensorState, type BleLink } from './probe.ts';
+import { changed, keepAdvertised, probe, sensorState, type BleLink } from './probe.ts';
 
 const text = (data: number[]) => String.fromCharCode(...data);
 
@@ -85,4 +85,17 @@ test('a rediscovered sensor is redrawn only when its state, name or signal (5 dB
   assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-56, 1, 'TETON-DEMO-001')), true, 'signal moved 6 dB');
   assert.equal(changed(seen(-50, 1, 'TETON-DEMO-001'), seen(-50, 2, 'TETON-DEMO-001')), true, 'set up');
   assert.equal(changed(seen(-50, 1), seen(-50, 1, 'TETON-DEMO-001')), true, 'name from the scan response');
+});
+
+test('a packet without the name or the state keeps the ones last advertised (scan response vs advertisement)', () => {
+  type Heard = { id: string; name?: string; rssi: number; advertising: { localName?: string; manufacturerData?: Record<string, { bytes: number[] }> } };
+  const named: Heard = { id: 'A', name: 'FLWR-O-019', rssi: -50, advertising: { localName: 'TETON-7B09F20339', manufacturerData: { ffff: { bytes: [1] } } } };
+  const bare: Heard = { id: 'A', name: 'FLWR-O-019', rssi: -44, advertising: {} };
+  const merged = keepAdvertised(named, bare);
+  assert.equal(merged.advertising.localName, 'TETON-7B09F20339', 'not the cached host name');
+  assert.equal(sensorState(merged.advertising), 'ready');
+  assert.equal(merged.rssi, -44, 'the signal is the newest');
+  const update: Heard = { id: 'A', rssi: -40, advertising: { localName: 'TETON-7B09F20339', manufacturerData: { ffff: { bytes: [2] } } } };
+  assert.equal(sensorState(keepAdvertised(named, update).advertising), 'online', 'a new state replaces the old one');
+  assert.equal(keepAdvertised(undefined, bare), bare);
 });

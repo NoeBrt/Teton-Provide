@@ -42,9 +42,14 @@ the first milestone (`Noise_NKpsk2`, decision 24), which cannot scale to 200 sen
 4. **Handshake.** `Noise_XX_25519_ChaChaPoly_SHA256`, prologue `teton-provision/2`. Message 2 carries the sensor's
    static key and its certificate, encrypted. The phone checks, before message 3: the device authority's signature
    (`verify_strict` semantics, `zip215: false`), that the certified key is the key the sensor just proved, that the
-   certified ID is the advertised name, and that the token covers the certified customer. Any failure ends the
+   certified ID is the sensor's name, and that the token covers the certified customer. Any failure ends the
    session with **not a genuine Teton sensor** or **another customer's sensor**; the phone has sent nothing but an
-   ephemeral key.
+   ephemeral key. The name compared is the one the sensor advertised (its scan response), or, when no packet carried
+   it, the system's name for the device (on Apple platforms a cache of its GATT name). Both are device-declared and only
+   select which certified ID must match; with neither, the phone does not connect (**unidentified**, retried by a
+   batch). The device service therefore sets its Bluetooth adapter's alias to its ID (`device/main.rs`); on the
+   FLWR-O-019 test sensor the system Bluetooth name was also set to it by hand (`tasks/HANDOFF.md`), not yet by
+   `install.sh`.
 5. **Technician code.** Message 3 carries the phone's token: `[2][expiry][holder X25519 public key][name][customers]`
    signed with the domain `teton-technician-token/2`. `authority issue` generates the holder key pair with each code,
    and the phone uses the holder's private key as its Noise static key. The sensor checks the signature, that its own

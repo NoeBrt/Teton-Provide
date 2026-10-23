@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as SecureStore from './secureStore';
 import { checkToken, parseTokenText, toHex, type Token } from './authority.ts';
 import { QrCamera } from './QrCamera';
+import { Sheet } from './Sheet';
+import { PASTE_KEY } from './pasteKey.ts';
 import { C, F } from './theme.ts';
 
 // The technician code (token and holder private key) is a credential: its own Keychain entry behind
@@ -106,55 +108,98 @@ export function TechnicianSheet({ visible, info, onClose, onSaved }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.fill} behavior="padding">
-        <ScrollView contentContainerStyle={s.sheet} keyboardShouldPersistTaps="handled">
-          <Text style={s.title} maxFontSizeMultiplier={1.3}>Technician code</Text>
-          <Text style={s.text}>
-            {replacing && info
-              ? `New code: ${codeText(infoOf(replacing))}. It replaces the code of ${codeText(info)}.`
-              : info
-                ? `${codeText(info)}. Scan or paste a new code to replace it.`
-                : 'Sensors only accept a phone with a code from Teton. Scan the code Teton sent you, or paste it.'}
-          </Text>
-          {replacing && info ? (
-            <Pressable style={s.primary} onPress={() => save(replacing)} accessibilityRole="button"
-              accessibilityLabel={`Replace the code of ${codeText(info)} with the code of ${codeText(infoOf(replacing))}`}>
-              <Text style={s.primaryText}>Replace</Text>
-            </Pressable>
-          ) : scanning ? (
-            <QrCamera hint="The camera reads the technician QR code. Nothing is recorded." onData={scanned} style={s.camera} />
-          ) : (
-            <TextInput style={s.input} value={text} onChangeText={setText} placeholder="Paste the code here" autoCapitalize="none"
-              autoCorrect={false} multiline accessibilityLabel="Technician code" />
-          )}
-          {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
-          {!scanning && !replacing && (
-            <Pressable style={s.primary} onPress={() => accept(text)} accessibilityRole="button">
-              <Text style={s.primaryText}>Save</Text>
-            </Pressable>
-          )}
-          {!replacing && (
-            <Pressable style={s.secondary} onPress={() => { setError(null); lastScan.current = null; setScanning(value => !value); }} accessibilityRole="button">
-              <Text style={s.secondaryText}>{scanning ? 'Paste the code instead' : 'Scan the QR code instead'}</Text>
-            </Pressable>
-          )}
-          <Pressable style={s.secondary} onPress={onClose} accessibilityRole="button">
-            <Text style={s.secondaryText}>Close</Text>
-          </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+    <Sheet visible={visible} onClose={onClose} label="Technician code">
+      <Text style={s.title} maxFontSizeMultiplier={1.3}>Technician code</Text>
+      <Text style={s.text}>
+        {replacing && info
+          ? `New code: ${codeText(infoOf(replacing))}. It replaces the code of ${codeText(info)}.`
+          : info
+            ? `${codeText(info)}. Scan or paste a new code to replace it.`
+            : 'Sensors only accept a phone with a code from Teton. Scan the code Teton sent you, or paste it.'}
+      </Text>
+      {replacing && info ? (
+        <Pressable style={s.primary} onPress={() => save(replacing)} accessibilityRole="button"
+          accessibilityLabel={`Replace the code of ${codeText(info)} with the code of ${codeText(infoOf(replacing))}`}>
+          <Text style={s.primaryText}>Replace</Text>
+        </Pressable>
+      ) : scanning ? (
+        <QrCamera hint="The camera reads the technician QR code. Nothing is recorded." onData={scanned} style={s.camera} />
+      ) : (
+        <CodeField text={text} onChangeText={setText} />
+      )}
+      {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
+      {!scanning && !replacing && !(text.trim() && tokenProblem(parseTokenText(text.trim()))) && ( // the card already says why
+        <Pressable style={s.primary} onPress={() => accept(text)} accessibilityRole="button">
+          <Text style={s.primaryText}>Save</Text>
+        </Pressable>
+      )}
+      {!replacing && (
+        <Pressable style={s.secondary} onPress={() => { setError(null); lastScan.current = null; setScanning(value => !value); }} accessibilityRole="button">
+          <Text style={s.secondaryText}>{scanning ? 'Paste the code instead' : 'Scan the QR code instead'}</Text>
+        </Pressable>
+      )}
+      <Pressable style={s.secondary} onPress={onClose} accessibilityRole="button">
+        <Text style={s.secondaryText}>Close</Text>
+      </Pressable>
+    </Sheet>
+  );
+}
+
+// The code is long (about 300 characters: Teton's signature and the holder's key), so it is pasted whole, like a
+// recovery key, never typed or shown. Empty: a paste area (a transparent field over it takes the paste, or a long press and
+// Paste). Pasted: what the code is for (name, customers and expiry are not secret), or why it cannot be used.
+function CodeField({ text, onChangeText }: { text: string; onChangeText: (text: string) => void }) {
+  const [focused, setFocused] = useState(false);
+  const code = text.trim();
+  if (code) {
+    const token = parseTokenText(code);
+    const problem = tokenProblem(token);
+    return (
+      <View style={[s.codeCard, problem ? s.codeCardWarn : s.codeCardOk]} accessibilityLiveRegion="polite">
+        <View style={s.grow}>
+          {token && !problem ? (<>
+            <Text style={s.codeName}>✓ {token.name}</Text>
+            <Text style={s.codeLine}>{token.customers.join(', ')} · {validity(token.expires)}</Text>
+          </>) : <Text style={s.codeWarn}>{problem}</Text>}
+          <Text style={s.codeMeta}>{code.length} characters, hidden</Text>
+        </View>
+        <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear the pasted code">
+          <Text style={s.codeClear}>Clear</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={[s.pasteArea, focused && s.pasteAreaFocused]}>
+      <Text style={s.pasteTitle}>Paste your technician code</Text>
+      <Text style={s.pasteHow}>{Platform.OS === 'web' ? `Click here, then ${PASTE_KEY}` : 'Press and hold here, then Paste'}</Text>
+      <TextInput style={s.pasteInput} value={text} onChangeText={onChangeText} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        caretHidden autoComplete="off" textContentType="none" autoCapitalize="none" autoCorrect={false} spellCheck={false}
+        accessibilityLabel="Technician code" accessibilityHint="Paste the code Teton sent you; it stays hidden" />
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: C.bg },
-  sheet: { padding: 20, gap: 12 },
   title: { fontFamily: F.bold, fontSize: 24, letterSpacing: -0.6, color: C.ink, marginTop: 8 },
   text: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.muted },
   camera: { height: 280 },
-  input: { fontFamily: F.regular, fontSize: 15, color: C.ink, backgroundColor: C.card, borderRadius: 10, padding: 14, minHeight: 96, textAlignVertical: 'top' },
+  grow: { flex: 1 },
+  pasteArea: { minHeight: 96, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.tone, backgroundColor: C.card,
+    alignItems: 'center', justifyContent: 'center', gap: 4, padding: 16 },
+  pasteAreaFocused: { borderStyle: 'solid', borderColor: C.blue, backgroundColor: C.bg },
+  pasteTitle: { fontFamily: F.medium, fontSize: 16, color: C.ink },
+  pasteHow: { fontFamily: F.regular, fontSize: 14, color: C.muted },
+  // Over the area, invisible but focusable: it receives the paste.
+  pasteInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent', fontSize: 16 },
+  codeCard: { minHeight: 96, borderRadius: 10, padding: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  codeCardOk: { backgroundColor: C.mint },
+  codeCardWarn: { backgroundColor: C.warnBg },
+  codeName: { fontFamily: F.bold, fontSize: 17, color: C.ink },
+  codeLine: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.ink, marginTop: 2 },
+  codeWarn: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.warn },
+  codeMeta: { fontFamily: F.regular, fontSize: 13, color: C.muted, marginTop: 6 },
+  codeClear: { fontFamily: F.medium, fontSize: 15, color: C.blue },
   warn: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.warn, backgroundColor: C.warnBg, borderRadius: 10, padding: 12, overflow: 'hidden' },
   primary: { backgroundColor: C.ink, borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   primaryText: { fontFamily: F.medium, fontSize: 16, color: '#ffffff' },

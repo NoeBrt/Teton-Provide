@@ -19,6 +19,7 @@ const REFUSED_EXPIRED = 3;
 
 export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
 /**
+ * `unidentified`: the sensor has not advertised its ID yet (nothing was sent; try again once it is heard);
  * `not-genuine`: no valid Teton certificate for the key and ID it shows (nothing secret was sent);
  * `other-customer`: a genuine sensor of a customer this token does not cover;
  * `token-invalid` / `token-expired`: the sensor refused the token (or the app holds the wrong key for it, nothing sent);
@@ -26,7 +27,7 @@ export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
  * `locked`: not tried, the app had locked the token or the site password again.
  */
 export type SetupFailure =
-  | Failure | 'timeout' | 'rejected' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed' | 'locked';
+  | Failure | 'timeout' | 'rejected' | 'unidentified' | 'not-genuine' | 'other-customer' | 'token-invalid' | 'token-expired' | 'unknown' | 'closed' | 'locked';
 /** The phone cannot tell what happened: retrying must reuse this attempt so the device can answer it. */
 export const isUnsettled = (result: SetupResult) =>
   !result.ok && result.attempt !== undefined && (result.reason === 'timeout' || result.reason === 'rejected');
@@ -50,7 +51,8 @@ const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every(
 export async function setup(
   ble: BleLink,
   id: string,
-  sensorName: string,
+  /** The sensor's name: the one it advertised, or the system's; it must be the certificate's ID. Missing: not contacted. */
+  sensorName: string | undefined,
   token: Token,
   ssid: string,
   password: string,
@@ -61,6 +63,7 @@ export async function setup(
     sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), deviceAuthority = DEVICE_AUTHORITY,
   }: SetupOptions = {},
 ): Promise<SetupResult> {
+  if (!sensorName) return { ok: false, step: 'connect', reason: 'unidentified' };
   let step: SetupStep = 'connect';
   let attempt: Uint8Array | undefined;
   const at = (next: SetupStep) => { step = next; onStep(next); };

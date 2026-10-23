@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as SecureStore from './secureStore';
 import { credentialError } from './provision.ts';
 import { parseWifiQr, removeSite, upsertSite, type Setups, type Site } from './sites.ts';
 import { QrCamera } from './QrCamera';
+import { Sheet } from './Sheet';
 import { C, F } from './theme.ts';
 
 // Saved sites live in the Keychain on this phone only. Each password sits in its own entry behind Face ID
@@ -133,89 +134,83 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={s.fill} behavior="padding">
-        <ScrollView contentContainerStyle={s.sheet} keyboardShouldPersistTaps="handled">
-          {editing === null ? (
-            <>
-              <Text style={s.title} maxFontSizeMultiplier={1.3}>Site {NB}</Text>
-              <Text style={s.text}>Pick the facility you are in. Face ID unlocks its password once for this session.</Text>
-              {sites.map(site => (
-                <View key={site.id} style={[s.siteRow, site.id === activeId && s.siteActive]}>
-                  <Pressable style={s.grow} onPress={() => onPick(site)} accessibilityRole="button" accessibilityLabel={`Use ${site.name}`}>
-                    <Text style={s.siteName} numberOfLines={2}>{site.name}</Text>
-                    <Text style={s.text} numberOfLines={1}>{site.ssid}</Text>
-                  </Pressable>
-                  <Pressable style={s.small} onPress={() => edit(site)} accessibilityRole="button" accessibilityLabel={`Edit ${site.name}`}>
-                    <Text style={s.secondaryText}>Edit</Text>
-                  </Pressable>
-                </View>
-              ))}
-              <Pressable style={s.primary} onPress={() => edit('new')} accessibilityRole="button">
-                <Text style={s.primaryText}>Add a site</Text>
+    <Sheet visible={visible} onClose={onClose} label="Site Wi-Fi">
+      {editing === null ? (
+        <>
+          <Text style={s.title} maxFontSizeMultiplier={1.3}>Site {NB}</Text>
+          <Text style={s.text}>Pick the facility you are in. Face ID unlocks its password once for this session.</Text>
+          {sites.map(site => (
+            <View key={site.id} style={[s.siteRow, site.id === activeId && s.siteActive]}>
+              <Pressable style={s.grow} onPress={() => onPick(site)} accessibilityRole="button" accessibilityLabel={`Use ${site.name}`}>
+                <Text style={s.siteName} numberOfLines={2}>{site.name}</Text>
+                <Text style={s.text} numberOfLines={1}>{site.ssid}</Text>
               </Pressable>
-              <Pressable style={s.secondary} onPress={onClose} accessibilityRole="button">
-                <Text style={s.secondaryText}>Close</Text>
+              <Pressable style={s.small} onPress={() => edit(site)} accessibilityRole="button" accessibilityLabel={`Edit ${site.name}`}>
+                <Text style={s.secondaryText}>Edit</Text>
+              </Pressable>
+            </View>
+          ))}
+          <Pressable style={s.primary} onPress={() => edit('new')} accessibilityRole="button">
+            <Text style={s.primaryText}>Add a site</Text>
+          </Pressable>
+          <Pressable style={s.secondary} onPress={onClose} accessibilityRole="button">
+            <Text style={s.secondaryText}>Close</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Text style={s.title} maxFontSizeMultiplier={1.3}>{editing === 'new' ? 'New site' : 'Edit site'}</Text>
+          <Text style={s.text}>Every sensor you set up here joins this network.</Text>
+          {scanning ? (
+            <>
+              <QrCamera hint={`The camera reads the network's ${NB} QR code. Nothing is recorded.`} onData={scanned} style={s.camera} />
+              <Text style={s.text}>Point the camera at the {NB} QR code: a guest {NB} poster, or {NB} › Share on an Android phone.</Text>
+              {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
+              <Pressable style={s.secondary} onPress={() => { setError(null); setScanning(false); }} accessibilityRole="button">
+                <Text style={s.secondaryText}>Type it instead</Text>
               </Pressable>
             </>
           ) : (
-            <>
-              <Text style={s.title} maxFontSizeMultiplier={1.3}>{editing === 'new' ? 'New site' : 'Edit site'}</Text>
-              <Text style={s.text}>Every sensor you set up here joins this network.</Text>
-              {scanning ? (
-                <>
-                  <QrCamera hint={`The camera reads the network's ${NB} QR code. Nothing is recorded.`} onData={scanned} style={s.camera} />
-                  <Text style={s.text}>Point the camera at the {NB} QR code: a guest {NB} poster, or {NB} › Share on an Android phone.</Text>
-                  {error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
-                  <Pressable style={s.secondary} onPress={() => { setError(null); setScanning(false); }} accessibilityRole="button">
-                    <Text style={s.secondaryText}>Type it instead</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <Pressable style={s.secondary} onPress={() => { setError(null); setScanning(true); }} accessibilityRole="button">
-                  <Text style={s.secondaryText}>Scan the {NB} QR code</Text>
-                </Pressable>
-              )}
-              <Text style={s.label}>SITE NAME</Text>
-              <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Hôpital Nord – Bât. B" returnKeyType="next"
-                onSubmitEditing={() => ssidField.current?.focus()} submitBehavior="submit" accessibilityLabel="Site name" />
-              <Text style={s.label}>NETWORK NAME</Text>
-              <TextInput ref={ssidField} style={s.input} value={ssid} onChangeText={setSsid} autoCapitalize="none" autoCorrect={false} placeholder="Ward-3"
-                returnKeyType="next" onSubmitEditing={() => passwordField.current?.focus()} submitBehavior="submit" accessibilityLabel="Network name" />
-              <Text style={s.label}>PASSWORD</Text>
-              <View style={s.row}>
-                <TextInput ref={passwordField} style={[s.input, s.grow]} value={password} onChangeText={setPassword} secureTextEntry={!shown}
-                  autoCapitalize="none" autoCorrect={false} textContentType="password" returnKeyType="done" onSubmitEditing={save}
-                  placeholder={editing === 'new' ? undefined : 'Enter it again to change it'} accessibilityLabel="Password" />
-                <Pressable style={s.toggle} onPress={() => setShown(value => !value)} accessibilityRole="button" accessibilityLabel={shown ? 'Hide the password' : 'Show the password'}>
-                  <Text style={s.secondaryText}>{shown ? 'Hide' : 'Show'}</Text>
-                </Pressable>
-              </View>
-              {!scanning && error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
-              {!scanning && (
-                <Pressable style={s.primary} onPress={save} accessibilityRole="button">
-                  <Text style={s.primaryText}>Save</Text>
-                </Pressable>
-              )}
-              <Pressable style={s.secondary} onPress={back} accessibilityRole="button">
-                <Text style={s.secondaryText}>{sites.length === 0 ? 'Cancel' : 'Back'}</Text>
-              </Pressable>
-              {editing !== 'new' && (
-                <Pressable style={s.link} onPress={() => forget(editing)} accessibilityRole="button" accessibilityLabel={`Forget ${editing.name} on this phone`}>
-                  <Text style={s.linkText}>Forget this site on this phone</Text>
-                </Pressable>
-              )}
-            </>
+            <Pressable style={s.secondary} onPress={() => { setError(null); setScanning(true); }} accessibilityRole="button">
+              <Text style={s.secondaryText}>Scan the {NB} QR code</Text>
+            </Pressable>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+          <Text style={s.label}>SITE NAME</Text>
+          <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Hôpital Nord – Bât. B" returnKeyType="next"
+            onSubmitEditing={() => ssidField.current?.focus()} submitBehavior="submit" accessibilityLabel="Site name" />
+          <Text style={s.label}>NETWORK NAME</Text>
+          <TextInput ref={ssidField} style={s.input} value={ssid} onChangeText={setSsid} autoCapitalize="none" autoCorrect={false} placeholder="Ward-3"
+            returnKeyType="next" onSubmitEditing={() => passwordField.current?.focus()} submitBehavior="submit" accessibilityLabel="Network name" />
+          <Text style={s.label}>PASSWORD</Text>
+          <View style={s.row}>
+            <TextInput ref={passwordField} style={[s.input, s.grow]} value={password} onChangeText={setPassword} secureTextEntry={!shown}
+              autoCapitalize="none" autoCorrect={false} textContentType="password" returnKeyType="done" onSubmitEditing={save}
+              placeholder={editing === 'new' ? undefined : 'Enter it again to change it'} accessibilityLabel="Password" />
+            <Pressable style={s.toggle} onPress={() => setShown(value => !value)} accessibilityRole="button" accessibilityLabel={shown ? 'Hide the password' : 'Show the password'}>
+              <Text style={s.secondaryText}>{shown ? 'Hide' : 'Show'}</Text>
+            </Pressable>
+          </View>
+          {!scanning && error && <Text style={s.warn} accessibilityRole="alert">{error}</Text>}
+          {!scanning && (
+            <Pressable style={s.primary} onPress={save} accessibilityRole="button">
+              <Text style={s.primaryText}>Save</Text>
+            </Pressable>
+          )}
+          <Pressable style={s.secondary} onPress={back} accessibilityRole="button">
+            <Text style={s.secondaryText}>{sites.length === 0 ? 'Cancel' : 'Back'}</Text>
+          </Pressable>
+          {editing !== 'new' && (
+            <Pressable style={s.link} onPress={() => forget(editing)} accessibilityRole="button" accessibilityLabel={`Forget ${editing.name} on this phone`}>
+              <Text style={s.linkText}>Forget this site on this phone</Text>
+            </Pressable>
+          )}
+        </>
+      )}
+    </Sheet>
   );
 }
 
 const s = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: C.bg },
-  sheet: { padding: 20, gap: 12 },
   title: { fontFamily: F.bold, fontSize: 24, letterSpacing: -0.6, color: C.ink, marginTop: 8 },
   text: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.muted },
   label: { fontFamily: F.medium, fontSize: 12, letterSpacing: 0.7, color: C.blue, marginTop: 8 },

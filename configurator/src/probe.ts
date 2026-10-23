@@ -17,6 +17,16 @@ export const changed = (before: { rssi: number; advertising?: Advertising } | un
   || sensorState(before.advertising) !== sensorState(after.advertising)
   || before.advertising?.localName !== after.advertising?.localName
   || Math.abs(before.rssi - after.rssi) >= 5;
+
+/** A sensor's name travels only in its scan response and its state only in its advertisement, and the phone does not
+ * always get both: a packet missing one keeps the last advertised value, rather than falling back to the system's
+ * cached name (which can be the host's, FLWR-O-019). */
+export function keepAdvertised<P extends { advertising?: Advertising }>(before: P | undefined, after: P): P {
+  if (!before) return after;
+  const localName = after.advertising?.localName ?? before.advertising?.localName;
+  const manufacturerData = after.advertising?.manufacturerData?.ffff ? after.advertising.manufacturerData : before.advertising?.manufacturerData;
+  return { ...after, advertising: { ...after.advertising, localName, manufacturerData } };
+}
 const RESPONSE = bytes('world');
 
 // The subset of react-native-ble-manager the probe needs, so tests can use a fake.
