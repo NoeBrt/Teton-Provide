@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use btleplug::api::{
-    Central, CentralEvent, CentralState, Manager as _, Peripheral as _, ScanFilter, WriteType,
+    Central, CentralEvent, CentralState, Manager as _, Peripheral as _, RetrievePeripheralsOptions,
+    ScanFilter, WriteType,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use futures::StreamExt;
@@ -18,6 +19,34 @@ const REPORT_EVERY: Duration = Duration::from_millis(250);
 /// The only service the page may scan for, read or write (configurator/src/probe.ts SERVICE_UUID): a script in the
 /// page cannot reach any other Bluetooth device's data through this bridge.
 const TETON_SERVICE: Uuid = Uuid::from_u128(0x3b0a90ce_9564_40d1_b96b_14cf8858aba3);
+
+/// A scan the page asks for: Teton sensors only (an empty filter would list every device around).
+fn scan_filter(services: &[Uuid]) -> Result<(), String> {
+    if services == [TETON_SERVICE] {
+        Ok(())
+    } else {
+        Err("Only Teton sensors can be scanned for".into())
+    }
+}
+
+/// A service the page reads or writes: the Teton service only.
+fn teton_service(service: Uuid) -> Result<(), String> {
+    if service == TETON_SERVICE {
+        Ok(())
+    } else {
+        Err(format!("Not a Teton service: {service}"))
+    }
+}
+
+/// A scan round's length: 0.1 s to a minute; anything else (a huge or invalid number from the page) would panic the
+/// round's timer, which then never stops the scan.
+fn scan_length(seconds: f64) -> Duration {
+    Duration::from_secs_f64(if seconds.is_nan() {
+        0.1
+    } else {
+        seconds.clamp(0.1, 60.0)
+    })
+}
 
 #[derive(Default)]
 pub struct Ble {
@@ -156,13 +185,32 @@ fn listen(app: AppHandle, adapter: Adapter) {
     });
 }
 
+/// A sensor the listener reported, as a live handle. On macOS btleplug forgets a peripheral when its link closes: the
+/// next connection then failed at once ("Peripheral no longer available") until a scan heard the sensor again, which
+/// took 1 to 40 s. CoreBluetooth hands it back at once by its identifier.
 async fn peripheral(ble: &Ble, id: &str) -> Result<Peripheral, String> {
-    ble.known
+    let known = ble
+        .known
         .lock()
         .await
         .get(id)
         .cloned()
-        .ok_or_else(|| format!("Unknown sensor {id}"))
+        .ok_or_else(|| format!("Unknown sensor {id}"))?;
+    let Some(adapter) = ble.adapter.get() else {
+        return Ok(known);
+    };
+    if let Ok(live) = adapter.peripheral(&known.id()).await {
+        return Ok(live);
+    }
+    let wanted = RetrievePeripheralsOptions {
+        identifiers: Some(vec![known.id()]),
+        services: None,
+    };
+    // Elsewhere (not supported) the cached handle stays valid.
+    Ok(match adapter.retrieve_peripherals(wanted).await {
+        Ok(found) => found.into_iter().next().unwrap_or(known),
+        Err(_) => known,
+    })
 }
 
 fn uuid(text: &str) -> Result<Uuid, String> {
@@ -175,9 +223,7 @@ async fn characteristic(
     characteristic: &str,
 ) -> Result<btleplug::api::Characteristic, String> {
     let (service, characteristic) = (uuid(service)?, uuid(characteristic)?);
-    if service != TETON_SERVICE {
-        return Err(format!("Not a Teton service: {service}"));
-    }
+    teton_service(service)?;
     p.characteristics()
         .into_iter()
         .find(|c| c.service_uuid == service && c.uuid == characteristic)
@@ -206,9 +252,7 @@ pub async fn ble_scan(
         .iter()
         .map(|s| uuid(s))
         .collect::<Result<Vec<_>, _>>()?;
-    if wanted != [TETON_SERVICE] {
-        return Err("Only Teton sensors can be scanned for".into());
-    }
+    scan_filter(&wanted)?;
     let adapter = adapter(&ble, &app).await?;
     adapter
         .start_scan(ScanFilter { services: wanted })
@@ -217,7 +261,7 @@ pub async fn ble_scan(
     let round = ble.round.fetch_add(1, Ordering::SeqCst) + 1;
     let (app, adapter) = (app.clone(), adapter.clone());
     tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(Duration::from_secs_f64(seconds.clamp(0.1, 60.0))).await;
+        tokio::time::sleep(scan_length(seconds)).await;
         if app.state::<Ble>().round.load(Ordering::SeqCst) == round {
             let _ = adapter.stop_scan().await;
             let _ = app.emit("ble-stop", ());
@@ -296,6 +340,37 @@ pub async fn ble_disconnect(ble: State<'_, Ble>, id: String) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BATTERY: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
+
+    #[test]
+    fn the_page_can_only_scan_for_teton_sensors() {
+        assert!(scan_filter(&[TETON_SERVICE]).is_ok());
+        assert!(
+            scan_filter(&[]).is_err(),
+            "an empty filter would list every device around"
+        );
+        assert!(scan_filter(&[BATTERY]).is_err());
+        assert!(scan_filter(&[TETON_SERVICE, BATTERY]).is_err());
+    }
+
+    #[test]
+    fn the_page_can_only_read_or_write_the_teton_service() {
+        assert!(teton_service(TETON_SERVICE).is_ok());
+        assert!(teton_service(BATTERY).is_err());
+    }
+
+    #[test]
+    fn a_scan_round_lasts_between_a_tenth_of_a_second_and_a_minute() {
+        assert_eq!(scan_length(5.0), Duration::from_secs(5));
+        assert_eq!(
+            scan_length(1e300),
+            Duration::from_secs(60),
+            "would otherwise panic and never stop the scan"
+        );
+        assert_eq!(scan_length(-3.0), Duration::from_millis(100));
+        assert_eq!(scan_length(f64::NAN), Duration::from_millis(100));
+    }
 
     #[test]
     fn manufacturer_data_is_keyed_like_react_native_ble_manager() {
