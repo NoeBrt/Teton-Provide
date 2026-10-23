@@ -1,4 +1,4 @@
-// the two authorities, phone side (src/authority.rs on the device): the app checks a sensor's certificate
+// the two authorities, phone side (device/src/authority.rs on the device): the app checks a sensor's certificate
 // before anything secret leaves the phone, and reads and checks the technician token it imports.
 import { ed25519, x25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';

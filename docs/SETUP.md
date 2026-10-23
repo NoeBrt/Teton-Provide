@@ -16,10 +16,10 @@ Technician → provide. → BLE + authenticated Noise XX → Linux device → Wi
 
 | Goal | Path |
 | --- | --- |
-| See the technician experience | [42-second demo video](assets/architecture/overall-200-sensors.mp4) — simulated sensors, no real Wi-Fi joins |
+| See the technician experience | [42-second demo video](media/overall-200-sensors.mp4) — simulated sensors, no real Wi-Fi joins |
 | Explore the UI on Ubuntu without hardware | [Local preview](#preview-without-hardware) |
 | Reproduce a real Wi-Fi join | [Hardware and assumptions](#hardware-and-assumptions), then [Ubuntu setup](#prepare-the-ubuntu-device) |
-| Check the four challenge constraints | [Evidence and limits](#evidence-and-limits) |
+| Check the four challenge constraints | [Requirements map](../README.md#requirements-map) |
 | Review channel choice, security and 200-device deployment | [Architecture](ARCHITECTURE.md#why-bluetooth-low-energy), [security](SECURITY.md), [200-device design](ARCHITECTURE.md#200-devices-in-a-hospital-wing) |
 
 ## Preview without hardware
@@ -50,13 +50,15 @@ Dependencies, authorities and apps are prepared before the visit. Those preparat
 
 ## Prepare the Ubuntu device
 
-Run these commands from the repository root on a dedicated test device. The installer adds a system user, installs a service and NetworkManager permissions, restarts Bluetooth, and disables BlueZ’s battery plugin to avoid unwanted phone pairing requests.
+Run these commands from the `device/` folder of a checkout, on a dedicated test device. The installer adds a system user, installs a service and NetworkManager permissions, restarts Bluetooth, and disables BlueZ’s battery plugin to avoid unwanted phone pairing requests.
 
 ### 1. Build and install
 
-Install Rust 1.88.0 with rustup if it is not already available. The repository pins that toolchain in `rust-toolchain.toml`.
+Install Rust 1.88.0 with rustup if it is not already available. The crate pins that toolchain in `device/rust-toolchain.toml`.
 
 ```sh
+git clone https://github.com/NoeBrt/iot-provisioning.git
+cd iot-provisioning/device
 sudo apt update
 sudo apt install build-essential pkg-config libdbus-1-dev bluez network-manager curl rfkill
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0 --profile minimal
@@ -69,7 +71,7 @@ rfkill list bluetooth
 If Bluetooth is soft-blocked, run `sudo rfkill unblock bluetooth`. Replace `wlo1` below with the Wi-Fi interface reported by `nmcli`:
 
 ```sh
-sudo device/systemd/install.sh wlo1
+sudo systemd/install.sh wlo1
 ```
 
 The service runs as `iot`. Its private state lives in `/var/lib/iot-device`, mode `0700`. It cannot accept provisioning until staged below.
@@ -83,7 +85,7 @@ target/release/authority init ~/iot-evaluation-authority
 target/release/authority public ~/iot-evaluation-authority
 ```
 
-The output names two **public** keys. In `configurator/src/authority.ts`, replace both `DEVICE_AUTHORITY` and `TECHNICIAN_AUTHORITY` with these values **before building the configurator**. The first verifies devices; the second verifies imported technician codes. The checked-in public keys belong to the existing test deployment; its private keys are not included.
+The output names two **public** keys. In `../configurator/src/authority.ts`, replace both `DEVICE_AUTHORITY` and `TECHNICIAN_AUTHORITY` with these values **before building the configurator**. The first verifies devices; the second verifies imported technician codes. The checked-in public keys belong to the existing test deployment; its private keys are not included.
 
 Never copy authority private keys into the app, the repository or evidence files.
 
@@ -153,32 +155,16 @@ Expected: the `iot-provisioned` profile is active and the journal reports the pr
 
 A configured device offers **Reconfigure**. The implementation rolls back to the previous profile if a new network fails; the wrong-password, absent-network and rollback scenarios still need hardware validation.
 
-## Evidence and limits
+## Evidence and the 200-device case
 
-| Challenge constraint | Implementation and evidence | What this proves |
-| --- | --- | --- |
-| No internet or shared initial network | Local BLE GATT; [offline service check](../evidence/real/service-offline-hello.txt) | A phone with networking disabled exchanged hello over BLE. A complete offline encrypted provisioning run is still to be recorded. |
-| Real Wi-Fi connection using received credentials | NetworkManager activation; [current protocol hardware run](../evidence/real/identity-advertisement.txt) | macOS app result and device journal report a connected attempt on real hardware. [Earlier iPhone run](../evidence/real/real-join.txt) used the previous protocol. |
-| No plaintext credentials over the air | Noise XX; [security design and test locations](SECURITY.md); [earlier BLE capture summary](../evidence/real/real-join.txt) | Protocol checks cover encryption and authentication. The earlier capture checked SSID absence; it is not a fresh full capture of the current protocol checking both SSID and password. |
-| Usable by a non-developer | Automatic discovery, one-device or batch setup, progress and actionable errors; [UI video](assets/architecture/overall-200-sensors.mp4) | Demonstrates the implemented technician flow with simulated devices. No independent facilities-team usability study has been run. |
-
-Other unverified areas: 200 physical sensors, a new 200-sensor radio batch after the identity change, Android, desktop Windows/Linux runtime, and reboot recovery on hardware. Historical documents may describe older milestones; the dated evidence above states which protocol was exercised.
-
-## Architecture and the 200-device case
-
-BLE works before either side joins a network and is available on phones without adding a device access point. Its costs are radio range, discovery delays, MTU limits and a small number of concurrent links.
-
-Each sensor proves a certified key during **Noise XX**. The configurator checks that key, the advertised identity and the customer before sending the technician token. The sensor verifies the token and holder key; only then are the SSID and password sent as encrypted transport messages. NetworkManager receives them through D-Bus. The app reports success from the result of that exact attempt.
-
-For 200 sensors, the app queues work with up to six concurrent sessions, shows per-device progress and groups errors for retry. Device certificates remove the need to scan 200 individual labels. The demo and BLE simulator exercise this design; they do not establish real deployment capacity. A hospital rollout still needs measured controller limits and RF coverage, room-to-device mapping, multiple-operator coordination, revocation and per-device network credentials. Smith integration is outside this implementation.
-
-Read the [channel trade-offs](ARCHITECTURE.md#why-bluetooth-low-energy), [credential protection](SECURITY.md) and [200-device discussion](ARCHITECTURE.md#200-devices-in-a-hospital-wing).
+The [requirements map in the README](../README.md#requirements-map) links each challenge constraint to its proof and states what remains unverified. The channel choice, credential protection and the 200-device design are in [ARCHITECTURE.md](ARCHITECTURE.md#why-bluetooth-low-energy) and [SECURITY.md](SECURITY.md).
 
 ## Tests
 
-Run the full device suite on Ubuntu; BlueZ/D-Bus dependencies and Linux host-audit fixtures are platform-specific:
+Run the full device suite on Ubuntu, from `device/`; BlueZ/D-Bus dependencies and Linux host-audit fixtures are platform-specific:
 
 ```sh
+cd device
 cargo test --features ble,stage --all-targets --locked
 cargo clippy --features ble,stage --all-targets --locked -- -D warnings
 ```
@@ -197,13 +183,4 @@ Tests cover Rust/TypeScript Noise interoperability, certificate and technician-t
 
 ## Code map
 
-| Path | Responsibility |
-| --- | --- |
-| `configurator/` | Technician UI, Noise initiator, authorization, batch queue; native and desktop platform adapters |
-| `device/` | Linux BLE service, NetworkManager integration, staging and authority CLIs, systemd installation |
-| `src/` | Rust protocol, Noise responder, certificates and simulation library |
-| `tests/` | Rust integration tests and interoperability vectors |
-| `lab/` | Real-BLE bench with simulated sensors and simulated Wi-Fi outcomes |
-| `docs/` | Architecture, security, decisions, benchmarks and demonstration media |
-| `evidence/` | Execution evidence and verification scripts, including historical runs |
-| `docs/development/` | Development history and plans; optional background reading |
+The [folder tree in the README](../README.md#folder-tree) describes every folder.

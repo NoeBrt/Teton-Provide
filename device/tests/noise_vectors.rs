@@ -15,7 +15,7 @@ use iot_provisioning::provision::{
 
 const PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/configurator/src/noise-vectors.json"
+    "/../configurator/src/noise-vectors.json"
 );
 const CUSTOMER: &str = "DEMO";
 /// 2100-01-01: the token in the vectors stays valid.

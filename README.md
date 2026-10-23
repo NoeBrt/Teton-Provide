@@ -10,6 +10,8 @@
 <p align="center">
   <a href="#watch-the-demo">Watch the demos</a> ·
   <a href="#try-it">Try it</a> ·
+  <a href="#requirements-map">Requirements map</a> ·
+  <a href="#folder-tree">Folder tree</a> ·
   <a href="docs/SETUP.md">Ubuntu setup</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="docs/SECURITY.md">Security</a>
@@ -32,19 +34,19 @@ Start with the original overview videos: a whole wing, 200 simulated sensors, ba
   </tr>
   <tr>
     <td align="center">
-      <a href="docs/assets/architecture/overall-200-sensors.mp4">
-        <img src="docs/assets/demos/mobile-200-preview.png" alt="Watch the original mobile demo with 200 simulated sensors" width="165" />
+      <a href="docs/media/overall-200-sensors.mp4">
+        <img src="docs/media/mobile-200-preview.png" alt="Watch the original mobile demo with 200 simulated sensors" width="165" />
       </a>
     </td>
     <td align="center">
-      <a href="docs/assets/demos/desktop-200-sensors.mp4">
-        <img src="docs/assets/demos/desktop-200-preview.png" alt="Watch the desktop overview with 200 simulated sensors" width="640" />
+      <a href="docs/media/desktop-200-sensors.mp4">
+        <img src="docs/media/desktop-200-preview.png" alt="Watch the desktop overview with 200 simulated sensors" width="640" />
       </a>
     </td>
   </tr>
   <tr>
-    <td align="center"><a href="docs/assets/architecture/overall-200-sensors.mp4">▶ Mobile overview · 41 s</a></td>
-    <td align="center"><a href="docs/assets/demos/desktop-200-sensors.mp4">▶ Desktop overview · 25 s</a></td>
+    <td align="center"><a href="docs/media/overall-200-sensors.mp4">▶ Mobile overview · 41 s</a></td>
+    <td align="center"><a href="docs/media/desktop-200-sensors.mp4">▶ Desktop overview · 25 s</a></td>
   </tr>
 </table>
 
@@ -54,13 +56,13 @@ Short videos show one action at a time, with a **visible pointer and click highl
 
 | Step | Mobile | Desktop |
 | --- | --- | --- |
-| **1. Add the technician code** — paste, verify, save | [▶ Watch](docs/assets/demos/mobile-technician-code.mp4) | [▶ Watch](docs/assets/demos/desktop-technician-code.mp4) |
-| **2. Set up the site Wi-Fi** — site, SSID, password, save | [▶ Watch](docs/assets/demos/mobile-site-wifi.mp4) | [▶ Watch](docs/assets/demos/desktop-site-wifi.mp4) |
-| **3. Open and test a sensor** — Test → “world” received | [▶ Watch](docs/assets/demos/mobile-sensor-test.mp4) | [▶ Watch](docs/assets/demos/desktop-sensor-test.mp4) |
-| **4. Configure one sensor** — Set up → Device connected | [▶ Watch](docs/assets/demos/mobile-sensor-setup.mp4) | [▶ Watch](docs/assets/demos/desktop-sensor-setup.mp4) |
-| **5. Configure all ready sensors** — batch, errors, retry | [▶ Watch](docs/assets/demos/mobile-configure-all.mp4) | [▶ Watch](docs/assets/demos/desktop-configure-all.mp4) |
+| **1. Add the technician code** — paste, verify, save | [▶ Watch](docs/media/mobile-technician-code.mp4) | [▶ Watch](docs/media/desktop-technician-code.mp4) |
+| **2. Set up the site Wi-Fi** — site, SSID, password, save | [▶ Watch](docs/media/mobile-site-wifi.mp4) | [▶ Watch](docs/media/desktop-site-wifi.mp4) |
+| **3. Open and test a sensor** — Test → “world” received | [▶ Watch](docs/media/mobile-sensor-test.mp4) | [▶ Watch](docs/media/desktop-sensor-test.mp4) |
+| **4. Configure one sensor** — Set up → Device connected | [▶ Watch](docs/media/mobile-sensor-setup.mp4) | [▶ Watch](docs/media/desktop-sensor-setup.mp4) |
+| **5. Configure all ready sensors** — batch, errors, retry | [▶ Watch](docs/media/mobile-configure-all.mp4) | [▶ Watch](docs/media/desktop-configure-all.mp4) |
 
-**Demo scope:** the original mobile overview was recorded in the iOS Simulator. The desktop overview and both tutorial layouts use a browser. All fleet results are simulated. Setup tutorials use a public test code and fictitious Wi-Fi details; the sensor tutorials use the app’s separate demo mode. The batch tutorial accelerates the middle of the run 4×. No real credentials are shown and these videos do not prove 200 physical devices were provisioned. [Recording details](docs/assets/demos/README.md).
+**Demo scope:** the original mobile overview was recorded in the iOS Simulator. The desktop overview and both tutorial layouts use a browser. All fleet results are simulated. Setup tutorials use a public test code and fictitious Wi-Fi details; the sensor tutorials use the app’s separate demo mode. The batch tutorial accelerates the middle of the run 4×. No real credentials are shown and these videos do not prove 200 physical devices were provisioned. [Recording details](docs/media/README.md).
 
 ## Built for the technician
 
@@ -106,28 +108,49 @@ You need an Ubuntu device with BLE peripheral support and NetworkManager-managed
 
 The guide covers installation, your own authorities, device staging, app builds, expected results and tests. A plain browser supports the simulation only; real Bluetooth requires a native app. Internet may be needed to prepare dependencies and builds before the offline visit.
 
-## What has been demonstrated
+## Requirements map
 
-| Run | Evidence |
-| --- | --- |
-| **Current protocol, real hardware:** macOS configurator → Linux device → real Wi-Fi connection | [App result and device journal, 23 October 2026](evidence/real/identity-advertisement.txt) |
-| **Earlier protocol, real hardware:** iPhone → Ubuntu → real Wi-Fi connection | [Successful run and BLE capture summary](evidence/real/real-join.txt) |
-| **Offline BLE:** phone networking disabled, device service answers hello | [Offline radio check](evidence/real/service-offline-hello.txt) |
-| **200 simulated sensors:** batch progress, grouped errors and retries | Mobile and desktop videos above |
+Each item of the challenge, where it is answered, and what the proof covers.
 
-The current iPhone build is installed; provisioning on a physical iPhone after the identity update remains unverified. Android, desktop Windows/Linux runtime and 200 physical sensors remain unverified. Desktop secrets currently live in memory and are lost when the app closes; iPhone uses native secure storage.
-
-For the four challenge constraints, exact evidence scope and remaining checks, see the [evaluation table](docs/SETUP.md#evidence-and-limits).
-
-## Under the hood
-
-| Part | Stack | Code |
+| Challenge requirement | Where | Proof and limits |
 | --- | --- | --- |
-| Configurator | Expo / React Native / TypeScript | [configurator/](configurator) |
-| Desktop shell and Bluetooth bridge | Tauri / Rust | [configurator/desktop/](configurator/desktop) |
-| Linux device and Wi-Fi activation | Rust / BlueZ / NetworkManager | [device/](device) |
-| Protocol and authorization | Noise XX / Ed25519 certificates | [src/](src) |
-| Integration tests | Rust and shared Noise vectors | [tests/](tests) |
-| BLE simulation bench | Python / Bumble; simulated Wi-Fi | [lab/](lab) |
+| **1. No internet** — local channel, no cloud relay, no shared network at the start | Bluetooth LE GATT ([why BLE](docs/ARCHITECTURE.md#why-bluetooth-low-energy)) | [Offline hello](evidence/real/service-offline-hello.txt): the phone, with networking off, exchanged hello with the device over BLE. A full offline encrypted setup is not recorded yet. |
+| **2. Real network connection** with the received credentials | NetworkManager on the device ([device/](device/)) | [Current protocol, macOS → Linux](evidence/real/identity-advertisement.txt): app result and device journal report the join. [Earlier protocol, iPhone → Ubuntu](evidence/real/real-join.txt). |
+| **3. No plaintext credentials over the air** | Noise XX, device certificates, holder-bound technician codes ([SECURITY.md](docs/SECURITY.md)) | Interoperability and rejection tests ([device/tests/](device/tests/), [configurator tests](configurator/src/)). The [earlier BLE capture](evidence/real/real-join.txt) checked the SSID is absent; a fresh capture of the current protocol is still to do. |
+| **4. Usable by a non-developer** | Automatic discovery, code import, saved sites, one sensor or a whole batch, errors and retry | [Videos above](#watch-the-demo), with simulated sensors. No usability study with a facilities team. |
+| **Working code**, configurator and device | [configurator/](configurator/), [device/](device/) | |
+| **Setup and run on Ubuntu**, hardware assumptions | [docs/SETUP.md](docs/SETUP.md) | Not reproduced on a clean machine. |
+| **Architecture writeup**: channel and trade-offs, protection in transit, 200 devices | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ([200 devices](docs/ARCHITECTURE.md#200-devices-in-a-hospital-wing)), [docs/SECURITY.md](docs/SECURITY.md) | The 200-sensor runs are simulations: [measurements](evidence/simulation/README.md). |
+| **Evidence of a successful run** | [evidence/](evidence/) | Real runs, simulations and test logs are kept apart. |
 
-**Further reading:** [setup and tests](docs/SETUP.md) · [architecture](docs/ARCHITECTURE.md) · [security](docs/SECURITY.md) · [decisions](docs/DECISIONS.md) · [benchmarks](docs/BENCHMARKS.md)
+Not verified: provisioning from a physical iPhone since the identity change, Android, the desktop app on Windows and Linux, 200 physical sensors, and reboot recovery on hardware. The desktop app keeps the technician code and sites in memory only (lost when it closes); the iPhone uses the system's secure storage.
+
+## Folder tree
+
+```text
+README.md                you are here: demo, requirements map, folder tree
+configurator/            CONFIGURATOR side: provide., the technician app (iPhone and desktop, one code base)
+  App.tsx                  the whole screen: discovery, sensor cards, batch
+  src/                     provisioning logic (Noise initiator, certificates, codes, batch queue) and its tests
+  desktop/                 desktop shell (Tauri): window, Rust Bluetooth bridge, layout checks
+  assets/                  app icons and logo
+device/                  IOT DEVICE side: the Linux service, one Rust crate
+  bin/                     programs: the BLE service (main.rs, wifi.rs), stage, authority, audit-host
+  src/                     protocol library: hello probe, Noise responder, certificates and codes, simulation
+  tests/                   integration tests, incl. Noise vectors shared with the configurator
+  examples/                200-sensor simulation and benchmark
+  systemd/                 service unit, permissions and installer for Ubuntu
+docs/
+  SETUP.md                 reproduce on Ubuntu: hardware, build, staging, tests
+  ARCHITECTURE.md          channel choice and trade-offs, data flow, 200 devices in a hospital wing
+  SECURITY.md              how credentials are protected in transit, threats, limits
+  DECISIONS.md             dated decision log
+  media/                   screenshots and videos used by the docs (ui-history/: how the app evolved)
+evidence/
+  real/                    runs on real hardware (BLE hello, Wi-Fi join, reconfiguration)
+  simulation/              200-sensor simulations and benchmarks, with their method (README.md)
+  tests/                   test and check logs, desktop screenshots, video checks
+tools/                   bench and demo tooling: simulated BLE sensors, capture check, video scripts
+```
+
+Start with [docs/SETUP.md](docs/SETUP.md) to run it, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) to understand it, and [evidence/](evidence/) to check it.

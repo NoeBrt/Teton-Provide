@@ -7,7 +7,7 @@ import { RETRIED } from './batch.ts';
 import { decodeToken, fromHex, type Token } from './authority.ts';
 import type { Advertising, BleLink } from './probe.ts';
 
-// The device side of this conversation was produced by snow (tests/noise_vectors.rs).
+// The device side of this conversation was produced by snow (device/tests/noise_vectors.rs).
 const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.meta.url), 'utf8'));
 const hex = (s: string) => Array.from(Buffer.from(s, 'hex'));
 const [m1, m2, m3, accepted, request1, response1, request2, response2] = vectors.messages.map((m: { message: string }) => hex(m.message));

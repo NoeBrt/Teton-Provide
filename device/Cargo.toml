@@ -7,7 +7,7 @@ publish = false
 
 [[bin]]
 name = "audit-host"
-path = "device/audit.rs"
+path = "bin/audit.rs"
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -18,17 +18,17 @@ required-features = ["provision"]
 
 [[bin]]
 name = "stage"
-path = "device/stage.rs"
+path = "bin/stage.rs"
 required-features = ["stage"]
 
 [[bin]]
 name = "authority"
-path = "device/authority.rs"
+path = "bin/authority.rs"
 required-features = ["stage"]
 
 [[bin]]
 name = "device"
-path = "device/main.rs"
+path = "bin/main.rs"
 required-features = ["ble"]
 
 [features]

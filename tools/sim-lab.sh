@@ -1,5 +1,5 @@
 #!/bin/sh
-# Lends noe-lab's Bluetooth chip to the simulated fleet (lab/iot_sim.py, ~/noe-ws/lab-sensors), then gives it back
+# Lends noe-lab's Bluetooth chip to the simulated fleet (tools/iot_sim.py, ~/noe-ws/lab-sensors), then gives it back
 # to the real sensor, whatever happens.
 #   ssh -t noe@noe-lab 'sudo sh ~/noe-ws/sim-lab.sh'      Ctrl-C stops the fleet; iot-device restarts by itself.
 # The log (sensor IDs, attempt IDs, the technician's name and outcomes; never a key or a password) is

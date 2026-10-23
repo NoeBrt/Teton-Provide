@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 const { chromium } = await import(process.argv[2] || 'playwright');
 const browser = await chromium.launch({ headless: true, ...(process.argv[3] && { executablePath: process.argv[3] }) });
-const out = new URL('../../evidence/checks/desktop/', import.meta.url).pathname;
+const out = new URL('../../evidence/tests/desktop/', import.meta.url).pathname;
 await mkdir(out, { recursive: true });
 const errors = [];
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });

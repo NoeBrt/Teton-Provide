@@ -1,6 +1,6 @@
 # README demo media
 
-The root README presents the original [mobile overview](../architecture/overall-200-sensors.mp4) and [desktop overview](desktop-200-sensors.mp4), followed by five short pointer tutorials for each layout.
+The root README presents the original [mobile overview](overall-200-sensors.mp4) and [desktop overview](desktop-200-sensors.mp4), followed by five short pointer tutorials for each layout.
 
 | Tutorial | Mobile | Desktop |
 | --- | --- | --- |
@@ -27,13 +27,13 @@ After the setup scenes, the recording navigates into the app's existing demo mod
 With Metro running on `http://localhost:8081`, use an existing Playwright installation:
 
 ```sh
-node evidence/tools/record-demos.mjs <PLAYWRIGHT_MODULE_PATH> [CHROMIUM_EXECUTABLE]
-python3 evidence/tools/build-tutorials.py
+node tools/record-demos.mjs <PLAYWRIGHT_MODULE_PATH> [CHROMIUM_EXECUTABLE]
+python3 tools/build-tutorials.py
 ```
 
 The script asserts successful code import, site save, hello/world test, individual connection result, batch and retry completion, and absence of page errors and horizontal document overflow. Raw recordings and stage screenshots stay under `/private/tmp/iot-gif-*`; capture timings and the local render report support visual review. Public test credentials are safe for documentation and are not valid for the deployed authority.
 
 ## Render verification
 
-The current MP4 clips were decoded and checked for dimensions, frame rate, duration, file size and fast-start metadata. Opening frames and action/result frames were inspected in a browser video player. The README’s linked overview previews and tutorial links were checked at 390 px and 1440 px. See [render checks](../../../evidence/checks/demos/render-check.json) and [video checks](../../../evidence/checks/demos/video-check.json). This is a local preview, not a published GitHub rendering.
+The current MP4 clips were decoded and checked for dimensions, frame rate, duration, file size and fast-start metadata. Opening frames and action/result frames were inspected in a browser video player. The README’s linked overview previews and tutorial links were checked at 390 px and 1440 px. See [render checks](../../evidence/tests/demos/render-check.json) and [video checks](../../evidence/tests/demos/video-check.json). This is a local preview, not a published GitHub rendering.
 

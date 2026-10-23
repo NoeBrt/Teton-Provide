@@ -3,9 +3,9 @@ import json
 import subprocess
 from pathlib import Path
 
-repo = Path(__file__).resolve().parents[2]
-root = repo / "docs/assets/demos"
-checks = repo / "evidence/checks/demos"
+repo = Path(__file__).resolve().parents[1]
+root = repo / "docs/media"
+checks = repo / "evidence/tests/demos"
 for layout in ('mobile', 'desktop'):
     data = json.loads((checks / f'{layout}-capture.json').read_text())
     captures = {item['label']: item['at'] for item in data['captures']}

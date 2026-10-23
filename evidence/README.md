@@ -1,6 +1,6 @@
 # Evidence
 
-Use [the evaluation matrix](../docs/EVALUATION.md) for the current requirement status. Evidence files retain their original contents and dates, including historical command paths. A test fixture or simulated Wi-Fi response is not a hardware connection.
+Use the [requirements map](../README.md#requirements-map) for the current requirement status. Evidence files retain their original contents and dates, including historical command paths. A test fixture or simulated Wi-Fi response is not a hardware connection.
 
 ## Real hardware
 
@@ -16,7 +16,7 @@ Use [the evaluation matrix](../docs/EVALUATION.md) for the current requirement s
 ## Simulation and software checks
 
 - [simulation/](simulation/): simulation, controlled benchmarks and soak traces. They do not measure 200 physical sensors.
-- [checks/](checks/): test-first traces, fixture results and verification reports. [Desktop playtest](checks/desktop/playtest.json) and [video checks](checks/demos/video-check.json) describe their environments.
-- [tools/](tools/): capture checks, benchmark harnesses, browser recording and media export tools. Run instructions for the recordings are in [the media notes](../docs/assets/demos/README.md).
+- [checks/](tests/): test-first traces, fixture results and verification reports. [Desktop playtest](tests/desktop/playtest.json) and [video checks](tests/demos/video-check.json) describe their environments.
+- [tools/](../tools/): capture checks, benchmark harnesses, browser recording and media export tools. Run instructions for the recordings are in [the media notes](../docs/media/README.md).
 
-The [videos and images](../docs/assets/) live with documentation. Real credentials, authority private keys, device state and raw sensitive captures are excluded from Git; public interoperability fixtures are explicitly marked in source.
+The [videos and images](../docs/media/) live with documentation. Real credentials, authority private keys, device state and raw sensitive captures are excluded from Git; public interoperability fixtures are explicitly marked in source.

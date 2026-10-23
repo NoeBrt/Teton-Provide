@@ -9,13 +9,13 @@ received for that exact attempt.
 | Side | Code | Runs on |
 | --- | --- | --- |
 | Configurator (**provide.**, shared iPhone and macOS desktop UI) | `configurator/`: Expo SDK 57, React Native 0.86, TypeScript | iPhone and macOS; Android and Windows/Linux desktop runtime not run |
-| Device service | `device/main.rs`, `device/wifi.rs`, `src/provision.rs`, `src/authority.rs`: Rust 1.88, BlueZ through `bluer`, Noise through `snow`, Ed25519 through `ed25519-dalek`, NetworkManager over D-Bus | Ubuntu 22.04, any adapter with BLE and Wi-Fi |
-| Staging tool | `device/stage.rs` | The sensor, once, before deployment |
-| Authority tool | `device/authority.rs` | the workshop, offline: certifies sensors, issues technician codes |
+| Device service | `device/bin/main.rs`, `device/bin/wifi.rs`, `device/src/provision.rs`, `device/src/authority.rs`: Rust 1.88, BlueZ through `bluer`, Noise through `snow`, Ed25519 through `ed25519-dalek`, NetworkManager over D-Bus | Ubuntu 22.04, any adapter with BLE and Wi-Fi |
+| Staging tool | `device/bin/stage.rs` | The sensor, once, before deployment |
+| Authority tool | `device/bin/authority.rs` | the workshop, offline: certifies sensors, issues technician codes |
 
 Setup and run steps live in the [README](../README.md); the security design and its tests in
 [SECURITY.md](SECURITY.md); every decision with its alternatives in [DECISIONS.md](DECISIONS.md); the live
-requirement check in [docs/EVALUATION.md](EVALUATION.md).
+requirement check in the [README's requirements map](../README.md#requirements-map).
 
 ## System at a glance
 
@@ -50,20 +50,20 @@ only. Flags, service UUID and this record consume exactly 31 legacy advertising 
 
 <table>
 <tr>
-<td align="center"><img src="assets/architecture/01-searching.png" width="190"><br><sub>1. The app scans as soon as it opens</sub></td>
-<td align="center"><img src="assets/architecture/02-sensors-found.png" width="190"><br><sub>2. 20 sensors; the code and the site Wi-Fi are missing</sub></td>
-<td align="center"><img src="assets/architecture/03-technician-code.png" width="190"><br><sub>3. The technician code (earlier build, which opened a link)</sub></td>
-<td align="center"><img src="assets/architecture/04-site-wifi.png" width="190"><br><sub>4. Site Wi-Fi, entered once per facility</sub></td>
+<td align="center"><img src="media/01-searching.png" width="190"><br><sub>1. The app scans as soon as it opens</sub></td>
+<td align="center"><img src="media/02-sensors-found.png" width="190"><br><sub>2. 20 sensors; the code and the site Wi-Fi are missing</sub></td>
+<td align="center"><img src="media/03-technician-code.png" width="190"><br><sub>3. The technician code (earlier build, which opened a link)</sub></td>
+<td align="center"><img src="media/04-site-wifi.png" width="190"><br><sub>4. Site Wi-Fi, entered once per facility</sub></td>
 </tr>
 <tr>
-<td align="center"><img src="assets/architecture/05-batch-running.png" width="190"><br><sub>5. Set up all ready: several at a time, counters</sub></td>
-<td align="center"><img src="assets/architecture/06-refused.png" width="190"><br><sub>6. Each failure with its reason</sub></td>
-<td align="center"><img src="assets/architecture/07-failed-filter.png" width="190"><br><sub>7. Filter on failures, then Retry failed</sub></td>
+<td align="center"><img src="media/05-batch-running.png" width="190"><br><sub>5. Set up all ready: several at a time, counters</sub></td>
+<td align="center"><img src="media/06-refused.png" width="190"><br><sub>6. Each failure with its reason</sub></td>
+<td align="center"><img src="media/07-failed-filter.png" width="190"><br><sub>7. Filter on failures, then Retry failed</sub></td>
 <td></td>
 </tr>
 </table>
 
-Video, 55 s: [architecture/demo-simulator.mp4](assets/architecture/demo-simulator.mp4). Screens 5 to 7 and this video show
+Video, 55 s: [architecture/demo-simulator.mp4](media/demo-simulator.mp4). Screens 5 to 7 and this video show
 the earlier filter pills and the earlier sort, failures first; the overall card below replaced them.
 
 The technician scans the code IoT sent once, with the app's own camera, or pastes it; the app checks the code and
@@ -125,14 +125,14 @@ groups (a filled ink square, a filled red square, a hollow one), not symbols or 
 
 <table>
 <tr>
-<td align="center"><img src="assets/architecture/08-overall-running.png" width="190"><br><sub>8. During a batch: compact rows, 6 in progress, Add 2 to the batch</sub></td>
-<td align="center"><img src="assets/architecture/09-overall-in-progress.png" width="190"><br><sub>9. Not set up tab: IN PROGRESS · 6 on top, what is left below</sub></td>
-<td align="center"><img src="assets/architecture/10-overall-errors.png" width="190"><br><sub>10. After a batch: Errors tab, 3 errors grouped by cause, refresh icon, Retry failed (2)</sub></td>
-<td align="center"><img src="assets/architecture/11-overall-se-large-text.png" width="190"><br><sub>11. iPhone SE, accessibility-large text, during a batch: the title, the line and "Not set up" wrap</sub></td>
+<td align="center"><img src="media/08-overall-running.png" width="190"><br><sub>8. During a batch: compact rows, 6 in progress, Add 2 to the batch</sub></td>
+<td align="center"><img src="media/09-overall-in-progress.png" width="190"><br><sub>9. Not set up tab: IN PROGRESS · 6 on top, what is left below</sub></td>
+<td align="center"><img src="media/10-overall-errors.png" width="190"><br><sub>10. After a batch: Errors tab, 3 errors grouped by cause, refresh icon, Retry failed (2)</sub></td>
+<td align="center"><img src="media/11-overall-se-large-text.png" width="190"><br><sub>11. iPhone SE, accessibility-large text, during a batch: the title, the line and "Not set up" wrap</sub></td>
 </tr>
 </table>
 
-Video, 42 s at 2x speed: [architecture/overall-200-sensors.mp4](assets/architecture/overall-200-sensors.mp4) (`SIMULATION`):
+Video, 42 s at 2x speed: [architecture/overall-200-sensors.mp4](media/overall-200-sensors.mp4) (`SIMULATION`):
 discovery, a batch with sensors added as they are found, the Not set up tab, then the Errors tab. Screens and video
 come from the iOS Simulator in demo mode (`configurator/src/demo.ts`), on an iPhone 16 Pro, and an iPhone SE for
 screen 11. The demo's 200 sensors are heard gradually, about half within 4 s and the rest over a minute; each runs a
@@ -305,7 +305,7 @@ BLE throughput is not the bottleneck: the exchange is under a kilobyte. The netw
 measured on noe-lab, NetworkManager allows 45 s), so the number of concurrent links on one phone, and several
 technicians, set the pace. Each sensor holds a link about 7.5 s (1.3 s to connect, 0.5 s of handshake and request,
 5.5 s of join); at three links a wing of 200 takes about 8 minutes, at six about 4. Six is set from that arithmetic and
-iOS's limits, not yet measured: the links share one radio. The noe-lab test bench (`lab/iot_sim.py`, 200 simulated
+iOS's limits, not yet measured: the links share one radio. The noe-lab test bench (`tools/iot_sim.py`, 200 simulated
 sensors over real Bluetooth) is where it gets measured; we have run one real sensor at a time. On the bench, one run
 with 14 advertising sets and a 3 s cycle had 84 provisioning sessions and 79 joins, against 20 sessions in the run
 before the link retries and the faster cycle (`ACTUAL_BLE`, simulated sensors). The bench's sensors are on air only
@@ -341,44 +341,47 @@ is the shared password risk in [SECURITY.md](SECURITY.md); it is the first to ev
 | Step | What we did | What changed our mind |
 | --- | --- | --- |
 | 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match the fleet ([decision 11](DECISIONS.md#11-rust-to-align-with-the-fleet)). |
-| 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([BENCHMARKS.md](BENCHMARKS.md)). |
+| 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([simulation measurements](../evidence/simulation/README.md)). |
 | 3 | Wrote `audit-host`, a read-only preflight of BlueZ and NetworkManager, then inventoried the real host. | Bluetooth was soft-blocked by rfkill and BlueZ reported it as a generic "busy"; the device now names rfkill when it cannot power the adapter. |
 | 4 | Compared channels. SoftAP looked best for a zero-install web page. | We excluded it to stay clear of "no shared local network" ([decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
 | 5 | Reviewed security before sending any secret: Just Works, static passkey, LE Secure Connections OOB, SRP6a, Noise. | iOS apps cannot use out-of-band pairing, so the channel had to live above GATT: Noise NKpsk2 keyed by a QR label. |
 | 6 | Built the BlueZ hello peripheral, then an Expo app; first real exchange from an iPhone 15 Pro to Ubuntu. | Six exchanges and a reconnect after a service restart worked ([evidence/real/phone-hello.txt](../evidence/real/phone-hello.txt)). |
-| 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](assets/configurator/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
+| 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](media/ui-history/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
 | 8 | Added staging, the Noise channel on both sides, attempt IDs and NetworkManager over D-Bus. | Site Wi-Fi once per visit, then saved sites behind Face ID because a technician serves several facilities ([decision 26](DECISIONS.md#26-saved-sites-behind-face-id)). |
 | 9 | Ran two independent reviews. | Eight fixes: a double prompt, a double scan, a cached bad label, a replayed first message that locked the device, a non-durable "provisioned" marker, profiles that kept autoconnect, missed failure reasons. |
 | 10 | Installed the systemd service and ran the real setup from the iPhone, with SSH on Ethernet and `btmon` recording. | The device joined, but the phone never got the result: BlueZ's battery plugin read the iPhone's battery level, iOS asked to pair, and BlueZ stopped answering. `bluetoothd` now runs without that plugin; the second run showed **Device connected** ([evidence/real/real-join.txt](../evidence/real/real-join.txt)). |
 | 11 | Asked what blocks 200 sensors, then settled 24 requirement questions in one session. | Scanning 200 labels is the bottleneck, and a label secret in every patient room is a liability. Certificates and technician codes replaced labels; the batch, the reconfiguration with rollback and the advertised state followed ([decision 27](DECISIONS.md#27-certified-sensors-and-technician-codes-for-200-devices)). |
 
-The [standalone mockup](development/archive/architecture-demo.html) from step 4 shows the early design; the app has replaced it.
+A standalone HTML mockup (step 4, in the git history) showed the early design; the app has replaced it.
 
 ## What is proven
 
-The [dated evaluation matrix](EVALUATION.md) is the current source for validation status. The current protocol completed a real macOS-to-Linux Wi-Fi setup on 23 October 2026 ([app and device evidence](../evidence/real/identity-advertisement.txt)). The iPhone end-to-end evidence from the earlier protocol remains available separately.
+The [requirements map](../README.md#requirements-map) is the current source for validation status. The current protocol completed a real macOS-to-Linux Wi-Fi setup on 23 October 2026 ([app and device evidence](../evidence/real/identity-advertisement.txt)). The iPhone end-to-end evidence from the earlier protocol remains available separately.
 
 The 200-sensor videos demonstrate simulated fleet handling. They do not establish capacity for 200 physical devices or actual Wi-Fi joins from the BLE bench. Desktop secrets are currently memory-only; iPhone secrets use native secure storage.
 
 ## Code map
 
+The [README's folder tree](../README.md#folder-tree) lists every folder; the files that carry the design:
+
 ```text
-src/authority.rs      Device certificates and technician codes: encoding, Ed25519 signatures, checks, device ID
-src/provision.rs      Noise XX session, identity files, request/response encoding, attempt registry
-src/protocol.rs       Service and characteristic UUIDs, the hello contract
-device/main.rs        BLE peripheral: hello and provisioning, one-phone claim, advertised state, reconfiguration
-device/wifi.rs        NetworkManager over D-Bus: two alternating profiles, rollback, failure reasons, cleanup
-device/stage.rs       Staging: key, then certificate and technician authority
-device/authority.rs   the authorities: init, public keys, certify a sensor, issue a technician code
-device/audit.rs       Read-only host preflight
-configurator/App.tsx  Scan, requirements, overall and batch controls, sensor cards and compact rows, set-up flow
-                      wiring, demo mode switch
-configurator/src/     noise.ts (Noise initiator), authority.ts (certificate and code checks), setup.ts (one sensor),
-                      batch.ts (queue, six at a time), flow.ts (code → site → join), TechnicianSheet.tsx (code
-                      behind Face ID), SiteSheet.tsx (sites behind Face ID), probe.ts (hello test, advertised state),
-                      wing.ts (each sensor's group, time left), Summary.tsx (overall card and its three tabs),
-                      demo.ts (200 simulated sensors on a fake radio, demo authority)
-tests/                Noise vectors, simulation, scale and host-audit tests
-lab/                  noe-lab test bench, outside the app: iot_sim.py (200 simulated sensors over real BLE),
-                      mint-lab.sh (their identities), sim-lab.sh (lends hci0 to the bench, then gives it back)
+device/src/authority.rs   Device certificates and technician codes: encoding, Ed25519 signatures, checks, device ID
+device/src/provision.rs   Noise XX session, identity files, request/response encoding, attempt registry
+device/src/protocol.rs    Service and characteristic UUIDs, the hello contract
+device/bin/main.rs        BLE peripheral: hello and provisioning, one-phone claim, advertised state, reconfiguration
+device/bin/wifi.rs        NetworkManager over D-Bus: two alternating profiles, rollback, failure reasons, cleanup
+device/bin/stage.rs       Staging: key, then certificate and technician authority
+device/bin/authority.rs   the authorities: init, public keys, certify a sensor, issue a technician code
+device/bin/audit.rs       Read-only host preflight
+device/tests/             Noise vectors, simulation, scale and host-audit tests
+configurator/App.tsx      Scan, requirements, overall and batch controls, sensor cards and compact rows, set-up flow
+                          wiring, demo mode switch
+configurator/src/         noise.ts (Noise initiator), authority.ts (certificate and code checks), setup.ts (one sensor),
+                          batch.ts (queue, six at a time), flow.ts (code → site → join), TechnicianSheet.tsx (code
+                          behind Face ID), SiteSheet.tsx (sites behind Face ID), probe.ts (hello test, advertised
+                          state and ID), wing.ts (each sensor's group, time left), Summary.tsx (overall card and its
+                          three tabs), demo.ts (200 simulated sensors on a fake radio, demo authority)
+configurator/desktop/     Tauri shell; src-tauri/src/ble.rs is the Bluetooth bridge (btleplug)
+tools/                    Test bench, outside the app: iot_sim.py (200 simulated sensors over real BLE),
+                          mint-lab.sh (their identities), sim-lab.sh (lends hci0 to the bench, then gives it back)
 ```

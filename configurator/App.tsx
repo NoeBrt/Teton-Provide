@@ -377,7 +377,7 @@ function Provide({ demo, onDemo }: Mode) {
   useEffect(() => {
     const ble = radio;
     if (!ble || !radioStarted) return;
-    // The latest advertisement of each sensor waits here; one state update applies them all (docs/BENCHMARKS.md).
+    // The latest advertisement of each sensor waits here; one state update applies them all (evidence/simulation/README.md).
     const latest = new Map<string, Peripheral>();
     const flush = setInterval(() => {
       if (latest.size === 0) return;

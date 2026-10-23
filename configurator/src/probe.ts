@@ -1,9 +1,9 @@
-// Harmless BLE probe: write "hello", read "world". Mirrors src/protocol.rs on the device.
+// Harmless BLE probe: write "hello", read "world". Mirrors device/src/protocol.rs on the device.
 export const SERVICE_UUID = '3b0a90ce-9564-40d1-b96b-14cf8858aba3';
 export const CHARACTERISTIC_UUID = '29b3765c-de49-4114-889e-89b05852c968';
 export const REQUEST = bytes('hello');
 
-/** The sensor's state, advertised as one byte of manufacturer data under company 0xFFFF (src/protocol.rs STATE_*). */
+/** The sensor's state, advertised as one byte of manufacturer data under company 0xFFFF (device/src/protocol.rs STATE_*). */
 export type SensorState = 'not-staged' | 'ready' | 'online' | 'offline';
 const STATES: SensorState[] = ['not-staged', 'ready', 'online', 'offline'];
 export type Advertising = { localName?: string; manufacturerData?: Record<string, { bytes: number[] }> };

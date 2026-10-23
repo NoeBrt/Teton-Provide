@@ -14,7 +14,7 @@ export const STOPS_BATCH: readonly SetupFailure[] = ['WrongPsk', 'token-invalid'
 export const RETRIED: readonly SetupFailure[] = ['timeout', 'rejected', 'unidentified', 'Busy', 'unknown'];
 export const RETRIES = 2;
 // Six BLE links at once: the join (~5.5 s) dominates and iOS holds more links; to confirm on the noe-lab test bench
-// (lab/iot_sim.py) and with real sensors, since the links share one radio.
+// (tools/iot_sim.py) and with real sensors, since the links share one radio.
 export const BATCH_CONCURRENCY = 6;
 
 /** Filled by runBatch: `add` puts more sensors (found while it runs) at the end of the queue; ignored after a stop. */
