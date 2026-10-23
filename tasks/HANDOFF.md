@@ -906,3 +906,35 @@ review, and a measurement of the affected path. Document measurement limits.
   `git archive HEAD`), advertising IOT-7B09F20339, Name and Alias IOT-7B09F20339; iPhone Release build installed
   (launch refused while the phone was locked); `/Applications/Provide.app` reinstalled. `desktop:install` now also
   unregisters the build copy from LaunchServices (`0760e77`), which had come back as a second Provide.
+
+## Primary advertisement identity — approved and deployed, 2026-10-23
+
+- User explicitly confirmed the shared protocol correction and deployment. It supersedes the earlier decision
+  to rely on a renamed Bluetooth adapter. Scope: `tasks/sensor-identity-proposal.md`; SPEC records the exception
+  to the unchanged-iPhone/provisioning-logic boundaries.
+- Primary manufacturer data is `[state][5 SHA-256(public key) bytes]` under test company `0xFFFF`. Total legacy
+  advertisement: 31/31 bytes. Default Rust tests cover the payload/budget; BLE tests pin advertisement options.
+- Shared `sensorId` and `sensorLabel` identify display, saved-site lookup and setup. Setup accepts advertising
+  data and derives the claim itself. No OS-name or scan-response-name fallback; missing/malformed identity
+  prevents connection. State-only firmware returns non-retried `old-firmware` with update guidance.
+- Certificate signature, Noise-proven key, full 40-bit certified ID and customer still gate message 3. No new
+  dependency. Demo and Python bench use the same bytes. Runtime alias mutation removed; existing sensor name
+  configuration was left alone because correctness no longer depends on it.
+- COMMAND_FIXTURE PASS: RED before implementation; 86 JS tests, 85 Ubuntu ARM64 Rust tests (ble,stage), 4 desktop
+  Rust tests, typecheck, lint, fmt, Clippy, Python simulator selftest. Independent review found no blocker;
+  its bridge-fixture coverage note was addressed with the new payload and shared-parser assertion.
+- The deployed apps retain the pre-existing, tested Claude working-tree changes; the identity commit isolates
+  this correction and does not commit those unrelated edits.
+- Deployed firmware to FLWR-O-019; installed `/Applications/Provide.app` and the signed Release on the physical
+  iPhone 15 Pro (launch succeeded). iOS Simulator Release demo built, launched and visually checked.
+- ACTUAL_HOST / ACTUAL_BLE PASS: btmon records 31 bytes, manufacturer `027b09f20339`; Mac receives the correct ID
+  in 4/4 reports despite absent advertised name and cached FLWR-O-019. Before: 6 reports with state only, no name.
+- ACTUAL_BLE / ACTUAL_WIFI: observed Mac UI hello at 12:59:48, Wi-Fi setup at 13:00:52, IP 192.168.1.15; device
+  journal independently confirms hello, accepted technician and connected attempt. Deployment did not initiate
+  these UI operations or change the requested Wi-Fi. Evidence and hashes: `demo/identity-advertisement.txt`.
+- Rollback artifacts: `/private/tmp/Provide.before-identity.app` on Mac;
+  `/usr/local/bin/iot-device.before-identity-20261023` on FLWR-O-019. Firmware is hash-checked before install;
+  deployment restores the binary if restart/active checks fail. These backups have not been restored in a drill.
+- NOT_RUN: real iPhone provisioning after update, Windows/Linux desktop radios, new bench batch, state-transition
+  radio capture. Noe-lab left unchanged; updated apps need the new firmware for provisioning there too.
+- Limits: zero advertising headroom, static ID visible to passive listeners, company `0xFFFF` remains test-only.

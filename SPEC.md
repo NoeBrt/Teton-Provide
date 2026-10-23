@@ -128,3 +128,13 @@ export const BleManager = {
    real-Bluetooth runs stay `NOT_RUN` until a Windows PC and a second Linux machine (or a USB dongle on noe-lab) exist.
 2. **Desktop layout (D7)**: radar and requirements on the left, summary, tabs and list on the right, list items in
    columns as wide as a phone row; confirmed or changed on the first screenshots.
+
+## Approved protocol correction, 2026-10-23
+
+The user confirmed implementation and deployment of the shared sensor-identity correction after reviewing
+`tasks/sensor-identity-proposal.md`. This supersedes the earlier name/cache workaround and makes a scoped
+exception to the unchanged-iPhone/provisioning-logic boundaries above: iPhone and desktop derive the claimed ID
+from `manufacturerData.ffff.bytes[1..6]`, with state at `[0]`. Neither OS nor scan-response names identify sensors.
+The certificate, proven-key and customer checks still precede the technician token. The demo and Python bench
+use the same layout. State-only firmware is refused with update guidance; apps and firmware deploy together.
+The primary legacy advertisement is exactly 31 bytes; extra fields require revisiting the protocol budget.

@@ -7,13 +7,22 @@ pub const RESPONSE: &[u8] = b"world";
 pub const SERVICE_UUID: u128 = 0x3b0a90ce_9564_40d1_b96b_14cf8858aba3;
 pub const CHARACTERISTIC_UUID: u128 = 0x29b3765c_de49_4114_889e_89b05852c968;
 
-/// The sensor's state, one byte of advertised manufacturer data, so the app shows it before connecting.
+/// Manufacturer data starts with state, followed by the five identity bytes when the sensor has a key.
 /// 0xFFFF is the company ID reserved for tests; a production sensor would use the own.
 pub const STATE_COMPANY_ID: u16 = 0xFFFF;
 pub const STATE_NOT_STAGED: u8 = 0;
 pub const STATE_READY: u8 = 1;
 pub const STATE_ONLINE: u8 = 2;
 pub const STATE_OFFLINE: u8 = 3;
+
+/// Fits exactly 31 legacy advertising bytes with flags and the 128-bit service UUID; no room for extra fields.
+pub fn manufacturer_data(state: u8, id: Option<[u8; 5]>) -> Vec<u8> {
+    let mut data = vec![state];
+    if let Some(id) = id {
+        data.extend_from_slice(&id);
+    }
+    data
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidRequest;
@@ -37,6 +46,24 @@ pub fn respond(payload: &[u8]) -> Result<&'static [u8], InvalidRequest> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identity_and_state_fit_the_primary_legacy_advertisement() {
+        let id = [0x7b, 0x09, 0xf2, 0x03, 0x39];
+        for state in [STATE_NOT_STAGED, STATE_READY, STATE_ONLINE, STATE_OFFLINE] {
+            let data = manufacturer_data(state, Some(id));
+            assert_eq!(data, [vec![state], id.to_vec()].concat());
+            assert_eq!(
+                3 + 18 + 4 + data.len(),
+                31,
+                "flags + UUID + manufacturer AD"
+            );
+        }
+        assert_eq!(
+            manufacturer_data(STATE_NOT_STAGED, None),
+            [STATE_NOT_STAGED]
+        );
+    }
 
     #[test]
     fn hello_returns_world() {

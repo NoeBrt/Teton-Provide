@@ -6,26 +6,33 @@ export const REQUEST = bytes('hello');
 /** The sensor's state, advertised as one byte of manufacturer data under company 0xFFFF (src/protocol.rs STATE_*). */
 export type SensorState = 'not-staged' | 'ready' | 'online' | 'offline';
 const STATES: SensorState[] = ['not-staged', 'ready', 'online', 'offline'];
-type Advertising = { localName?: string; manufacturerData?: Record<string, { bytes: number[] }> };
+export type Advertising = { localName?: string; manufacturerData?: Record<string, { bytes: number[] }> };
 /** `null` when the sensor advertises no state (older firmware) or an unknown one. */
 export const sensorState = (advertising?: Advertising): SensorState | null =>
   STATES[advertising?.manufacturerData?.ffff?.bytes[0] ?? -1] ?? null;
+
+/** The primary advertisement's untrusted claim; setup must still verify the certificate and proven key. */
+export function sensorId(advertising?: Advertising): string | null {
+  const data = advertising?.manufacturerData?.ffff?.bytes;
+  if (!data || data.length !== 6 || !Array.from(data).every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+    || sensorState(advertising) === null) return null;
+  return `IOT-${data.slice(1).map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
+
+export const sensorLabel = (sensor: { name?: string; advertising?: Advertising }) => sensorId(sensor.advertising) ?? 'Unnamed sensor';
 
 /** The scan reports every advertisement: a card is redrawn only when its state, name or signal (≥ 5 dB) changed. */
 export const changed = (before: { rssi: number; advertising?: Advertising } | undefined, after: { rssi: number; advertising?: Advertising }) =>
   !before
   || sensorState(before.advertising) !== sensorState(after.advertising)
-  || before.advertising?.localName !== after.advertising?.localName
+  || sensorId(before.advertising) !== sensorId(after.advertising)
   || Math.abs(before.rssi - after.rssi) >= 5;
 
-/** A sensor's name travels only in its scan response and its state only in its advertisement, and the phone does not
- * always get both: a packet missing one keeps the last advertised value, rather than falling back to the system's
- * cached name (which can be the host's, FLWR-O-019). */
+/** Scan-response callbacks can omit manufacturer data: retain state and identity together, never mix two records. */
 export function keepAdvertised<P extends { advertising?: Advertising }>(before: P | undefined, after: P): P {
   if (!before) return after;
-  const localName = after.advertising?.localName ?? before.advertising?.localName;
   const manufacturerData = after.advertising?.manufacturerData?.ffff ? after.advertising.manufacturerData : before.advertising?.manufacturerData;
-  return { ...after, advertising: { ...after.advertising, localName, manufacturerData } };
+  return { ...after, advertising: { ...after.advertising, manufacturerData } };
 }
 const RESPONSE = bytes('world');
 

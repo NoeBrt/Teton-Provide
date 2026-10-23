@@ -79,3 +79,10 @@ only and never joins Wi-Fi, and no credential travels outside the Noise channel.
 | 8 | Wrong password may surface as a generic error (100 ms poll can miss FAILED) | FIXED (code): the device `StateChanged` signal records every FAILED reason. NOT_RUN: wrong-password run; on a desktop Ubuntu a secret agent may also prompt for the password |
 | 9 | App flow untested; missing setup cases | PARTIAL: flow tested (7 tests), handshake refusal tested; device `Failed`/`Unknown` replies need extra snow vectors |
 | — | systemd unit, `label.svg` kept on device, QR printed to the terminal, log flooding, zeroization, unspecific busy/closed messages | OPEN (suggestions) |
+
+## Identity carrier correction, 2026-10-23
+
+The claimed identity comes from the six-byte primary manufacturer record (state, then five identity bytes),
+never an OS or scan-response name. The existing certified/proven-key/customer checks precede token delivery.
+Old state-only firmware is refused before connection with update guidance. Regression evidence and deployment
+results are recorded in HANDOFF; no new hardware provisioning claim follows from transcript tests alone.

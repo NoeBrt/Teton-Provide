@@ -110,7 +110,7 @@ export function startDemo(random: (n: number) => Uint8Array) {
     const kind = kindOf(i);
     const key = sha256(enc.encode(`demo-sensor-${i}`));
     const publicKey = x25519.getPublicKey(key);
-    return { id: `demo-${i}`, kind, key, publicKey, name: deviceId(publicKey), rssi: -42 - ((i * 13) % 45), state: kind === 'not-staged' ? 0 : kind === 'online' ? 2 : 1 };
+    return { id: `demo-${i}`, kind, key, publicKey, identity: Array.from(sha256(publicKey).slice(0, 5)), name: deviceId(publicKey), rssi: -42 - ((i * 13) % 45), state: kind === 'not-staged' ? 0 : kind === 'online' ? 2 : 1 };
   });
   type Sensor = (typeof fleet)[number];
   const byId = new Map(fleet.map(sensor => [sensor.id, sensor]));
@@ -123,9 +123,10 @@ export function startDemo(random: (n: number) => Uint8Array) {
   let stopped: (() => void) | null = null;
   let scanning = false;
   let startedAt = 0; // the first scan: the technician walks into the wing
+  const advertising = (s: Sensor) => ({ localName: s.name, manufacturerData: { ffff: { bytes: [s.state, ...s.identity] } } });
   const advertise = (s: Sensor) => {
     s.rssi = Math.max(-95, Math.min(-35, s.rssi + Math.round((Math.random() - 0.5) * 6)));
-    discover?.({ id: s.id, name: s.name, rssi: s.rssi, advertising: { localName: s.name, manufacturerData: { ffff: { bytes: [s.state] } } } } as unknown as Peripheral);
+    discover?.({ id: s.id, name: s.name, rssi: s.rssi, advertising: advertising(s) } as unknown as Peripheral);
   };
   // Discovery as when walking into a wing: about half is heard within 4 s, the rest one by one over a minute; each
   // sensor then advertises every 0.3 to 1 s, and the phone misses some of them.
@@ -184,6 +185,6 @@ export function startDemo(random: (n: number) => Uint8Array) {
     radio, deviceAuthority: ed25519.getPublicKey(DEVICE_SEED), token: demoToken(), site: DEMO_SITE, password: DEMO_PASSWORD,
     stop: () => clearInterval(timer),
     /** For tests: each simulated sensor's id and kind. */
-    sensors: fleet.map(({ id, name, kind }) => ({ id, name, kind })),
+    sensors: fleet.map(s => ({ id: s.id, name: s.name, kind: s.kind, advertising: advertising(s) })),
   };
 }
