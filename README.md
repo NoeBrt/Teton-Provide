@@ -270,6 +270,8 @@ sudo systemctl restart iot-device            # the journal shows IOT-XXXXXXXXXX 
 `iot-workshop deploy <ssh-host> [wifi-interface] --customer "Noé Home"`. It copies the Linux binaries from `target/linux-<arch>/`
 (built on Linux with the `cargo build` above), runs the installer, has the sensor create its key, certifies it,
 records the laptop's time as the sensor's earliest clock, and starts the service. It asks for the sensor's sudo password once.
+`iot-workshop uninstall <ssh-host>` undoes it: the sensor forgets the Wi-Fi it was given and loses the service,
+and its key moves to `/root/iot-backup`.
 
 Copy the two public keys from `iot-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
 `TECHNICIAN_AUTHORITY`) before you build the app.
@@ -423,9 +425,10 @@ of the installer on the Edge, and a result per Edge even when it fails: see
 - **The desktop app keeps codes and sites in memory**: closing it loses them.
 - **The customer is written into the sensor's certificate**, so moving a sensor to another customer needs a new
   certificate.
-- **No transfer between customers yet.** `deploy` refuses a sensor that already has the service, and `iot-stage install`
-  refuses to replace a certificate. Moving a deployed sensor, such as one certified for `DEMO`, to another customer
-  needs a procedure still to define: who authorizes it, and what happens to the old customer's Wi-Fi on the sensor.
+- **No transfer between customers yet.** `deploy` refuses a sensor that already has the service, and
+  `iot-stage install` refuses to replace a certificate. `uninstall` then `deploy` gives the sensor a new key, a new ID
+  and a new customer. Moving a sensor while keeping its ID needs a procedure still to define: who authorizes it, and
+  what happens to the old customer's Wi-Fi on the sensor.
 - **Customer IDs come from names.** "Hôpital Saint-Louis" and "Hopital Saint Louis" both give `HOPITAL-SAINT-LOUIS`,
   and the workshop keeps no list of customers to catch two different hospitals with the same name. Check the ID that
   `deploy` and `issue` print.

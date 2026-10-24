@@ -19,6 +19,9 @@
 //!     the binaries built for its architecture (target/linux-ARCH/device and stage), runs systemd/install.sh, has
 //!     the sensor create its key, certifies that key here for the customer and installs the certificate. The authority's
 //!     private keys stay on this machine; the sudo password is read here, without echo, and sent over SSH only
+//! iot-workshop uninstall SSH_HOST [--yes]
+//!     undoes deploy: forgets the Wi-Fi the sensor was given, removes the service, its files and the iot account,
+//!     and keeps the sensor's key in /root/iot-backup
 //! ```
 //!
 //! The code is `<token hex>.<holder private key hex>`: the token names a holder key generated for this code, and
@@ -51,7 +54,7 @@ const MAX_DAYS: u64 = 5;
 const USAGE: &str = "usage: iot-workshop init | public | certify DEVICE_PUBLIC_KEY_HEX --customer C | issue NAME --customer C... \
                      (in $IOT_AUTHORITY, else ~/iot-authority; 1 day)\n       \
                      iot-workshop init DIR | public DIR | certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER | issue DIR NAME CUSTOMERS [DAYS]\n       \
-                     iot-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C   (default wlan0)\n\
+                     iot-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C   (default: the first Wi-Fi device) | uninstall SSH_HOST [--yes]\n\
                      Run `iot-workshop help` for what each command does.";
 /// `iot-workshop help`, by what the user wants to do; `{dir}` is the authority folder in use.
 const HELP: &str = "iot-workshop: the workshop tool. It holds the two authority keys, on this machine only.
@@ -72,6 +75,8 @@ Add a sensor
                                 install, key, certify for C and start a blank Ubuntu sensor over SSH (USB: 192.168.55.1)
   certify SENSOR_PUBLIC_KEY --customer C
                                 manual path: certify the key `iot-stage init` printed
+  uninstall SSH_HOST [--yes]    forget the Wi-Fi it was given and remove the IoT service: a blank sensor again
+                                (its key is kept in /root/iot-backup); asks first, a script passes --yes
 
 Give a technician access
   issue NAME --customer C [--customer C2...]
@@ -94,8 +99,6 @@ const STATE_DIR: &str = "/var/lib/iot-device";
 const CRATE_DIR: &str = env!("CARGO_MANIFEST_DIR");
 /// The last customer chosen, `ID<TAB>name`: offered again, after a yes, when a command names none.
 const LAST_CUSTOMER: &str = "last-customer";
-/// `deploy` reports these steps.
-const STEPS: u8 = 5;
 // ANSI styles.
 const BOLD: &str = "1";
 const DIM: &str = "2";
@@ -327,7 +330,7 @@ fn main() -> ExitCode {
 
 /// One command; the short forms use `default` as the authority directory.
 fn run(args: &[&str], default: &Path) -> Result<(), String> {
-    let (mut given, mut rest) = (Vec::new(), Vec::new());
+    let (mut given, mut rest, mut yes) = (Vec::new(), Vec::new(), false);
     let mut words = args.iter();
     while let Some(&word) = words.next() {
         if word == "--customer" {
@@ -339,6 +342,8 @@ fn run(args: &[&str], default: &Path) -> Result<(), String> {
             );
         } else if let Some(value) = word.strip_prefix("--customer=") {
             given.push(value.to_string());
+        } else if word == "--yes" {
+            yes = true;
         } else if word.starts_with("--") && word != "--help" {
             return Err(format!("unknown option {word}\n{USAGE}"));
         } else {
@@ -351,6 +356,9 @@ fn run(args: &[&str], default: &Path) -> Result<(), String> {
     );
     if !given.is_empty() && !takes_customer {
         return Err("--customer goes with deploy, certify KEY and issue NAME".to_string());
+    }
+    if yes && !matches!(rest.as_slice(), ["uninstall", _]) {
+        return Err("--yes goes with uninstall".to_string());
     }
     match rest.as_slice() {
         ["help" | "--help" | "-h"] => {
@@ -381,8 +389,9 @@ fn run(args: &[&str], default: &Path) -> Result<(), String> {
                 _ => Ok(()),
             }
         }
-        ["deploy", host] => deploy(default, host, "wlan0", &given),
-        ["deploy", host, interface] => deploy(default, host, interface, &given),
+        ["uninstall", host] => uninstall(host, yes, ask_uninstall),
+        ["deploy", host] => deploy(default, host, None, &given),
+        ["deploy", host, interface] => deploy(default, host, Some(interface), &given),
         ["init", dir] => init(Path::new(dir)),
         ["public", dir] => public(Path::new(dir)),
         ["certify", dir, key, customer] => certify(Path::new(dir), key, &Customer::exact(customer)),
@@ -507,24 +516,13 @@ fn certificate(dir: &Path, key: &str, customer: &str) -> Result<(String, String)
     Ok((device_id(&key), hex(&certificate.encode())))
 }
 
-fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(), String> {
+fn deploy(dir: &Path, host: &str, interface: Option<&str>, given: &[String]) -> Result<(), String> {
     target(host, interface)?;
     // Chosen, and confirmed if remembered, before anything touches the sensor.
     let action = format!("Certify the sensor on {host}");
     let customer = one(choose(dir, given, false, &action, ask(action.clone()))?);
     load(dir, DEVICE_KEY)?; // both keys checked before touching the sensor
     let technician_key = load(dir, TECHNICIAN_KEY)?;
-    // One SSH login for every step below, closed at the end. In ~/.ssh, which only this user can write: a socket in
-    // /tmp could be planted by another account to read the sudo password and get its own key certified.
-    let control = "ControlPath=~/.ssh/iot-deploy-%C";
-    let ssh_options = [
-        "-o",
-        "ControlMaster=auto",
-        "-o",
-        control,
-        "-o",
-        "ControlPersist=60",
-    ];
     println!(
         "{} {}  {}",
         out(BOLD, "Deploying to"),
@@ -532,17 +530,18 @@ fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(
         out(
             DIM,
             format!(
-                "authority {} · customer {customer} · Wi-Fi {interface}",
-                dir.display()
+                "authority {} · customer {customer} · Wi-Fi {}",
+                dir.display(),
+                interface.unwrap_or("first device")
             )
         )
     );
-    let result = (|| {
-        let binaries = step(1, "Reaching the sensor", || {
+    over_ssh(host, |ssh_options| {
+        let binaries = step((1, 5), "Reaching the sensor", || {
             // A sensor already installed is refused here, before step 3 would reinstall and restart it.
             let answer = remote(
                 host,
-                &ssh_options,
+                ssh_options,
                 &["uname -m; test -e /usr/local/bin/iot-device && echo installed || true"],
                 None,
             )?;
@@ -573,10 +572,10 @@ fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(
         })?;
         eprint!("{} ", err(YELLOW, format!("sudo password on {host}:")));
         let password = secret()?;
-        step(2, "Copying the service", || {
+        step((2, 5), "Copying the service", || {
             remote(
                 host,
-                &ssh_options,
+                ssh_options,
                 &[&format!(
                     "rm -rf {REMOTE_DIR} && mkdir -p {REMOTE_DIR}/target/release"
                 )],
@@ -585,35 +584,32 @@ fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(
             let files = ["device", "stage"].map(|name| binaries.join(name));
             copy(
                 host,
-                &ssh_options,
+                ssh_options,
                 &files,
                 &format!("{REMOTE_DIR}/target/release/"),
             )?;
             copy(
                 host,
-                &ssh_options,
+                ssh_options,
                 &[Path::new(CRATE_DIR).join("systemd")],
                 &format!("{REMOTE_DIR}/"),
             )
         })?;
         let key = step(
-            3,
+            (3, 5),
             "Installing the service and creating the sensor's key",
             || {
                 let output = remote(
                     host,
-                    &ssh_options,
-                    &[&format!(
-                        "sudo -k -S -p '' sh -c 'exec </dev/null; {REMOTE_DIR}/systemd/install.sh {interface} >/dev/null && \
-                     sudo -u iot iot-stage init {STATE_DIR}'"
-                    )],
+                    ssh_options,
+                    &[&install_command(interface)],
                     Some(&password),
                 )?;
                 public_key_in(&output)
             },
         )?;
         let (id, certificate) = step(
-            4,
+            (4, 5),
             &format!("Certifying it for {customer} on this machine"),
             || {
                 let signed = certificate(dir, &key, &customer.id)?;
@@ -625,7 +621,7 @@ fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(
             },
         )?;
         step(
-            5,
+            (5, 5),
             "Installing the certificate and starting the service",
             || {
                 let authority = hex(&technician_key.verifying_key().to_bytes());
@@ -635,7 +631,7 @@ fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(
                     .as_secs();
                 let journal = remote(
                     host,
-                    &ssh_options,
+                    ssh_options,
                     &[&start_command(&certificate, &authority, now)],
                     Some(&password),
                 )?;
@@ -658,13 +654,135 @@ fn deploy(dir: &Path, host: &str, interface: &str, given: &[String]) -> Result<(
             out(BOLD, "Next:")
         );
         Ok(())
-    })();
+    })
+}
+
+/// One SSH login for every command `work` runs on `host`, closed at the end. The socket sits in ~/.ssh, which only this
+/// user can write: one in /tmp could be planted by another account to read the sudo password.
+fn over_ssh<T>(host: &str, work: impl FnOnce(&[&str]) -> Result<T, String>) -> Result<T, String> {
+    let options = [
+        "-o",
+        "ControlMaster=auto",
+        "-o",
+        "ControlPath=~/.ssh/iot-deploy-%C",
+        "-o",
+        "ControlPersist=60",
+    ];
+    let result = work(&options);
     let _ = Command::new("ssh")
-        .args(ssh_options)
+        .args(options)
         .args(["-O", "exit", host])
         .stderr(Stdio::null())
         .status();
     result
+}
+
+/// The two NetworkManager profiles the sensor service creates (`PROFILE_UUIDS` in device/bin/wifi.rs).
+const WIFI_PROFILES: [&str; 2] = [
+    "4a7db77c-6fda-47aa-95ca-d186c5096b32",
+    "b5b2bc3f-8221-4a28-8c40-5e078953fcf2",
+];
+
+/// `uninstall`: back to a blank sensor, after a yes (`confirm`, `None` with no terminal) or `--yes`.
+fn uninstall(
+    host: &str,
+    yes: bool,
+    confirm: impl FnOnce(&str) -> Option<bool>,
+) -> Result<(), String> {
+    target(host, None)?;
+    if !yes {
+        match confirm(host) {
+            Some(true) => {}
+            Some(false) => return Err("uninstall cancelled".to_string()),
+            None => {
+                return Err(format!(
+                    "uninstall asks first; with no terminal to ask, a script passes --yes: iot-workshop uninstall \
+                     {host} --yes"
+                ));
+            }
+        }
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    println!("{} {}", out(BOLD, "Uninstalling from"), out(CYAN, host));
+    over_ssh(host, |ssh_options| {
+        step((1, 2), "Reaching the sensor", || {
+            remote(host, ssh_options, &["true"], None).map(|_| ())
+        })?;
+        eprint!("{} ", err(YELLOW, format!("sudo password on {host}:")));
+        let password = secret()?;
+        let said = step(
+            (2, 2),
+            "Forgetting its Wi-Fi and removing the IoT service",
+            || {
+                remote(
+                    host,
+                    ssh_options,
+                    &[&uninstall_command(now)],
+                    Some(&password),
+                )
+            },
+        )?;
+        for line in said.lines() {
+            detail(line);
+        }
+        println!(
+            "\n{} {host} is blank again: deploy it with {}",
+            out(GREEN, "✓"),
+            out(CYAN, format!("iot-workshop deploy {host} --customer C"))
+        );
+        Ok(())
+    })
+}
+
+/// On a terminal, asks before uninstalling; elsewhere, asks nothing.
+fn ask_uninstall(host: &str) -> Option<bool> {
+    if !std::io::stdin().is_terminal() {
+        return None;
+    }
+    eprint!(
+        "{} remove the IoT service from {host} and forget the Wi-Fi it was given? Its key is kept in \
+         /root/iot-backup. [y/N] ",
+        err(YELLOW, "Uninstall:")
+    );
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer).ok()?;
+    Some(matches!(
+        answer.trim().to_lowercase().as_str(),
+        "y" | "yes" | "o" | "oui"
+    ))
+}
+
+/// Undoes systemd/install.sh, `stage init` and `stage install`. The sensor's state, key included, moves to a root-only
+/// backup rather than being erased. The Wi-Fi profiles go last, detached: over Wi-Fi the SSH link drops there.
+fn uninstall_command(now: u64) -> String {
+    let forget = WIFI_PROFILES
+        .map(|uuid| format!("nmcli connection delete uuid {uuid}"))
+        .join("; ");
+    format!(
+        "sudo -k -S -p '' sh -c 'exec </dev/null; systemctl disable --now iot-device 2>/dev/null; \
+         rm -f /etc/systemd/system/iot-device.service /usr/local/bin/iot-device /usr/local/bin/iot-stage \
+         /etc/default/iot-device /etc/polkit-1/localauthority/50-local.d/iot-device.pkla \
+         /etc/polkit-1/rules.d/50-iot-device.rules /etc/systemd/system/bluetooth.service.d/iot-device.conf; \
+         rmdir /etc/systemd/system/bluetooth.service.d 2>/dev/null; \
+         if [ -d {STATE_DIR} ]; then install -d -m 700 /root/iot-backup && \
+         mv {STATE_DIR} /root/iot-backup/iot-device-{now} && echo key kept in /root/iot-backup/iot-device-{now}; fi; \
+         id iot >/dev/null 2>&1 && userdel iot; systemctl daemon-reload; systemctl restart bluetooth; \
+         echo service, files and iot account removed; \
+         setsid sh -c \"sleep 2; {forget}\" >/dev/null 2>&1 &' && rm -rf {REMOTE_DIR}"
+    )
+}
+
+/// Deploy's step 3 on the sensor: install the service, then have the sensor create its key. The Wi-Fi interface is
+/// pinned only when given: otherwise the service takes the first Wi-Fi device (a Jetson's wlan0, noe-lab's wlo1).
+fn install_command(interface: Option<&str>) -> String {
+    let interface = interface.map(|name| format!(" {name}")).unwrap_or_default();
+    format!(
+        "sudo -k -S -p '' sh -c 'exec </dev/null; {REMOTE_DIR}/systemd/install.sh{interface} >/dev/null && \
+         sudo -u iot iot-stage init {STATE_DIR}'"
+    )
 }
 
 /// Deploy's last step on the sensor: install the certificate, record this machine's time as the sensor's clock
@@ -680,10 +798,14 @@ fn start_command(certificate: &str, authority: &str, now: u64) -> String {
     )
 }
 
-/// Prints `[n/STEPS] label`, runs the step and names it in its error.
-fn step<T>(n: u8, label: &str, work: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
-    println!("{} {label}", out(DIM, format!("[{n}/{STEPS}]")));
-    work().map_err(|e| format!("step {n}/{STEPS}, {}: {e}", label.to_lowercase()))
+/// Prints `[n/of] label`, runs the step and names it in its error.
+fn step<T>(
+    (n, of): (u8, u8),
+    label: &str,
+    work: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    println!("{} {label}", out(DIM, format!("[{n}/{of}]")));
+    work().map_err(|e| format!("step {n}/{of}, {}: {e}", label.to_lowercase()))
 }
 
 /// A result under its step.
@@ -706,7 +828,7 @@ fn printable(text: &str) -> String {
 }
 
 /// The host and interface go into an ssh command line and a remote shell: refuse anything read as more.
-fn target(host: &str, interface: &str) -> Result<(), String> {
+fn target(host: &str, interface: Option<&str>) -> Result<(), String> {
     let plain = |text: &str, extra: &str| {
         !text.is_empty()
             && text
@@ -718,7 +840,7 @@ fn target(host: &str, interface: &str) -> Result<(), String> {
             "{host:?}: an SSH host such as jetson-027 or user@192.168.55.1"
         ));
     }
-    if !plain(interface, "") {
+    if let Some(interface) = interface.filter(|name| !plain(name, "")) {
         return Err(format!(
             "{interface:?}: a Wi-Fi interface such as wlan0, from `nmcli device status`"
         ));
@@ -1157,6 +1279,84 @@ mod tests {
     }
 
     #[test]
+    fn uninstall_removes_what_install_put_and_keeps_the_key_aside() {
+        let command = uninstall_command(1_792_879_921);
+        assert!(
+            command.starts_with("sudo -k -S -p '' sh -c 'exec </dev/null;"),
+            "the password never reaches a child"
+        );
+        for path in [
+            "/etc/systemd/system/iot-device.service",
+            "/usr/local/bin/iot-device",
+            "/usr/local/bin/iot-stage",
+            "/etc/default/iot-device",
+            "/etc/polkit-1/localauthority/50-local.d/iot-device.pkla",
+            "/etc/polkit-1/rules.d/50-iot-device.rules",
+            "/etc/systemd/system/bluetooth.service.d/iot-device.conf",
+        ] {
+            assert!(command.contains(path), "systemd/install.sh puts {path}");
+        }
+        assert!(
+            command.contains("mv /var/lib/iot-device /root/iot-backup/iot-device-1792879921"),
+            "the sensor key is kept, root only"
+        );
+        assert!(command.contains("userdel iot"));
+        for uuid in WIFI_PROFILES {
+            let wifi = command
+                .find(uuid)
+                .expect("both Wi-Fi profiles are forgotten");
+            assert!(
+                wifi > command.find("userdel iot").unwrap(),
+                "last: over Wi-Fi, the link drops there"
+            );
+        }
+    }
+
+    #[test]
+    fn uninstall_asks_first_and_a_script_must_say_yes() {
+        let dir = Path::new("/nonexistent");
+        let script = uninstall("jetson-027", false, |_| None).unwrap_err();
+        assert!(
+            script.contains("--yes"),
+            "no terminal, no question: {script}"
+        );
+        assert!(
+            uninstall("jetson-027", false, |_| Some(false))
+                .unwrap_err()
+                .contains("cancelled")
+        );
+        assert!(
+            uninstall("-oProxyCommand=sh", true, |_| None).is_err(),
+            "the host is checked first"
+        );
+        assert!(run(&["uninstall", "jetson-027", "--customer", "DEMO"], dir).is_err());
+    }
+
+    #[test]
+    fn deploy_pins_a_wifi_interface_only_when_asked() {
+        assert!(
+            install_command(None).contains("iot-deploy/systemd/install.sh >/dev/null"),
+            "no interface: the service takes the first Wi-Fi device (noe-lab's is wlo1, not wlan0)"
+        );
+        assert!(
+            install_command(Some("wlo1"))
+                .contains("iot-deploy/systemd/install.sh wlo1 >/dev/null")
+        );
+        assert!(install_command(None).starts_with("sudo -k -S -p '' sh -c 'exec </dev/null;"));
+    }
+
+    #[test]
+    fn uninstall_forgets_the_profiles_the_service_creates() {
+        let service = include_str!("wifi.rs");
+        for uuid in WIFI_PROFILES {
+            assert!(
+                service.contains(uuid),
+                "{uuid} is one of PROFILE_UUIDS in bin/wifi.rs"
+            );
+        }
+    }
+
+    #[test]
     fn colour_only_where_a_person_reads_it() {
         assert_eq!(
             paint(false, GREEN, "ready"),
@@ -1185,18 +1385,18 @@ mod tests {
 
     #[test]
     fn deploy_refuses_a_host_or_interface_the_shell_or_ssh_would_read_as_more() {
-        assert_eq!(target("jetson-027", "wlan0"), Ok(()));
-        assert_eq!(target("floware@192.168.55.1", "wlo1"), Ok(()));
+        assert_eq!(target("jetson-027", Some("wlan0")), Ok(()));
+        assert_eq!(target("floware@192.168.55.1", Some("wlo1")), Ok(()));
         assert!(
-            target("-oProxyCommand=sh", "wlan0").is_err(),
+            target("-oProxyCommand=sh", Some("wlan0")).is_err(),
             "an ssh option"
         );
-        assert!(target("", "wlan0").is_err());
+        assert!(target("", Some("wlan0")).is_err());
         assert!(
-            target("jetson-027", "wlan0; reboot").is_err(),
+            target("jetson-027", Some("wlan0; reboot")).is_err(),
             "a shell command"
         );
-        assert!(target("jetson-027", "").is_err());
+        assert!(target("jetson-027", Some("")).is_err());
     }
 
     #[test]
