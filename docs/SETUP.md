@@ -49,6 +49,39 @@ Demo mode uses 200 fake sensors with the real application handshake and certific
 
 Dependencies, authorities and apps are prepared before the visit. Those preparation steps can require internet. The provisioning exchange itself does not.
 
+## Deploy over SSH from your laptop
+
+From the checkout root on macOS or Linux, with Rust, OpenSSH and curl installed:
+
+```sh
+cargo install --path device --features stage --bin iot-workshop --locked
+iot-workshop init                 # once; reuse an existing authority
+iot-workshop deploy user@192.168.55.1 --customer "Noé Home"
+iot-workshop issue "Evaluator" --customer "Noé Home"
+```
+
+Use an SSH alias or `user@host`; `192.168.55.1` is a Jetson connected over USB. The sensor needs Ubuntu 22.04 or
+later, SSH and sudo access, BlueZ, NetworkManager and a BLE peripheral adapter. Prefer USB or Ethernet for
+administration. Neither Rust nor a checkout is needed on the sensor.
+
+`deploy` detects `aarch64` or `x86_64`, refuses an already installed sensor, downloads the v1.1.0 Linux binaries
+from this repository's GitHub release, checks each SHA-256, then copies and installs them over SSH. It creates the
+sensor key on the sensor, certifies its public key on the laptop, records a clock floor and starts the service.
+Authority private keys stay on the laptop; the sudo password travels only on SSH stdin.
+
+The cache is `device/target/sensor-v1.1.0-linux-<arch>/` in the checkout used to install the workshop tool. The first
+deployment per architecture needs internet on the laptop; later deployments use the cache. A failed download or
+checksum stops before installation. Keep the checkout in place; reinstall the workshop tool if you move it.
+For an offline local build, place **both** `device` and `stage` in `device/target/linux-<arch>/`: those take precedence.
+The published binaries target Ubuntu 22.04 and later; older Ubuntu and other architectures need a local build.
+
+Copy the two public authority keys from `init` into `configurator/src/authority.ts` before building your app. A new
+authority's sensors are not accepted by the prebuilt apps, which carry the original deployment's public keys.
+If the sensor already runs the service, `iot-workshop uninstall user@host` asks before removing it and its Wi-Fi,
+and keeps its key in `/root/iot-backup`. Redeploying then creates a new identity.
+
+The steps below are the manual path for a sensor without SSH, or for building and evaluating from source.
+
 ## Prepare the Ubuntu device
 
 Run these commands from the `device/` folder of a checkout, on a dedicated test device. The installer adds a system user, installs a service and NetworkManager permissions, restarts Bluetooth, and disables BlueZ’s battery plugin to avoid unwanted phone pairing requests.

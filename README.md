@@ -229,40 +229,32 @@ Open the URL Expo prints with `?demo=1`: 200 simulated sensors, no Bluetooth. Ne
 Provide. talks Bluetooth through `react-native-ble-manager`, a native library that Expo Go does not ship. In Expo Go
 the app opens, runs the demo, and says "Bluetooth is unavailable in Expo Go". A real sensor needs your own build.
 
-### 1. Build the sensor binaries (Linux)
+### 1. Deploy a sensor from your laptop
 
-The sensor runs Ubuntu with BlueZ and NetworkManager. Build on the sensor itself or on any Linux machine of the
-same architecture:
-
-```sh
-sudo apt install build-essential pkg-config libdbus-1-dev bluez network-manager curl rfkill
-curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0 --profile minimal
-. "$HOME/.cargo/env"
-git clone https://github.com/NoeBrt/iot-provisioning.git && cd iot-provisioning/device
-cargo build --release --features ble,stage --locked
-```
-
-Copy `target/release/device` and `target/release/stage` into `device/target/linux-$(uname -m)/` of the checkout on
-your laptop (`linux-aarch64` for a Jetson, `linux-x86_64` for a PC).
-
-### 2. Deploy it from the workshop (your laptop)
+Use a blank Ubuntu 22.04 or later sensor with SSH, BlueZ, NetworkManager and a BLE peripheral adapter. Connect it
+over USB or Ethernet so that changing its Wi-Fi later will not cut the SSH link.
 
 The authorities' private keys stay on your laptop. A sensor only receives its certificate. Install the workshop tool
-once (macOS or Linux, Rust installed), then run it from any folder:
+once (macOS or Linux, Rust, OpenSSH and curl installed), from the checkout root, then run it from any folder:
 
 ```sh
 cargo install --path device --features stage --bin iot-workshop --locked   # first build: 1-2 minutes
 iot-workshop init                           # once, for every customer: two authorities, their public keys
-iot-workshop deploy <ssh-host> --customer "Noé Home"
+iot-workshop deploy user@192.168.55.1 --customer "Noé Home"
 iot-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
 ```
 
-`deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It asks for
-the sensor's sudo password once, then copies the binaries, runs the installer, has the sensor create its key,
+`deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It reads
+the sensor's architecture, downloads the v1.1.0 Linux binaries to your laptop, checks their SHA-256 and caches them.
+It then asks for the sensor's sudo password once, copies the binaries, runs the installer, has the sensor create its key,
 certifies that key for the customer, records your laptop's time as the sensor's earliest clock and starts the
 service. Add the Wi-Fi interface after the host (`deploy <ssh-host> wlo1`) to pin one; by default NetworkManager
 picks. `deploy` refuses a sensor that already runs the service: run `iot-workshop uninstall <ssh-host>` first. It
 removes the service and the Wi-Fi the sensor was given, and moves the sensor's key to `/root/iot-backup`.
+
+No Linux build is needed on your laptop or on the sensor. The first download per architecture needs internet on the
+laptop; later deployments use its cache. Keep the checkout in place after installing the tool. For a local build or
+a sensor without SSH, see [the manual setup](docs/SETUP.md#prepare-the-ubuntu-device).
 
 A customer is a name or an ID: `"Noé Home"` becomes `NOE-HOME`, the ID that certificates and codes carry. Leave out
 `--customer` and the tool offers the last customer again and waits for your yes. A script with no terminal must name
@@ -272,7 +264,7 @@ path (`iot-stage init`, `iot-workshop certify`) for a sensor without SSH.
 Copy the two public keys from `iot-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
 `TECHNICIAN_AUTHORITY`) before you build the app.
 
-### 3. Install the app on a phone
+### 2. Install the app on a phone
 
 **iPhone** (Mac with Xcode, free Apple ID; the app lasts 7 days):
 
@@ -291,12 +283,12 @@ On the iPhone, trust the developer (Settings › General › VPN & Device Manage
 **Android** (not tested): `cd configurator && npm ci && npx expo run:android --variant release` with the phone
 plugged in.
 
-### 4. Or install it on a desktop
+### 3. Or install it on a desktop
 
 **macOS** (Rust and the Xcode command-line tools): `cd configurator && npm ci && npm run desktop:install` puts
 Provide. in `/Applications`. **Linux** (not tested): `npm run desktop:build`. Windows is not tested.
 
-### 5. Set up the sensor
+### 4. Set up the sensor
 
 Open Provide. with no DEMO badge, scan the technician code, enter the site Wi-Fi, then tap **Set up** on
 `IOT-XXXXXXXXXX`. The card ends on **Device connected** with the sensor's address; on Ubuntu,
@@ -365,7 +357,7 @@ starting new sensors.
 **What if the Bluetooth link drops mid-setup?** The app retries with the same attempt ID; the sensor returns the stored
 result and joins once.
 
-**Does any of this need internet?** Only before the visit, to build the app and issue codes.
+**Does any of this need internet?** Only before the visit, to install tools, download sensor binaries and build the app. Issuing codes and setting up Wi-Fi work offline.
 
 **What is not proven yet?** 200 physical sensors, Android, the desktop app on Windows and Linux, a radio capture of
 the current protocol.
