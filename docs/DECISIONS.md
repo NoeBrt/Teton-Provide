@@ -10,6 +10,24 @@ earlier fallback guidance. Sections 19-20 require Android/iPhone coverage and
 preserve offline builds while the BLE dependency graph is unavailable.
 Radio acceptance remains pending.
 
+## The path I took (summary)
+
+| Step | What I did | What changed my mind |
+| --- | --- | --- |
+| 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match the fleet ([decision 11](#11-rust-to-align-with-the-fleet)). |
+| 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([simulation measurements](../evidence/simulation/README.md)). |
+| 3 | Wrote `audit-host`, a read-only preflight of BlueZ and NetworkManager, then inventoried the real host. | Bluetooth was soft-blocked by rfkill and BlueZ reported it as a generic "busy"; the device now names rfkill when it cannot power the adapter. |
+| 4 | Compared channels. SoftAP looked best for a zero-install web page. | I excluded it to stay clear of "no shared local network" ([decision 18](#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
+| 5 | Reviewed security before sending any secret: Just Works, static passkey, LE Secure Connections OOB, SRP6a, Noise. | iOS apps cannot use out-of-band pairing, so the channel had to live above GATT: Noise NKpsk2 keyed by a QR label. |
+| 6 | Built the BlueZ hello peripheral, then an Expo app; first real exchange from an iPhone 15 Pro to Ubuntu. | Six exchanges and a reconnect after a service restart worked ([evidence/real/phone-hello.txt](../evidence/real/phone-hello.txt)). |
+| 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](media/ui-history/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
+| 8 | Added staging, the Noise channel on both sides, attempt IDs and NetworkManager over D-Bus. | Site Wi-Fi once per visit, then saved sites behind Face ID because a technician serves several facilities ([decision 26](#26-saved-sites-behind-face-id)). |
+| 9 | Ran two independent reviews. | Eight fixes: a double prompt, a double scan, a cached bad label, a replayed first message that locked the device, a non-durable "provisioned" marker, profiles that kept autoconnect, missed failure reasons. |
+| 10 | Installed the systemd service and ran the real setup from the iPhone, with SSH on Ethernet and `btmon` recording. | The device joined, but the phone never got the result: BlueZ's battery plugin read the iPhone's battery level, iOS asked to pair, and BlueZ stopped answering. `bluetoothd` now runs without that plugin; the second run showed **Device connected** ([evidence/real/real-join.txt](../evidence/real/real-join.txt)). |
+| 11 | Asked what blocks 200 sensors, then settled 24 requirement questions in one session. | Scanning 200 labels is the bottleneck, and a label secret in every patient room is a liability. Certificates and technician codes replaced labels; the batch, the reconfiguration with rollback and the advertised state followed ([decision 27](#27-certified-sensors-and-technician-codes-for-200-devices)). |
+
+A standalone HTML mockup (step 4, in the git history) showed the early design; the app has replaced it.
+
 ## Evidence collected
 
 | Check | Observed result |
@@ -174,7 +192,7 @@ Memory queues also work within this session's socket restrictions.
 BlueZ, BLE timing/MTU, systemd recovery, offline wireless operation, or Wi-Fi joining.
 
 **Evidence / test:** User instruction, 2026-10-17. Planned executable checks and
-the distinct hardware acceptance checkpoint are in `tasks/todo.md`.
+the distinct hardware acceptance checkpoint are in the development notes (git history).
 
 ## 8. Docker boundary
 
@@ -231,7 +249,7 @@ Bleak documents BlueZ >=5.55, met by the workstation's tools, not yet verified o
 **Original proposal:** Private GitHub repository and hardware-first milestone.
 
 **Final choice:** Continue in the existing local `iot-provisioning/` Git
-repository. Write `docs/ARCHITECTURE.md`, `tasks/plan.md`, and `tasks/todo.md`.
+repository. Write `docs/ARCHITECTURE.md` and the plan and to-do list (development notes, git history).
 Do not change the existing workspace AGENTS.md or implement future features now.
 
 **Reason:** The latest request explicitly asks to define the stack and plan
@@ -318,7 +336,7 @@ sub-agents explicitly authorized for collaboration.
 mode and checked responses; separately time reused-session exchange and full
 connect/exchange/close. Run a bounded 300-second mixed-failure endurance test.
 Keep commands, compiler, code commit, raw results, and resource snapshots in
-`demo/`, with interpretation in `docs/BENCHMARKS.md`.
+`evidence/`, with interpretation in `evidence/simulation/README.md`.
 
 **Reason:** Fixed, checked work plus independent review gives a defensible
 software milestone. Benchmarks retain validation and worker cleanup. No
@@ -367,7 +385,7 @@ no blocking defect. All 23 tests pass in debug/release, with formatting, Clippy,
 and release build passing. Three processes checked 80,073 timed jobs across
 45 scenario summaries, all with zero exit status. For 200 jobs, medians of
 per-process median batch times were 6.713/2.237/2.431 ms at 1/4/8 clients.
-See `docs/REVIEW.md`, `docs/BENCHMARKS.md`, and raw evidence under `demo/`.
+See the development notes (git history), `evidence/simulation/README.md`, and raw evidence under `evidence/`.
 
 ## 15. Phone configurator and headless Ubuntu device
 
@@ -439,8 +457,8 @@ semantics, a descendant retaining stdout after TERM, non-UTF-8 argument leakage,
 and D-Bus autoactivation. Separate Standards/Spec reviews identified defects
 that were reproduced and fixed. Rustfmt, Clippy, and release builds pass.
 The actual prepared-binary run returns exit 1 because host service access is
-blocked; see `demo/host-preflight.txt`, `demo/tdd-host-audit.txt`, and
-`demo/host-audit-verification.txt`. This does not close checkpoint H.
+blocked; see `evidence/real/host-preflight.txt`, `evidence/tests/tdd-host-audit.txt`, and
+`evidence/tests/host-audit-verification.txt`. This does not close checkpoint H.
 
 ## 17. Standalone architecture document and technician mockup
 
@@ -451,7 +469,7 @@ an interactive illustration of the non-technical operator flow.
 credential protection, and real Wi-Fi activation have passed their gates.
 
 **Final choice:** The user explicitly requests an HTML architecture/mockup now.
-Add `docs/architecture-demo.html` with inline CSS/JavaScript, phone/desktop
+Add a standalone HTML mockup (now in the git history) with inline CSS/JavaScript, phone/desktop
 previews, and simulated success, password, network, disconnect, and identity
 outcomes. Keep the actual runtime implementation gated. Use French, a neutral
 paper/green palette, one diagram, and a focused device/network/result workflow.
@@ -471,7 +489,7 @@ audit tests and the rest of the Rust suite are unchanged and not rerun here.
 A separate review found retained SSID validation after reset; the reproduced
 regression is fixed. All 12 DOM scenario groups pass under jsdom with controlled
 timers, no DOM errors, no outbound requests, and no pending timers. See
-`demo/mockup-dom-verification.md` for method, tested file hash, and limitations.
+`evidence/tests/mockup-dom-verification.md` for method, tested file hash, and limitations.
 Chrome headless fails on a prohibited socket operation in this session; Firefox
 is also blocked by its snap runtime path. DOM checks do not validate visual
 layout, native browser accessibility, CSP enforcement, or physical provisioning.
@@ -562,4 +580,374 @@ the offline baseline or pretending another simulation is radio evidence.
 205 cached crates, required BLE/runtime crates absent, temporary-manifest
 `cargo check --locked --offline` fails with package `bluer` unavailable.
 Actual BlueZ/NetworkManager access remains prohibited; see the separate
-`demo/host-preflight-continuation.txt` and `tasks/HANDOFF.md`.
+`evidence/real/host-preflight-continuation.txt` and the development notes (git history).
+
+## 21. Real BlueZ hello endpoint behind the `ble` feature
+
+**Decision:** Add `bluer` 0.17.4 (`bluetoothd`) and Tokio as optional dependencies,
+and a `device` binary that serves the shared handler over one GATT characteristic.
+
+**Final choice:** One service, one characteristic with acknowledged write and read.
+A single pending slot holds `(client address, response)`: every write clears it,
+`hello` fills it, and a read returns `world` once and only to that client. Nonzero
+offsets fail with `InvalidOffset`, other payloads with `NotSupported`. The binary
+powers the default adapter, advertises `IOT-DEMO-001` plus the service UUID, and
+unregisters on SIGINT/SIGTERM. The systemd unit uses `DynamicUser`, because
+Ubuntu's BlueZ D-Bus policy allows the default context, and `Requires=bluetooth.service`,
+because registrations do not survive a `bluetoothd` restart.
+
+**Reason:** This session can reach crates.io, BlueZ, and NetworkManager, which lifts
+decision 20's blockers. The full graph (79 packages) resolves on Rust 1.88. Default
+builds still compile no third-party crate. Locked offline builds work once the
+graph is fetched.
+
+**Trade-off:** The single slot serializes concurrent clients, matching the contract.
+Per-connection state and notifications are deferred to the secure protocol.
+The default adapter is used; no adapter argument yet.
+
+**Evidence / test:** Six unit tests in `device/bin/main.rs`, four mutations caught
+(`evidence/tests/tdd-ble-device.txt`); all suites, Rustfmt, and
+Clippy with and without `ble`. Actual run: `evidence/real/host-ble-endpoint.txt` (rfkill soft
+block, BlueZ returns `Busy`). Over-the-air exchange remains `NOT_RUN`.
+
+## 22. Enter the site network once; provision room by room
+
+**Decision:** The technician enters (or receives) the site Wi-Fi profile once per
+intervention, then provisions the sensors of each room as a batch by scanning
+their labels. No credential is typed per device.
+
+**Original proposal:** One device per flow: select a device, type SSID and
+password, connect, repeat (the first mockup).
+
+**Final choice:** Two kinds of secrets stay separate. The *site profile* (SSID and
+WPA2 password, or per-device credentials) lives in the phone's secure storage
+(Keychain or Keystore) for the intervention only. The *label secret* is unique
+per device and only protects the BLE channel. Per room: enter the room number,
+scan each sensor label, tap one button; the app provisions the sensors one at a
+time and shows one status per sensor, with targeted retries. The app records
+sensor ↔ room for Smith.
+
+**Reason:** The challenge PDF targets "thousands of IoT devices", "200 devices
+simultaneously in a hospital wing" and a non-technical facilities team; rooms hold
+several sensors. Typing a password per device is slow and error-prone, and the
+QR label already disambiguates sensors that advertise side by side.
+
+**Trade-off:** With WPA2-Personal every device holds the same site password: one
+compromised sensor exposes the network, and revoking one device means changing the
+password everywhere. Production should prefer per-device credentials: EAP-TLS
+certificates or per-device PSKs (PPSK/iPSK) issued through Smith. Storing the site
+password on the phone during the intervention is an accepted, bounded exposure.
+
+**Evidence / test:** Design and mockup only. The Playwright run must show a second
+room provisioned without re-entering credentials and one status per sensor.
+
+## 23. Expo React Native configurator, tested on iPhone
+
+**Decision:** Build the phone configurator with Expo and React Native in
+TypeScript, using `react-native-ble-manager` for Bluetooth.
+
+**Original proposal:** No framework selected (decision 19); options were native
+Swift/Kotlin, Flutter, React Native, Kotlin Multiplatform, or a web page.
+
+**Final choice:** Expo SDK 57, React Native 0.86, development builds through EAS
+(SDK 58 was dropped: the App Store Expo Go still runs SDK 57).
+`react-native-ble-manager` 12.5 is a New Architecture TurboModule with an Expo
+config plugin; upstream `react-native-ble-plx` only claims support up to Expo 51,
+while SDK 55+ runs only on the New Architecture. The first version is the hello
+probe in `configurator/`. The user will test physically on an iPhone only; the
+code stays cross-platform, but Android has no physical evidence.
+
+**Reason:** the own mobile stack is Expo + React Native + TypeScript (their
+mobile job post and their `street-food-safari` challenge). EAS builds iOS in the
+cloud, so no Mac is needed, and development builds reload from a QR code. A web
+page cannot work on iPhone: Safari has no Web Bluetooth.
+
+**Trade-off:** iPhone installs need a paid Apple Developer account. The Noise
+channel will run in TypeScript on the phone and in Rust (`snow`) on the device;
+interoperability must be proven with the official Noise test vectors. Later, the
+device's Wi-Fi apply should reuse Smith's connectivity guard and error names
+(`WrongPSK`, `NotInRange`, `NmcliError`) so technician messages match Smith.
+
+**Evidence / test:** `npm test` (6 probe tests, 6 mutations caught,
+`evidence/tests/tdd-configurator.txt`), an independent review with its fixes applied, `tsc`, `expo lint`, `expo-doctor` 20/20, an iOS
+prebuild with the Bluetooth usage string, and an iOS JavaScript export. No phone
+has run the app yet.
+
+## 24. Authenticate the sensor with its QR label for the MVP
+
+**Superseded by [decision 27](#27-certified-sensors-and-technician-codes-for-200-devices)** (2026-10-20): labels do
+not scale to 200 sensors.
+
+**Decision:** The phone trusts a sensor only after a Noise `NKpsk2` handshake with the keys printed on that
+sensor's QR label (`T1:<device id>:<public key>:<label secret>`, written by `stage`). Credentials are encrypted
+only after that handshake succeeds.
+
+**Original proposal:** Question raised on 2026-10-20: is the QR needed at all for a secure channel?
+
+**Final choice:** Keep the QR label for the MVP. The alternatives below were reviewed and recorded for the
+architecture writeup and for production.
+
+| Alternative | Conclusion |
+| --- | --- |
+| **No proof** (anonymous key exchange, BLE "Just Works") | Rejected. It meets "no plaintext over the air" literally but anyone in range can advertise `IOT-DEMO-001`, receive the password, and even relay to the real sensor so the app still shows *Device connected*. It saves the technician one scan. |
+| **Short code on the label** (8 digits, HomeKit style) + PAKE (SRP6a or SPAKE2) | Viable if IoT labels cannot carry a QR. Each wrong guess costs one live attempt. Needs a different protocol: `NKpsk2` requires a 256-bit secret that nobody can type. |
+| **Sensor list sent by Smith** before the visit (IDs, keys, work order) | Production target for 200 devices: no secret on the label, authorization comes with the work order. Needs the phone to sync before the visit. |
+| **IoT device attestation** (per-device key, certificate signed by a IoT CA, CA public key in the app; Matter's model) | Best long-term identity proof: nothing secret printed in patient rooms. Must be per-device (one shared fleet key extracted from one sensor would impersonate all), ideally in a secure element; the app must still match the certificate's device ID to the sensor in front of the technician, and Smith revokes stolen units. Authorization stays separate (single use, work order). |
+
+**Reason:** The QR is built, tested byte for byte against snow, needs one scan from a non-developer, and stops
+both a fake sensor and a real but different one. Changing the protocol now would delay the real Wi-Fi test.
+
+**Trade-off:** A photographed label lets someone provision a sensor that is not yet provisioned (accepted risk,
+`docs/SECURITY.md`); attestation or a Smith manifest removes it.
+
+**Evidence / test:** `evidence/tests/tdd-provision.txt`, `configurator/src/setup.test.ts` (a sensor failing the handshake
+never receives the credentials).
+
+## 25. Channel if the own sensors have no BLE
+
+**Decision:** BLE stays the demo channel; its availability on the production hardware is an assumption, asked
+to IoT on 2026-10-20.
+
+**Original proposal:** Decisions 1 and 18 chose BLE from the challenge constraints; nothing checked a real IoT
+sensor. The challenge PDF names "your computer" as the device, which noe-lab satisfies (MT7921, BLE + Wi-Fi).
+
+**Final choice:** Ranked fallbacks that create no shared local network:
+
+| Fallback | Conclusion |
+| --- | --- |
+| **Phone shows a QR to the sensor's camera** (IoT sensors are camera based) | First fallback: optical, short range, works with an iPhone. One way only, so success needs feedback (LED, sound, or Smith once online); the QR must carry credentials encrypted with the label key. |
+| **Wi-Fi Easy Connect (DPP)**, QR on the label as its bootstrap | The standard for this exact problem, no IP network. Android only as configurator: no iPhone, macOS or browser API. Driver support on the device unverified. |
+| **SoftAP** (temporary access point on the sensor) | Works on any Wi-Fi hardware, but it is a shared local network created during the process; excluded by decision 18. |
+| **USB** | No radio at all, but needs a port on a mounted sensor. |
+
+**Reason:** The channel choice and its reasoning are graded (PDF); the hardware assumption must be explicit.
+
+**Trade-off:** A camera channel would reuse the configurator, the label key and the NetworkManager code; only the
+transport changes.
+
+**Evidence / test:** None yet; depends on the answer.
+
+## 26. Saved sites behind Face ID
+
+**Decision:** The configurator keeps several named sites (facility name, network, password). Each password is a
+separate Keychain entry protected by Face ID (`biometryCurrentSet`), unlocked once per session and kept in memory
+only. Since decision 29 it is locked again when the app comes back after more than 2 minutes away (`LOCK_AFTER_MS`),
+not as soon as the app leaves the foreground.
+
+**Original proposal:** Decision 22: one site profile per intervention, forgotten at the end.
+
+**Final choice:** Supersedes the "one intervention" part of decision 22 at the user's request (a technician serves
+several facilities a year). Saving is refused when Face ID is off; re-enrolling Face ID makes saved passwords
+unreadable, so the site is entered again.
+
+**Reason:** Retyping each facility's password at every visit is slow and error prone; protecting each entry with
+Face ID limits what a lost or unlocked phone exposes.
+
+**Trade-off:** A phone now holds several facilities' passwords. Production should replace them with expiring site
+profiles issued by Smith, or per-device credentials (EAP-TLS, PPSK) so no shared password reaches the phone.
+
+**Evidence / test:** `configurator/src/sites.test.ts`; simulator layout checks. Face ID itself is NOT_RUN (the
+Simulator does not prompt).
+
+## 27. Certified sensors and technician codes for 200 devices
+
+**Decision:** Replace the QR label (decision 24) with two IoT authorities (Ed25519). Each sensor holds a
+certificate for its static key, signed by the **device authority** for one customer; the phone checks it offline
+inside a Noise `XX` handshake before anything secret leaves. Each technician holds a **technician code**, a token
+signed by the **technician authority** that names them, lists the customers they may serve and expires after 30
+days; the sensor checks it before it accepts any request. "Set up all ready sensors in range" runs the setups six at
+a time (three until decision 29).
+
+**Original proposal:** Question raised on 2026-10-20: what blocks 200 sensors with the label protocol, and how does
+a sensor get a unique ID on a channel that no malicious device can use to pass as a IoT sensor?
+
+**Final choice:** Decided in one requirements session (questions Q1 to Q24):
+
+| Question | Choice |
+| --- | --- |
+| Threat | A rogue device in radio range that advertises like a sensor (to collect the site password or mislead the technician). Labels are dropped: scanning 200 of them is the bottleneck. |
+| Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
+| Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as the code `<token hex>.<holder key hex>`, a QR code scanned inside the app or pasted text, kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. The first build delivered it as a `provide://technician/` link; the link was removed after the security review, since another app could claim the scheme and receive the code. Not bound to one phone, but bound to a holder key the code carries (added after review). The sensor's clock floor is the later of its firmware build date and the time it last recorded, and rises no faster than its uptime. |
+| Reconfiguration | Allowed with a valid token. The device keeps two NetworkManager profiles and rolls back to the working one if the new network fails. |
+| Batch | Every ready sensor in range, six BLE links at a time (three before 2026-10-21). A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters and **Retry failed** (the overall card of decision 28 replaced the filters and their failures-first sort). |
+| Rooms | Later, in Smith; not in the app. |
+| Proof | A 200-sensor test with fakes, a Simulator video, one real run on noe-lab. |
+
+**Reason:** The certificate removes per-sensor secrets and per-sensor scans, which is what a 200-sensor wing needs.
+A rogue device cannot present a valid certificate for a key it can prove, and a copied certificate fails because the
+copier does not hold that key. The token keeps a stolen or borrowed app from configuring sensors.
+
+**Trade-off:** The device key sits in a 0600 file, not a secure element: whoever extracts it from one sensor can
+impersonate that one sensor until IoT revokes it (revocation lists are not built). It cannot replay the tokens it
+collects: each names a holder key whose private half only the code carries. A leaked code works for its customers
+on any phone until it expires; 5 days bounds that (30 at first). Import inside the app costs the one-tap link; Universal Links
+would bring it back without a scheme another app can claim. The clock floor follows a clock set far ahead only as
+fast as the uptime, so it cannot lock codes out, but after a long power-off it trails real time by the downtime.
+The authorities' private keys must stay offline at IoT; the
+demo keeps them in `~/noe-ws/iot-authority` on noe-lab (0600, outside the repository).
+
+**Evidence / test:** `device/src/authority.rs` and `device/src/provision.rs` tests (impostor with a copied certificate, other
+authority, other customer, expired and forged tokens, reconfiguration, rollback profile order);
+`device/tests/noise_vectors.rs` with `configurator/src/noise.test.ts` (byte-for-byte interop); `configurator/src/setup.test.ts`
+(the token never leaves for a sensor that fails the checks); `configurator/src/batch.test.ts` (200 fake sensors);
+Simulator video `docs/media/demo-simulator.mp4`.
+
+## 28. Overall of the sensors in range
+
+**Decision:** Keep the card list as the only view of the sensors and put one overall card above it, in the same
+style, once more than four sensors are in range. It counts the sensors set up out of those in
+range, says what is running or what is left, and gives three tabs, **Set up**, **Errors** and **Not set up**, that
+filter the cards below. The tabs replace the old filter pills (All, a tick, a cross and an hourglass emoji).
+
+**Original proposal:** The card list with counters, filters and **Retry failed** (decision 27) reads well with 20
+sensors; with 200 it is 200 cards. Five approaches were drawn on a design canvas in the real **provide.** layout, at
+the same instant of one batch (142 connected, 5 to handle, 3 running, 46 waiting, 4 not prepared), then compared by a
+judge panel:
+
+| Approach | Limit | Cost |
+| --- | --- | --- |
+| A. Summary and failures by cause | Does not show where the sensors are. | S (the same components) |
+| B. The whole wing as a grid of tiles | The order has no physical meaning until Smith maps rooms. | M |
+| C. Dense list, search by the end of the ID | A long list with little overview. | S |
+| D. Find a failed sensor by its signal (radar, warmer or colder) | RSSI is noisy (walls, bodies) and gives no direction. | M |
+| E. End-of-visit report for a supervisor (totals, pace, PDF or CSV) | Useful after the batch, not during it. | M |
+
+The panel's pick was built: A as an **overview** (a progress card with a check line that added up to every sensor
+seen, failures grouped by cause with the fix and **Retry N** only where a retry helps, the sensors working now, the
+rest folded), B as a **wall** (one tile per sensor in batch order, problems pinned above it), and a switch at the
+corner of the sensor list to go back to the cards. It ran with 200 fake sensors in the Simulator and was never
+committed.
+
+**Technician's feedback:** The original card list is the view they like best. They want an overall with the same
+ergonomics, easy access to the sensors not set up, set up and with errors, no emoji, and the original design
+philosophy kept.
+
+**Final choice:** Drop the overview, the wall and the switch. One card above the cards:
+
+| Part | What it shows |
+| --- | --- |
+| Title | "188 set up of 200 in range", in two tones like the screen title. |
+| Line | During a batch: "6 in progress · 83 waiting · about 1 min left", the time once ten sensors of this batch have finished. Otherwise: "N ready to set up · N not prepared", ending with "· N state unknown" when older firmware advertises no state. |
+| Bar | Set up in ink, errors in red, the rest blank. |
+| Tabs | **Set up**, **Errors**, **Not set up**, each with its count and a shape: filled ink, filled red, hollow. A tap filters the list, a second tap shows all; a tab at 0 is disabled unless it is selected. A selected tab stays on: it keeps every sensor it has shown, updated in place, and adds at the end the sensors that join its group. |
+| Rows | Past four sensors, each sensor is a one-line row: its group's shape, one status line, its signal. A tap opens it in place into the full card; a second tap folds it. |
+| List header | "SENSORS · N", "NOT SET UP · N", "SET UP · N" or "ERRORS · N", with a refresh icon (hidden while anything runs) that drops the sensors not heard for 15 s, never one in the batch; while the search is paused it only resumes it. |
+| In progress | The **Not set up** tab puts the sensors being set up in an **IN PROGRESS** block on top, one fixed slot per running sensor; a freed slot stays empty until reused. The list below is what is left to do; a finished sensor belongs to Set up or Errors. A row opened while in progress stays in the block with its result until closed. |
+
+Each sensor sits in one group (`groupOf` in `configurator/src/wing.ts`): this session's result first, from a batch or
+a setup by hand; otherwise a sensor online is set up, one offline (set up, but not on its Wi-Fi) is an error, and
+anything else is not set up. A sensor that joined this session but now advertises offline is an error. What a sensor
+advertises never turns a failure into set up: an impostor can advertise online. The list keeps the scan order, so
+nothing moves under the thumb; only the **Errors** tab, when tapped, groups the failures by cause. **Retry failed**
+also appears after a setup by hand fails, with no batch needed. A sensor that failed by hand leaves **Set up all
+ready** and counts under Errors, so a sensor that is not genuine is no longer retried by that button (**Retry
+failed** leaves it out too).
+
+**Reason:** The technician keeps the cards they know, with their per-sensor actions (Test, Set up, Reconfigure)
+where they were. The overall answers "how far along?" and gives one tap to each group, which is what they asked for.
+One view instead of three: nothing to switch and nothing new to learn. Words and shapes carry the groups, so no
+emoji and no color alone.
+
+**Trade-off:** No cause cards and no **Retry N** per cause any more: the Errors tab lists the failures grouped by
+cause, each card with its reason, and **Retry failed** covers them (it leaves out a sensor that is not genuine). A
+sensor set up before but offline counts as an error, though this session did not touch it. The overall and the
+compact rows show only from five sensors in range; with one to four, the cards say enough. Without a sort, a failure
+in the full list sits where the scan found it: the Errors tab is the way to the failures. Where a sensor is waits for
+rooms from Smith. The time left assumes the pace so far holds. The code is about 95 lines (`wing.ts`,
+`Summary.tsx`) instead of about 470 for the three views.
+
+**Evidence / test:** `configurator/src/wing.test.ts` (each sensor in one group, this session's result first, a
+sensor that joined then advertises offline an error; the time left only after ten have finished); app 68 tests,
+`npx tsc --noEmit` and `npx expo lint` clean. iOS Simulator in demo mode (`SIMULATION`, decision 30), 200 simulated
+sensors, each with a real Noise `XX` responder, iPhone 16 Pro and iPhone SE with accessibility-large text: screens
+`docs/media/08-overall-running.png` to `11-overall-se-large-text.png` and the 42 s video
+`docs/media/overall-200-sensors.mp4` (2x speed: discovery, a batch with sensors added, the Not set up tab, the
+Errors tab). The design canvas and the first build are kept
+outside the repository. NOT_RUN: the overall with many real sensors; the app is installed on the technician's
+iPhone, where it has not yet been used at scale.
+
+## 29. Batch at the pace of a wing
+
+**Decision:** Six BLE links at a time instead of three. A link failure goes back to the queue, up to two more times.
+Sensors found during a batch can join it. The scan keeps running during setups, and the status poll runs every
+500 ms. The technician code and the site password are locked again only when the app comes back after more than 2
+minutes away.
+
+**Original proposal:** Decision 27: three links, every failure final, the batch fixed when it starts, the scan
+stopped for each run, a poll every second. Decision 26 dropped the code and the password as soon as the app left the
+foreground, so any app switch stopped a running batch.
+
+**Final choice:**
+
+| Part | Choice |
+| --- | --- |
+| Links | `BATCH_CONCURRENCY` 6 (`configurator/src/batch.ts`). A sensor holds a link about 7.5 s; 200 sensors take about 8 minutes at 3 links and about 4 at 6. Set from that arithmetic and iOS's limits, not measured on hardware. |
+| Retries | Timeout, rejected, `Busy` and a lost result (`unknown`) send the sensor to the end of the queue, up to `RETRIES` (2) more times, with the same attempt ID when the request may have reached it. Wi-Fi failures and refusals are final. Never after a stop. |
+| Stop | A site-wide failure marks the rest of the queue "not tried" at once, not after the sensors in progress finish. |
+| Add during a batch | **Add N to the batch** puts the ready sensors found meanwhile at the end of the queue (`BatchControl.add`, de-duplicated, ignored after a stop); the time left counts them. |
+| Scan | Keeps running during setups and tests: the stop before each run was removed. |
+| Poll | `Status` every 500 ms (`configurator/src/setup.ts`), so a finished join frees its link sooner. |
+| Credential lock | `LOCK_AFTER_MS`, 2 minutes (`configurator/App.tsx`): checked when the app comes back. A short switch no longer stops a batch. |
+| Buttons | During a batch, **Test** stays available on the sensors the batch is not working on; **Set up** by hand stays disabled. |
+
+**Reason:** A wing is 200 sensors and the join (about 5.5 s) dominates, so the phone mostly waits. More links and
+fewer sensors lost to a dropped link shorten the visit. A technician who answers a message mid-batch should not lose
+the batch.
+
+**Trade-off:** Six links share one radio, so connects may slow down or fail more often; retries absorb part of it,
+but a dead sensor now costs up to three tries. Scanning while connecting is a risk: iOS connects were thought more
+reliable without a concurrent scan. Both are to measure on the bench and with real sensors. The code and the password
+stay in the app's memory while it is in the background: someone who opens the unlocked phone within 2 minutes reaches
+them without Face ID. Not built: releasing the link during the join, and a concurrency that adapts to failures
+(see "200 devices in a hospital wing" in `docs/ARCHITECTURE.md`).
+
+**Evidence / test:** `configurator/src/batch.test.ts` (12 tests: retries, sensors added during a run, the queue marked
+at once on a stop, a link failure after a stop is final); app 68 tests. Test bench (`ACTUAL_BLE`, simulated sensors,
+decision 30): one run with 14 advertising sets and a 3 s cycle had 84 provisioning sessions and 79 joins, against 20
+sessions in the run before the retries and the faster cycle; the bench's sensors are on air part of the time, so its
+connects are slower than real sensors'. The 2-minute lock has no test. NOT_RUN: six links and scanning during runs
+with real sensors.
+
+## 30. Demo mode in the app, and the lab bench
+
+**Decision:** Demo mode ships inside the app: 200 simulated sensors on a fake radio, trusted through a second, public
+demo authority that only the fake radio uses. A separate bench in `tools/`, outside the app, shows 200 simulated
+sensors over real Bluetooth from noe-lab, with identities certified by the real device authority for a lab customer.
+
+**Original proposal:** The Simulator screens and videos of decisions 27 and 28 came from a temporary harness, not in
+the repository. Nothing let a reviewer see a wing, and nothing loaded the phone's radio with many sensors.
+
+**Final choice:**
+
+| Part | Choice |
+| --- | --- |
+| Entry | Tap the logo and confirm; the chip reads **DEMO**; the logo or the chip leaves (not while a test or a batch runs). The launch argument `-demo 1` (simctl) starts in it. |
+| Isolation | Switching remounts the screen: no sensor, result, scan or credential crosses modes. The demo authority (seeds filled with 0x51 and 0x52, public) is passed to `setup()` only in demo mode; real sensors are always checked against `DEVICE_AUTHORITY`. The demo's code and site live in memory; nothing saved is read or written, and the code and site sheets never open. |
+| Demo wing | `configurator/src/demo.ts`: each sensor runs the sensor side of Noise `XX` with its own key. 6 set up before, 4 not prepared, 3 out of Wi-Fi range, 3 impostors (a copied certificate without its key), 2 of another customer, some slow joins. About half is heard within 4 s, the rest over a minute. |
+| Bench | `tools/iot_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `tools/mint-lab.sh` (`stage init`, `iot-workshop certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `tools/sim-lab.sh` stops `iot-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
+
+**Reason:** One app for both: the demo runs the real code paths (handshake, checks, batch, overall), so what a
+reviewer sees is what a technician gets. The bench measures what the Simulator cannot: the radio, iOS's links, the
+advertising load. Certifying its identities with the real authority lets the unmodified app trust them.
+
+**Trade-off:** The shipped app holds a second trust anchor whose seeds are public. A path that paired it with the
+real radio would let anyone pass as a sensor: audited, none does, and `demo.test.ts` shows demo sensors refused under
+the real authority. The bench's identities are real certificates whose keys sit on noe-lab: any phone whose code
+covers `LAB` sends them the site password, and the simulator, running as root, holds it in memory. Use a throwaway
+site; the simulator never joins Wi-Fi. A technician code for `LAB` and `DEMO` was issued for 30 days. The bench's
+sensors are on air part of the time, so its connect latency is worse than real sensors'; the demo's timings are not
+measured ones.
+
+**Evidence / test:** `configurator/src/demo.test.ts` (3 tests: the expected outcome for each simulated sensor through
+the real `setup()`, demo sensors refused under the real authority, Test on a demo sensor); screens 8 to 11 and
+`docs/media/overall-200-sensors.mp4` (`SIMULATION`); bench runs (`ACTUAL_BLE`, run log on noe-lab, not in the
+repository).
+
+## Sensor identity carrier correction — approved 2026-10-23
+
+The repeated jetson-019/not-genuine failure came from using an OS name cache when the scan-response name was
+missing. Rename/alias and process-memory workarounds did not survive cache lifetime changes. The user approved
+moving all five identity bytes into the existing primary manufacturer record after the state byte (31/31 legacy
+bytes), with one shared parser for display, saved-site lookup and setup. Names remain diagnostic. No certificate
+or Noise binding is weakened. Older state-only firmware requires an update; no fallback reintroduces the missing
+scan-response dependency. Scope, regressions and evidence limits: the identity proposal and handoff notes (git history).

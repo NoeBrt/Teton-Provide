@@ -1,0 +1,66 @@
+# The checks AGENTS.md asks for before each commit, on every push and pull request.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  configurator:
+    name: App (tests, types, lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: configurator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: configurator/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+
+  device:
+    name: Sensor and workshop (Ubuntu, BlueZ)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: device
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - run: rustup show # installs the toolchain pinned in device/rust-toolchain.toml
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: device
+      - run: cargo fmt --check
+      - run: cargo clippy --features ble,stage --all-targets --locked -- -D warnings
+      - run: cargo test --features ble,stage --all-targets --locked
+
+  desktop:
+    name: Desktop bridges (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: configurator/package-lock.json
+      # Tauri embeds the web build at compile time, so the tests need it.
+      - run: npm ci && npx expo export -p web
+        working-directory: configurator
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: configurator/desktop/src-tauri
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: configurator/desktop/src-tauri
+      - run: cargo test # the real-keychain test stays ignored: run it by hand with -- --ignored
+        working-directory: configurator/desktop/src-tauri

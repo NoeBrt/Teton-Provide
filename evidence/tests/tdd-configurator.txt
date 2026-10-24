@@ -1,0 +1,44 @@
+# COMMAND_FIXTURE red/green for configurator/src/probe.ts, 2026-10-18T14:17:13+02:00
+# Node v22.23.3, command per mutation: npm test (node --test src/*.test.ts)
+# Fake BLE link only: no phone or radio involved. Updated after the independent review.
+
+== mutation: no disconnect on failure
+not ok 1 - writes hello, reads world, then disconnects
+not ok 2 - an empty or different reply fails at the read step
+not ok 3 - a rejected write reports the step and the native message, then disconnects
+not ok 4 - a service lookup that never answers times out at the services step
+not ok 6 - a connection that never answers times out instead of hanging
+# pass 1
+# fail 5
+# cancelled 0
+== mutation: no per-step deadline
+not ok 4 - a service lookup that never answers times out at the services step
+not ok 5 - a disconnect that never answers does not hang the probe
+not ok 6 - a connection that never answers times out instead of hanging
+# pass 3
+# fail 0
+# cancelled 3
+== mutation: reply not checked
+not ok 2 - an empty or different reply fails at the read step
+# pass 5
+# fail 1
+# cancelled 0
+== mutation: sends wrong request
+not ok 1 - writes hello, reads world, then disconnects
+# pass 5
+# fail 1
+# cancelled 0
+== mutation: disconnect without deadline
+not ok 5 - a disconnect that never answers does not hang the probe
+not ok 6 - a connection that never answers times out instead of hanging
+# pass 4
+# fail 0
+# cancelled 2
+== mutation: native error message dropped
+not ok 3 - a rejected write reports the step and the native message, then disconnects
+# pass 5
+# fail 1
+# cancelled 0
+== unmutated
+# pass 6
+# fail 0

@@ -1,0 +1,125 @@
+{
+  "scope": "Local Chromium playback and FFmpeg full decode of all ten pointer tutorials",
+  "checks": [
+    {
+      "file": "mobile-technician-code.mp4",
+      "codec_name": "h264",
+      "width": 390,
+      "height": 844,
+      "r_frame_rate": "25/1",
+      "duration": "4.920000",
+      "size": "81475",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "mobile-site-wifi.mp4",
+      "codec_name": "h264",
+      "width": 390,
+      "height": 844,
+      "r_frame_rate": "25/1",
+      "duration": "11.480000",
+      "size": "190184",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "mobile-sensor-test.mp4",
+      "codec_name": "h264",
+      "width": 390,
+      "height": 844,
+      "r_frame_rate": "25/1",
+      "duration": "5.840000",
+      "size": "178731",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "mobile-sensor-setup.mp4",
+      "codec_name": "h264",
+      "width": 390,
+      "height": 844,
+      "r_frame_rate": "25/1",
+      "duration": "3.880000",
+      "size": "133123",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "mobile-configure-all.mp4",
+      "codec_name": "h264",
+      "width": 390,
+      "height": 844,
+      "r_frame_rate": "25/1",
+      "duration": "19.000000",
+      "size": "741440",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "desktop-technician-code.mp4",
+      "codec_name": "h264",
+      "width": 1280,
+      "height": 800,
+      "r_frame_rate": "25/1",
+      "duration": "4.920000",
+      "size": "128140",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "desktop-site-wifi.mp4",
+      "codec_name": "h264",
+      "width": 1280,
+      "height": 800,
+      "r_frame_rate": "25/1",
+      "duration": "11.480000",
+      "size": "312728",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "desktop-sensor-test.mp4",
+      "codec_name": "h264",
+      "width": 1280,
+      "height": 800,
+      "r_frame_rate": "25/1",
+      "duration": "5.800000",
+      "size": "321564",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "desktop-sensor-setup.mp4",
+      "codec_name": "h264",
+      "width": 1280,
+      "height": 800,
+      "r_frame_rate": "25/1",
+      "duration": "3.880000",
+      "size": "211179",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    },
+    {
+      "file": "desktop-configure-all.mp4",
+      "codec_name": "h264",
+      "width": 1280,
+      "height": 800,
+      "r_frame_rate": "25/1",
+      "duration": "19.000000",
+      "size": "1455819",
+      "decode": "PASS",
+      "browserPlayback": "PASS",
+      "fastStart": "PASS"
+    }
+  ]
+}

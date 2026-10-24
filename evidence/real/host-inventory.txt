@@ -1,0 +1,20 @@
+# ACTUAL_HOST inventory, 2026-10-18 (read-only commands from the README audit)
+# Sanitized: no controller MAC, no nearby or paired device addresses, no SSID.
+
+Machine        HP Victus 16-s0xxx laptop, x86-64 (not a Jetson: no /etc/nv_tegra_release)
+OS / kernel    Ubuntu 22.04.5 LTS, Linux 6.8.0-138-generic
+Radios         MediaTek MT7921 combo: Wi-Fi 6 on PCIe (mt7921e, 14c3:7961),
+               Bluetooth on USB (btusb, 13d3:3567); both share one antenna/chip
+BlueZ          5.64, bluetooth.service active; adapter hci0 is the default
+hci0 roles     central + peripheral (peripheral needed for iot-device)
+LE advertising SupportedInstances 20, ActiveInstances 0,
+               SupportedIncludes tx-power, appearance, local-name
+hci0 state     Powered: no — rfkill soft block (unblock requires root)
+NetworkManager active; WIFI-HW enabled, WIFI enabled; wlo1 managed and connected
+               to an existing network (not the challenge target yet)
+D-Bus          org.bluez GattManager1 / LEAdvertisingManager1 and
+               org.freedesktop.NetworkManager reachable as uid 1000
+
+Result: hardware and APIs suit the BLE peripheral + NetworkManager design.
+Remaining gate: rfkill soft block. The shared MT7921 chip means BLE and Wi-Fi
+coexist on one radio; test provisioning while wlo1 associates (later phase).

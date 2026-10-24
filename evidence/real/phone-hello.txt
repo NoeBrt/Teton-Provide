@@ -1,0 +1,49 @@
+# ACTUAL_BLE evidence, 2026-10-19/20 (evening, Europe/Paris), iPhone → headless Ubuntu device
+# Device: noe-lab, Ubuntu 22.04.5 LTS, 6.8.0-138-generic, BlueZ 5.64, MediaTek MT7921 (BLE + Wi-Fi)
+#         binary target/release/device built from revision 85f8b61 (feature `ble`), run from a user shell, no root
+# Phone:  iPhone 15 Pro (iPhone16,1), iOS 27.0
+# Client: configurator "provide." (configurator/), Expo SDK 57, React Native 0.86.3,
+#         react-native-ble-manager 12.5, react-native-reanimated 4.5.1; Release build (JavaScript bundled,
+#         no Metro, no network needed), signed with a free Apple ID (Personal Team) via Xcode 27.1 on macOS 26.6.2.
+#         Source: uncommitted configurator changes on top of 85f8b61 (see tasks/HANDOFF.md, Step 11).
+# Not recorded on purpose: Bluetooth addresses, device UDID, signing team, network names, payloads.
+
+$ ./target/release/device          # background, log in /tmp/iot-device.log
+$ cat -n /tmp/iot-device.log     # device-side log after the whole session
+     1	IOT-DEMO-001 advertising on hci0; accepts only hello
+     2	hello exchanged
+     3	hello exchanged
+     4	stopping
+     5	IOT-DEMO-001 advertising on hci0; accepts only hello
+     6	hello exchanged
+     7	hello exchanged
+     8	hello exchanged
+     9	hello exchanged
+    10	stopping
+    11	IOT-DEMO-001 advertising on hci0; accepts only hello
+
+Session, as observed:
+- Lines 1-3: the app discovered IOT-DEMO-001 by service UUID (automatic scan), the user tapped Test twice;
+  the app showed "“world” received" in the sensor's card each time. The user reported "ça marche parfaitement".
+- Line 4: the service was stopped with SIGINT; BlueZ then reported 0 active advertisements and no IoT
+  service UUID (registrations released).
+- Lines 5-9: the service was restarted; four more exchanges succeeded from the same app session,
+  without any manual Bluetooth reset on the phone or the host.
+- Lines 10-11: second scripted stop/restart (during an attempted screen recording, see below);
+  no exchange was made after line 11.
+
+Results:
+- Discovery by service UUID from the iPhone app ........................ PASS
+- Connect, write "hello", read "world" (6 exchanges, 2 service runs) ..... PASS
+- Reconnect after a device service restart, no manual Bluetooth reset ..... PASS
+- Phone-side error while the service is stopped ......................... NOT_RECORDED
+  (the app's failure path is unit-tested, configurator/src/probe.test.ts; the user did not report the on-phone
+   message for this run)
+- Internet disabled / no shared LAN ..................................... NOT_RUN (phone and host were at home,
+  both possibly on the same Wi-Fi; the exchange itself only uses BLE)
+- systemd service restart and machine reboot ............................ NOT_RUN (task 7)
+- Android ............................................................... NOT_RUN
+
+Screen recording: `xcrun devicectl device capture screen-record` fails on this iPhone with
+"The capability “Screen Recording” is not supported by this device" (CoreDevice error 1001).
+docs/configurator/simulator-flow.mp4 is a SIMULATION (fake sensors in the iOS Simulator), not this run.

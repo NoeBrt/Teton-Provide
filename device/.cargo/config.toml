@@ -1,0 +1,4 @@
+# `cargo workshop issue "Evaluator"`: builds and runs iot-workshop (bin/workshop.rs) from the sources, for development.
+# Install it once instead: `cargo install --path device --features stage --bin iot-workshop --locked`.
+[alias]
+workshop = "run --quiet --release --features stage --bin iot-workshop --"

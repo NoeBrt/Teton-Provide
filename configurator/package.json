@@ -1,0 +1,53 @@
+{
+  "name": "iot-provisioning-configurator",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo-google-fonts/onest": "^0.4.2",
+    "@expo/metro-runtime": "~57.0.17",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "barcode-detector": "3.2.3",
+    "expo": "~57.0.30",
+    "expo-build-properties": "~57.0.22",
+    "expo-camera": "~57.0.6",
+    "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.20",
+    "expo-font": "~57.0.4",
+    "expo-haptics": "~57.0.3",
+    "expo-keep-awake": "~57.0.2",
+    "expo-secure-store": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-ble-manager": "^12.5.3",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2",
+    "react-native-worklets": "0.10.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "~19.2.4",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "expo lint",
+    "desktop:dev": "cd desktop && tauri dev",
+    "desktop:build": "rm -rf dist desktop/src-tauri/target/release/bundle && cd desktop && tauri build",
+    "desktop:install": "npm run desktop:build -- --bundles app && ditto desktop/src-tauri/target/release/bundle/macos/Provide.app /Applications/Provide.app.new && (/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u desktop/src-tauri/target/release/bundle/macos/Provide.app || true) && rm -rf /Applications/Provide.app desktop/src-tauri/target/release/bundle && mv /Applications/Provide.app.new /Applications/Provide.app",
+    "postinstall": "node -e \"const fs=require('fs');fs.mkdirSync('public',{recursive:true});fs.copyFileSync(require.resolve('zxing-wasm/reader/zxing_reader.wasm',{paths:[require.resolve('barcode-detector')]}),'public/zxing_reader.wasm')\""
+  },
+  "private": true
+}
