@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The Provide window: core events for the Bluetooth bridge",
-  "windows": ["main"],
+  "description": "Provide and its menu panel: core events for the shared app state and Bluetooth bridge",
+  "windows": ["main", "menubar"],
   "permissions": ["core:default"]
 }

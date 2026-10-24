@@ -188,3 +188,9 @@ configurator/src/         noise.ts (Noise initiator), authority.ts (certificate 
                           simulated sensors)
 configurator/desktop/     Tauri shell; src-tauri/src/ble.rs is the Bluetooth bridge
 ```
+
+On macOS, `src/MenuPanel.tsx` displays a compact menu-bar window. `src/menuBar.ts` carries display-only snapshots
+and actions between it and the main window; it never starts a radio or receives a password or technician token.
+The main window stays alive when closed, with background throttling disabled so scans and batches keep running.
+`desktop/src-tauri/src/menu_bar.rs` positions the panel and applies native Liquid Glass (macOS 26+) or popover
+material. The menu panel uses the system font and follows the system appearance.

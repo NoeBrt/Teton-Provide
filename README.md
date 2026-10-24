@@ -75,6 +75,14 @@ Both videos show a wing of 200 simulated sensors: batch progress, errors and ret
 
 All results in these videos are simulated; they show no real credentials.
 
+On macOS, click Provide.'s icon in the menu bar for a compact sensor list: refresh or cancel a refresh, test a sensor,
+set one up, or set up all ready sensors. It shares the app's live state. Click a sensor to open its full card, or press
+Escape to dismiss the panel. **Window → Nearby Sensors** (⌘⇧P) also opens it. Closing the main window keeps Provide.
+available in the menu bar; right-click the icon and choose **Quit Provide.** to exit.
+
+The desktop app requires macOS 14 or later. The panel uses Liquid Glass on macOS 26+ and the system popover material
+on older versions.
+
 ## The challenge
 
 A technician walks into a hospital with sensors that have no screen and no network. They must give each sensor the site's Wi-Fi password and see which ones connected, with no terminal, no cloud relay and no shared network.

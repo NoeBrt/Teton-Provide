@@ -166,7 +166,7 @@ One code per technician: run the command again with another name. Name each tech
 Build after setting both authority public keys above.
 
 - **iPhone:** follow [Install on an iPhone from a Mac](../configurator/README.md#install-on-an-iphone-from-a-mac-free-apple-id). Use a **Release standalone build** with bundled JavaScript, so Metro and a shared network are unnecessary during the demo. Expo Go cannot run native Bluetooth provisioning.
-- **macOS:** with Xcode command-line tools, Rust and Node installed, run the commands below. Grant Bluetooth access when prompted. The packaged application is under `configurator/desktop/src-tauri/target/release/bundle/`.
+- **macOS 14+:** with Xcode command-line tools, Rust 1.90+ and Node installed, run the commands below. Grant Bluetooth access when prompted. The packaged application is under `configurator/desktop/src-tauri/target/release/bundle/`.
 
 ```sh
 cd configurator
@@ -258,6 +258,7 @@ Desktop shell (Bluetooth bridge restrictions), then the browser checks of the de
 cd configurator/desktop/src-tauri && cargo test && cd ../..
 node desktop/layout-check.mjs <path to the playwright module>   # layouts, resizes, scrolling, in Chromium and WebKit
 node desktop/playtest.mjs <path to the playwright module>       # demo batch, errors, retry, dialogs and keyboard
+node desktop/menu-bar-check.mjs <path to the playwright module> # shared 200-sensor panel, refresh/cancel, test and setup
 ```
 
 Tests cover Rust/TypeScript Noise interoperability, certificate and technician-token rejection, malformed messages, attempt handling and the simulated batch queue. They complement the hardware evidence; they do not replace it.
