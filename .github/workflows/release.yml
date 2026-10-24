@@ -32,12 +32,14 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - uses: gradle/actions/setup-gradle@v4 # caches Gradle and its dependencies between runs
       - run: npm ci
       - run: npx expo prebuild --platform android --no-install
       # Gradle refuses a project name ending with a dot, and the app is called "provide.": the label keeps it.
       - run: sed -i "s/^rootProject.name = 'provide\.'/rootProject.name = 'provide'/" android/settings.gradle && grep rootProject.name android/settings.gradle
-      # The release APK is signed with the debug key Expo's template sets up: installable, not for a store.
-      - run: ./gradlew assembleRelease --no-daemon
+      # The release APK is signed with the debug key Expo's template sets up: installable, not for a store. One ABI,
+      # arm64-v8a (every Android phone of the last years), builds the native code once instead of four times.
+      - run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
         working-directory: configurator/android
       - run: mv android/app/build/outputs/apk/release/app-release.apk "Provide-${VERSION}-android.apk"
       - uses: actions/upload-artifact@v4
@@ -57,6 +59,10 @@ jobs:
           cache-dependency-path: configurator/package-lock.json
       - run: npm ci
         working-directory: configurator
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: configurator/desktop/src-tauri
+          shared-key: release
       - run: npx tauri build --bundles dmg # its beforeBuildCommand exports the web build
         working-directory: configurator/desktop
       - run: mv configurator/desktop/src-tauri/target/release/bundle/dmg/*.dmg "Provide-${VERSION}-macos-arm64.dmg"
@@ -77,6 +83,10 @@ jobs:
           cache-dependency-path: configurator/package-lock.json
       - run: npm ci
         working-directory: configurator
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: configurator/desktop/src-tauri
+          shared-key: release
       - run: npx tauri build --bundles nsis
         working-directory: configurator/desktop
       - run: Move-Item configurator/desktop/src-tauri/target/release/bundle/nsis/*.exe "Provide-$env:VERSION-windows-x64-setup.exe"
@@ -102,6 +112,10 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config
       - run: npm ci
         working-directory: configurator
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: configurator/desktop/src-tauri
+          shared-key: release
       - run: npx tauri build --bundles appimage,deb
         working-directory: configurator/desktop
       - run: |
