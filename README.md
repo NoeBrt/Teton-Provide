@@ -229,9 +229,10 @@ Open the URL Expo prints with `?demo=1`: 200 simulated sensors, no Bluetooth. Ne
 Provide. talks Bluetooth through `react-native-ble-manager`, a native library that Expo Go does not ship. In Expo Go
 the app opens, runs the demo, and says "Bluetooth is unavailable in Expo Go". A real sensor needs your own build.
 
-### 1. Set up the device (Ubuntu)
+### 1. Build the sensor binaries (Linux)
 
-On an Ubuntu machine with BLE and Wi-Fi managed by NetworkManager:
+The sensor runs Ubuntu with BlueZ and NetworkManager. Build on the sensor itself or on any Linux machine of the
+same architecture:
 
 ```sh
 sudo apt install build-essential pkg-config libdbus-1-dev bluez network-manager curl rfkill
@@ -239,39 +240,34 @@ curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchai
 . "$HOME/.cargo/env"
 git clone https://github.com/NoeBrt/iot-provisioning.git && cd iot-provisioning/device
 cargo build --release --features ble,stage --locked
-sudo systemd/install.sh wlo1                   # your Wi-Fi interface, from `nmcli device status`
-sudo -u iot iot-stage init /var/lib/iot-device             # prints the sensor's public key
 ```
 
-### 2. Certify it from the workshop (your laptop)
+Copy `target/release/device` and `target/release/stage` into `device/target/linux-$(uname -m)/` of the checkout on
+your laptop (`linux-aarch64` for a Jetson, `linux-x86_64` for a PC).
 
-The authorities' private keys stay on a workshop machine, never on a sensor; the sensor only receives its certificate. On your laptop (macOS or Linux, Rust installed),
-install the workshop tool once from the checkout, then run it from any folder:
+### 2. Deploy it from the workshop (your laptop)
+
+The authorities' private keys stay on your laptop. A sensor only receives its certificate. Install the workshop tool
+once (macOS or Linux, Rust installed), then run it from any folder:
 
 ```sh
 cargo install --path device --features stage --bin iot-workshop --locked   # first build: 1-2 minutes
 iot-workshop init                           # once, for every customer: two authorities, their public keys
-iot-workshop certify <SENSOR_PUBLIC_KEY> --customer "Noé Home"     # the sensor's certificate, for one customer
+iot-workshop deploy <ssh-host> --customer "Noé Home"
 iot-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
 ```
 
-A customer is a name or an ID: `"Noé Home"` becomes `NOE-HOME`, the ID that certificates and codes carry. Without
-`--customer`, the tool offers the last customer again and asks for a yes; with no terminal to ask, it stops, so a
-script always names the customer.
+`deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It asks for
+the sensor's sudo password once, then copies the binaries, runs the installer, has the sensor create its key,
+certifies that key for the customer, records your laptop's time as the sensor's earliest clock and starts the
+service. Add the Wi-Fi interface after the host (`deploy <ssh-host> wlo1`) to pin one; by default NetworkManager
+picks. `deploy` refuses a sensor that already runs the service: run `iot-workshop uninstall <ssh-host>` first. It
+removes the service and the Wi-Fi the sensor was given, and moves the sensor's key to `/root/iot-backup`.
 
-Back on the device:
-
-```sh
-sudo -u iot iot-stage install /var/lib/iot-device <CERTIFICATE> <TECHNICIAN_AUTHORITY_KEY>
-sudo systemctl restart iot-device            # the journal shows IOT-XXXXXXXXXX advertising
-```
-
-**Or in one command from the laptop**, for a sensor reachable over SSH (a Jetson over USB is at 192.168.55.1):
-`iot-workshop deploy <ssh-host> [wifi-interface] --customer "Noé Home"`. It copies the Linux binaries from `target/linux-<arch>/`
-(built on Linux with the `cargo build` above), runs the installer, has the sensor create its key, certifies it,
-records the laptop's time as the sensor's earliest clock, and starts the service. It asks for the sensor's sudo password once.
-`iot-workshop uninstall <ssh-host>` undoes it: the sensor forgets the Wi-Fi it was given and loses the service,
-and its key moves to `/root/iot-backup`.
+A customer is a name or an ID: `"Noé Home"` becomes `NOE-HOME`, the ID that certificates and codes carry. Leave out
+`--customer` and the tool offers the last customer again and waits for your yes. A script with no terminal must name
+the customer. `iot-workshop help` lists every command, and [docs/SETUP.md](docs/SETUP.md) describes the manual
+path (`iot-stage init`, `iot-workshop certify`) for a sensor without SSH.
 
 Copy the two public keys from `iot-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
 `TECHNICIAN_AUTHORITY`) before you build the app.
