@@ -1,4 +1,5 @@
-//! teton-workshop: Teton's authorities, run at the workshop (offline). Two Ed25519 keys, kept apart from the devices:
+//! teton-workshop: Teton's authorities, run at the workshop. Offline except the first deployment downloads.
+//! Two Ed25519 keys, kept apart from the devices:
 //!
 //! ```text
 //! teton-workshop init | public | certify DEVICE_PUBLIC_KEY_HEX --customer C | issue NAME --customer C [--customer C2...]
@@ -16,7 +17,7 @@
 //!     customers, and its code ID; the ID is logged in DIR/issued.tsv with the name, never the code
 //! teton-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C
 //!     installs the service on a blank Ubuntu sensor over SSH (USB or network) and makes it ready for setup: copies
-//!     the binaries built for its architecture (target/linux-ARCH/device and stage), runs systemd/install.sh, has
+//!     the released binaries for its architecture (downloaded once, SHA-256 checked), runs systemd/install.sh, has
 //!     the sensor create its key, certifies that key here for the customer and installs the certificate. The authority's
 //!     private keys stay on this machine; the sudo password is read here, without echo, and sent over SSH only
 //! teton-workshop uninstall SSH_HOST [--yes]
@@ -28,6 +29,9 @@
 //! the phone proves its private half, so a sensor that records the token cannot reuse it. The code is a credential:
 //! send it to the technician only, over a channel you trust; the technician imports it inside the app (scan or
 //! paste), never through a link another app could claim.
+
+#[path = "workshop/binaries.rs"]
+mod binaries;
 
 use ed25519_dalek::SigningKey;
 use qrcode::QrCode;
@@ -73,6 +77,7 @@ Start
 Add a sensor
   deploy SSH_HOST [WIFI_IF] --customer C
                                 install, key, certify for C and start a blank Ubuntu sensor over SSH (USB: 192.168.55.1)
+                                downloads Linux binaries once; no compiler needed on the sensor
   certify SENSOR_PUBLIC_KEY --customer C
                                 manual path: certify the key `teton-stage init` printed
   uninstall SSH_HOST [--yes]    forget the Wi-Fi it was given and remove the Teton service: a blank sensor again
@@ -552,17 +557,7 @@ fn deploy(dir: &Path, host: &str, interface: Option<&str>, given: &[String]) -> 
                 ));
             }
             let arch = answer.lines().next().unwrap_or_default().to_string();
-            let binaries = binaries(&arch)?;
-            for name in ["device", "stage"] {
-                if !binaries.join(name).is_file() {
-                    return Err(format!(
-                        "{} missing: build it on Linux for {} (`cargo build --release --features ble,stage --locked`) \
-                         and copy target/release/device and stage there",
-                        binaries.join(name).display(),
-                        arch.trim()
-                    ));
-                }
-            }
+            let binaries = binaries::prepare(&arch, Path::new(CRATE_DIR))?;
             detail(&format!(
                 "{}, Linux binaries from {}",
                 arch.trim(),
@@ -846,15 +841,6 @@ fn target(host: &str, interface: Option<&str>) -> Result<(), String> {
         ));
     }
     Ok(())
-}
-
-/// Where the binaries for the sensor's architecture (`uname -m`) are expected.
-fn binaries(arch: &str) -> Result<PathBuf, String> {
-    let arch = arch.trim();
-    if arch.is_empty() || !arch.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-        return Err(format!("unexpected architecture {arch:?}"));
-    }
-    Ok(Path::new(CRATE_DIR).join(format!("target/linux-{arch}")))
 }
 
 /// The key printed by `stage init`.
@@ -1407,24 +1393,6 @@ mod tests {
         );
         assert_eq!(public_key_in(&output), Ok(key));
         assert!(public_key_in("TETON-0123456789 keyed in /var/lib/teton-device\n").is_err());
-    }
-
-    #[test]
-    fn deploy_picks_the_binaries_built_for_the_sensor() {
-        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        assert_eq!(
-            binaries("aarch64\n"),
-            Ok(crate_dir.join("target/linux-aarch64")),
-            "in the checkout, whatever the current folder"
-        );
-        assert_eq!(
-            binaries("x86_64"),
-            Ok(crate_dir.join("target/linux-x86_64"))
-        );
-        assert!(
-            binaries("../x").is_err(),
-            "the answer of a remote host is not a path"
-        );
     }
 
     #[test]
