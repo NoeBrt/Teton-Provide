@@ -174,9 +174,16 @@ npm ci
 npm run desktop:build
 ```
 
+For local macOS updates, use `npm run desktop:install`. It signs Provide. with an existing valid Apple Development or
+Developer ID Application certificate, or with `APPLE_SIGNING_IDENTITY` when set. The same certificate lets Keychain
+recognize future builds. Without a certificate, installation falls back to ad-hoc signing and prints a warning:
+Keychain can ask again after each update. When moving from an old ad-hoc build, choose **Always Allow** for each
+saved Provide. entry once. No code or Wi-Fi password is deleted to reset permissions.
+
 The device instructions target Ubuntu. The desktop configurator’s Linux and Windows builds have not been validated on hardware; use the iPhone or macOS path for the demonstrated real exchange.
 
-On iPhone, the technician code and site credentials use native secure storage with authentication. The desktop implementation currently keeps them **in memory only**: closing the app loses them. Persistent desktop keychain storage is not implemented.
+On iPhone, the technician code and site credentials use native secure storage with authentication. Desktop uses
+the system credential store (Keychain on macOS); closing the app keeps the saved code and sites.
 
 ## Use Provide.
 
