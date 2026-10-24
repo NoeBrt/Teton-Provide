@@ -262,6 +262,28 @@ node desktop/playtest.mjs <path to the playwright module>       # demo batch, er
 
 Tests cover Rust/TypeScript Noise interoperability, certificate and technician-token rejection, malformed messages, attempt handling and the simulated batch queue. They complement the hardware evidence; they do not replace it.
 
+## GitHub builds and caches
+
+The `release` workflow builds the apps on `main` when `configurator/` or the workflow changes. These runs populate
+caches that later version tags can restore. Only a `v*` tag publishes a release. New pushes cancel older builds of
+the same branch; builds of version tags are not cancelled.
+
+- Android saves Gradle dependencies and task outputs (`--build-cache`) from `main`. React Native also uses a C++
+  compiler cache (`ccache`, limited to 1 GB). Its hit statistics appear in the job log.
+- Desktop builds save Rust dependency artifacts from `main`, separated by OS and compiler, with Cargo lockfiles
+  included in the cache keys. npm downloads are cached on each platform.
+- Tags restore these caches without saving duplicate Gradle, C++ or Rust entries. Sensor binaries are reused by
+  Workshop from v1.1.0 and are not rebuilt here. The `tests` workflow still runs the app and protocol checks.
+
+The first build fills the caches and can still take as long as a cold build. To measure reuse without publishing:
+
+```sh
+gh workflow run release --ref main
+```
+
+Wait for that run to finish before starting the next one. Compare Gradle's `FROM-CACHE` tasks, C++ hit statistics,
+Rust cache restores and build durations. Compiler, dependency or native configuration changes can require rebuilding.
+
 ## Code map
 
 The [repo map in the README](../README.md#what-is-inside-the-repo) describes every folder.
