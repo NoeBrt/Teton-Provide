@@ -326,7 +326,8 @@ What the automated tests check ([commands](docs/SETUP.md#tests)):
 | **Configurator** | iPhone (iOS 27), macOS | Android, Windows and Linux desktop | A plain browser: demo only |
 | **Wi-Fi network** | WPA2-Personal | WPA3-Personal | Enterprise (802.1X) and captive portals |
 
-On desktop, the app keeps the technician code and sites in memory for now: closing it loses them.
+On desktop, the app keeps the technician code and site passwords in the system keychain (macOS Keychain, Windows
+Credential Manager, Secret Service on Linux), behind the account's own lock instead of Face ID.
 
 ## Timeline
 
@@ -422,7 +423,6 @@ of the installer on the Edge, and a result per Edge even when it fails: see
 - **No revocation.** A leaked technician code works until it expires, 5 days at most, and the app cannot refuse a
   stolen sensor.
 - **One WPA2-Personal password per site.** Enterprise Wi-Fi (802.1X) is not supported.
-- **The desktop app keeps codes and sites in memory**: closing it loses them.
 - **The customer is written into the sensor's certificate**, so moving a sensor to another customer needs a new
   certificate.
 - **No transfer between customers yet.** `deploy` refuses a sensor that already has the service, and
@@ -444,6 +444,6 @@ of the installer on the Edge, and a result per Edge even when it fails: see
    sensors to rooms, upload setup results.
 4. Give each sensor its own Wi-Fi credentials (EAP-TLS with its IoT certificate).
 5. Measure on real sensors: the link limit per phone, a batch of 200, a radio capture.
-6. Store desktop secrets in the system keychain, and ship signed builds (TestFlight, notarized desktop app).
+6. Ship signed builds (TestFlight, notarized desktop app).
 7. Run Android and the Windows and Linux desktop builds on hardware.
 8. Move the exchange into the IoT Alerts app, in place of *WiFi Broadcast*.

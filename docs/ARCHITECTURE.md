@@ -141,7 +141,7 @@ stateDiagram-v2
   tests replay the exact bytes the device produced, and tests with a forged reply, a copied certificate, another
   authority or another ID check that neither the code nor the password leaves the phone.
 - **At rest.** iPhone: the code and each site password in the Keychain behind Face ID, locked again after 2 minutes
-  away. Desktop: in memory only for now. Sensor: its key in a 0600 directory; NetworkManager keeps the PSK root-only.
+  away. Desktop: the system keychain (`desktop/src-tauri/src/secrets.rs`). Sensor: its key in a 0600 directory; NetworkManager keeps the PSK root-only.
 
 **Accepted risks for the demo:** the sensor's key sits in a file, not a secure element, and the app has no list of
 revoked sensors; a leaked technician code works until it expires, 5 days at most; with WPA2-Personal every sensor holds the
