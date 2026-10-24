@@ -29,4 +29,4 @@ systemctl daemon-reload
 systemctl restart bluetooth
 systemctl enable teton-device
 systemctl restart teton-device   # also picks up a new binary on reinstall
-systemctl --no-pager --lines=5 status teton-device
+systemctl --no-pager --lines=5 status teton-device || true   # not running until `stage init` and `stage install`

@@ -8,7 +8,7 @@ BIN=$HOME/noe-ws/teton-dev/target/release
 AUTHORITY=$HOME/noe-ws/teton-authority
 OUT=$HOME/noe-ws/lab-sensors
 mkdir -p "$OUT"
-technician=$("$BIN/authority" public "$AUTHORITY" | sed -n 's/^technician authority.*: //p')
+technician=$("$BIN/teton-workshop" public "$AUTHORITY" | sed -n 's/^technician authority.*: //p')
 [ -n "$technician" ]
 for i in $(seq -w 1 200); do
   d=$OUT/$i
@@ -16,7 +16,7 @@ for i in $(seq -w 1 200); do
   [ -f "$d/identity" ] || "$BIN/stage" init "$d" >/dev/null
   case $i in 194|195|196) customer=OTHER ;; *) customer=LAB ;; esac
   pub=$(head -c 64 "$d/identity" | tail -c 32 | od -An -v -tx1 | tr -d ' \n')  # 64- or legacy 96-byte file
-  cert=$("$BIN/authority" certify "$AUTHORITY" "$pub" "$customer" | tail -1)
+  cert=$("$BIN/teton-workshop" certify "$AUTHORITY" "$pub" "$customer" | tail -1)
   [ -n "$cert" ]
   "$BIN/stage" install "$d" "$cert" "$technician" >/dev/null
 done

@@ -2,7 +2,7 @@
 """Simulated Teton sensors over real Bluetooth LE, for the iPhone app (configurator/).
 
 One Bumble host owns hci0 through the kernel's HCI user channel. Each identity directory (`stage init` +
-`authority certify` + `stage install`, the same files as /var/lib/teton-device) becomes one sensor with its own
+`teton-workshop certify` + `stage install`, the same files as /var/lib/teton-device) becomes one sensor with its own
 static random address; ~20 legacy ADV_IND sets rotate over all identities. The GATT and Noise behaviour is a port of
 device/bin/main.rs and device/src/provision.rs; NetworkManager is replaced by a timed outcome per identity (PLAN).
 
