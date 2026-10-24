@@ -26,6 +26,7 @@ cargo test --features provision,stage         # macOS: everything except BlueZ a
 cargo test --features ble,stage --all-targets --locked                       # Ubuntu: the full suite
 cargo clippy --features ble,stage --all-targets --locked -- -D warnings      # Ubuntu
 cargo install --path . --features stage --bin teton-workshop --locked   # the workshop tool, once
+teton-workshop uninstall <ssh-host>         # undo deploy on a test sensor: Wi-Fi forgotten, service removed
 teton-workshop issue "Name" --customer DEMO  # a technician code, for manual tests
 teton-workshop deploy <ssh-host> --customer DEMO   # install, key and certify a blank sensor over SSH, from target/linux-<arch>/
 ```
