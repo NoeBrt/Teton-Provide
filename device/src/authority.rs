@@ -20,6 +20,9 @@ pub const SIGNATURE_LEN: usize = 64;
 pub const MAX_CUSTOMER: usize = 32;
 pub const MAX_NAME: usize = 64;
 pub const MAX_CUSTOMERS: usize = 8;
+pub const CODE_ID_LEN: usize = 8;
+/// A code's ID: the first bytes of its holder key, unique per code (the authority makes a fresh key for each).
+pub type CodeId = [u8; CODE_ID_LEN];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthorityError {
@@ -219,6 +222,11 @@ impl std::fmt::Debug for TechnicianToken {
 }
 
 impl TechnicianToken {
+    /// What the workshop prints at issue and logs in issued.tsv.
+    pub fn id(&self) -> CodeId {
+        self.holder[..CODE_ID_LEN].try_into().expect("8 bytes")
+    }
+
     fn body(name: &str, customers: &[String], expires: u64, holder: &[u8; KEY_LEN]) -> Vec<u8> {
         let mut body = vec![TOKEN_VERSION];
         body.extend_from_slice(&expires.to_be_bytes());

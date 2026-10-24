@@ -52,7 +52,7 @@ fn init(dir: &std::path::Path) -> Result<(), String> {
         .map_err(|e| format!("cannot write the key: {e}"))?;
     println!("{} keyed in {}", device_id(&keys.public_key), dir.display());
     println!(
-        "public key (certify it with `authority certify`): {}",
+        "public key (certify it with `iot-workshop certify`): {}",
         hex(&keys.public_key)
     );
     Ok(())

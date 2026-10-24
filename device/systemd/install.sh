@@ -29,4 +29,4 @@ systemctl daemon-reload
 systemctl restart bluetooth
 systemctl enable iot-device
 systemctl restart iot-device   # also picks up a new binary on reinstall
-systemctl --no-pager --lines=5 status iot-device
+systemctl --no-pager --lines=5 status iot-device || true   # not running until `stage init` and `stage install`

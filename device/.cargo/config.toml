@@ -1,3 +1,4 @@
-# `cargo authority issue "Evaluator"`: builds and runs the authority tool (bin/authority.rs) in one step.
+# `cargo workshop issue "Evaluator"`: builds and runs iot-workshop (bin/workshop.rs) from the sources, for development.
+# Install it once instead: `cargo install --path device --features stage --bin iot-workshop --locked`.
 [alias]
-authority = "run --quiet --release --features stage --bin authority --"
+workshop = "run --quiet --release --features stage --bin iot-workshop --"

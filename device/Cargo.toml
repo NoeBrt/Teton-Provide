@@ -22,8 +22,8 @@ path = "bin/stage.rs"
 required-features = ["stage"]
 
 [[bin]]
-name = "authority"
-path = "bin/authority.rs"
+name = "iot-workshop"
+path = "bin/workshop.rs"
 required-features = ["stage"]
 
 [[bin]]
