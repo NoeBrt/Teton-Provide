@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # The tag names the files; a build-only run (from a branch, whose name may hold a "/") uses its run number.
+  VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
+
 jobs:
   android:
     name: Android APK
@@ -35,7 +39,7 @@ jobs:
       # The release APK is signed with the debug key Expo's template sets up: installable, not for a store.
       - run: ./gradlew assembleRelease --no-daemon
         working-directory: configurator/android
-      - run: mv android/app/build/outputs/apk/release/app-release.apk "Provide-${GITHUB_REF_NAME}-android.apk"
+      - run: mv android/app/build/outputs/apk/release/app-release.apk "Provide-${VERSION}-android.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -55,7 +59,7 @@ jobs:
         working-directory: configurator
       - run: npx tauri build --bundles dmg # its beforeBuildCommand exports the web build
         working-directory: configurator/desktop
-      - run: mv configurator/desktop/src-tauri/target/release/bundle/dmg/*.dmg "Provide-${GITHUB_REF_NAME}-macos-arm64.dmg"
+      - run: mv configurator/desktop/src-tauri/target/release/bundle/dmg/*.dmg "Provide-${VERSION}-macos-arm64.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -75,7 +79,7 @@ jobs:
         working-directory: configurator
       - run: npx tauri build --bundles nsis
         working-directory: configurator/desktop
-      - run: Move-Item configurator/desktop/src-tauri/target/release/bundle/nsis/*.exe "Provide-$env:GITHUB_REF_NAME-windows-x64-setup.exe"
+      - run: Move-Item configurator/desktop/src-tauri/target/release/bundle/nsis/*.exe "Provide-$env:VERSION-windows-x64-setup.exe"
         shell: pwsh
       - uses: actions/upload-artifact@v4
         with:
@@ -101,8 +105,8 @@ jobs:
       - run: npx tauri build --bundles appimage,deb
         working-directory: configurator/desktop
       - run: |
-          mv configurator/desktop/src-tauri/target/release/bundle/appimage/*.AppImage "Provide-${GITHUB_REF_NAME}-linux-x64.AppImage"
-          mv configurator/desktop/src-tauri/target/release/bundle/deb/*.deb "Provide-${GITHUB_REF_NAME}-linux-x64.deb"
+          mv configurator/desktop/src-tauri/target/release/bundle/appimage/*.AppImage "Provide-${VERSION}-linux-x64.AppImage"
+          mv configurator/desktop/src-tauri/target/release/bundle/deb/*.deb "Provide-${VERSION}-linux-x64.deb"
       - uses: actions/upload-artifact@v4
         with:
           name: linux
