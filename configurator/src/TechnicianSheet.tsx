@@ -191,7 +191,7 @@ const s = StyleSheet.create({
   codeClear: { fontFamily: F.medium, fontSize: 15, color: C.blue },
   warn: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.warn, backgroundColor: C.warnBg, borderRadius: 10, padding: 12, overflow: 'hidden' },
   primary: { backgroundColor: C.ink, borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  primaryText: { fontFamily: F.medium, fontSize: 16, color: '#ffffff' },
+  primaryText: { fontFamily: F.medium, fontSize: 16, color: C.onInk },
   secondary: { borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
   secondaryText: { fontFamily: F.medium, fontSize: 16, color: C.ink },
 });

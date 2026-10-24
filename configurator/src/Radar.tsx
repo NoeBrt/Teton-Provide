@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, type ColorValue } from 'react-native';
 import Animated, {
   Easing, interpolate, useAnimatedStyle, useFrameCallback, useReducedMotion, useSharedValue, withSpring, withTiming, type SharedValue,
 } from 'react-native-reanimated';
@@ -24,7 +24,7 @@ const dotFor = (size: number) => { 'worklet'; return interpolate(size, SIZES, DO
 export const RESIZE = { duration: 450, easing: Easing.inOut(Easing.cubic) }; // shared with the layout transition in App
 
 // `size` is driven by the caller (the scroll position), so the radar follows the finger instead of animating on its own.
-type Props = { active: boolean; color: string; size: SharedValue<number>; label: string; onPress: () => void };
+type Props = { active: boolean; color: ColorValue; size: SharedValue<number>; label: string; onPress: () => void };
 
 // Waves while the phone listens for sensors; the centre dot is the pause/resume button.
 // Everything runs on the UI thread, so discovery re-renders never stutter the waves or the resize.
@@ -65,8 +65,10 @@ export function Radar({ active, color, size, label, onPress }: Props) {
   );
 }
 
-// Diameter is animated instead of scale so the stroke width stays under control at every radius.
-function Ring({ t, box, delay, color }: { t: SharedValue<number>; box: SharedValue<number>; delay: number; color: string }) {
+// Each ring is laid out at the radar's size and grown with a scale: its diameter then moves continuously, where a
+// growing width moved in pixel steps on the 48 pt compact radar and looked jerky. The stroke is set to the original
+// stroke divided by the scale, so once scaled it matches it exactly: the drawn ring is the same as before.
+function Ring({ t, box, delay, color }: { t: SharedValue<number>; box: SharedValue<number>; delay: number; color: ColorValue }) {
   const style = useAnimatedStyle(() => {
     const age = t.value - delay;
     if (age < 0) return { opacity: 0 }; // not born yet: on (re)start no circle appears half-way
@@ -74,9 +76,11 @@ function Ring({ t, box, delay, color }: { t: SharedValue<number>; box: SharedVal
     const start = dotFor(box.value);
     const grow = 1 - (1 - Math.min(phase / GROW, 1)) ** 2; // gentle ease-out
     const d = start + (box.value - start) * grow;
+    const scale = d / box.value;
     return {
-      width: d, height: d, borderRadius: d / 2,
-      borderWidth: interpolate(box.value, SIZES, STROKES, 'clamp') * (1 - THIN * grow),
+      width: box.value, height: box.value, borderRadius: box.value / 2,
+      borderWidth: (interpolate(box.value, SIZES, STROKES, 'clamp') * (1 - THIN * grow)) / scale,
+      transform: [{ scale }],
       opacity: interpolate(phase, [0, 0.04, FADE_FROM, GROW], [0, 0.9, 0.9, 0], 'clamp'),
     };
   });

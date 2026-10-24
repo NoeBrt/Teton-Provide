@@ -1,7 +1,7 @@
 // Radar, desktop: the same radar, its waves as CSS animations. macOS stops the page's animation frames while a window
 // is being resized, which froze the frame-driven waves (Radar.tsx); CSS animations of transform and opacity keep
 // running in the system compositor. The size still follows the scroll through Reanimated, as on iOS.
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type ColorValue } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import { DOTS, HOLD, HOLD_SCALE, RELEASE, RESIZE, SIZES } from './Radar.tsx';
 
@@ -28,7 +28,7 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(style);
 }
 
-type Props = { active: boolean; color: string; size: SharedValue<number>; label: string; onPress: () => void };
+type Props = { active: boolean; color: ColorValue; size: SharedValue<number>; label: string; onPress: () => void };
 
 export function Radar({ active, color, size, label, onPress }: Props) {
   const reduceMotion = useReducedMotion();

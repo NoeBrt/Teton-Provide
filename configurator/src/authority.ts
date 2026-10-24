@@ -4,9 +4,9 @@ import { ed25519, x25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { concat } from './noise.ts';
 
-// The demo authorities' public keys (`authority public`); a deployment replaces them with its own.
-export const DEVICE_AUTHORITY = fromHex('5fa1436b880e8b8705f5f55fcc0caa5c72332caf32dfcfcb232cef5281762837');
-export const TECHNICIAN_AUTHORITY = fromHex('e01026772cadd27c05ddbe2384f3c63818e39e87087ad13d526063f80b8c02ca');
+// The demo authorities' public keys (`iot-workshop public`); a deployment replaces them with its own.
+export const DEVICE_AUTHORITY = fromHex('3ef5b95202435ad8eeb62f5aee0cdd62c31eb972039afee13cb10cd8eef96f06');
+export const TECHNICIAN_AUTHORITY = fromHex('2bdfed531076b0b78543ba46eb94796c4a790638aa04abb41e16c0cf313ee726');
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -17,7 +17,7 @@ const TOKEN_VERSION = 2; // 2 added the holder key; version 1 tokens are refused
 const KEY_LEN = 32;
 const SIGNATURE_LEN = 64;
 const CUSTOMER = /^[A-Za-z0-9_-]{1,32}$/;
-// `authority issue` prints the bare code `<token hex>.<holder private key hex>`, imported only inside the app (scan or
+// `iot-workshop issue` prints the bare code `<token hex>.<holder private key hex>`, imported only inside the app (scan or
 // paste): a link would let another app claim the scheme and receive the code. Pasted with the old link prefix, it still reads.
 export const OLD_LINK = 'provide://technician/';
 

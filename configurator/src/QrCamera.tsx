@@ -87,5 +87,5 @@ const s = StyleSheet.create({
   placeholder: { alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 },
   text: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.muted, textAlign: 'center' },
   primary: { backgroundColor: C.ink, borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  primaryText: { fontFamily: F.medium, fontSize: 16, color: '#ffffff' },
+  primaryText: { fontFamily: F.medium, fontSize: 16, color: C.onInk },
 });

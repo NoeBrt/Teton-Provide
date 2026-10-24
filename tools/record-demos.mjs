@@ -47,7 +47,7 @@ async function record(name, width, height) {
  await page.route('**/*.bundle?*',async route=>{
   const response=await route.fetch();
   const original=await response.text();
-  const key='e01026772cadd27c05ddbe2384f3c63818e39e87087ad13d526063f80b8c02ca';
+  const key='2bdfed531076b0b78543ba46eb94796c4a790638aa04abb41e16c0cf313ee726';
   changed ||= original.includes(key);
   await route.fulfill({response,body:original.replaceAll(key,fixture.technicianAuthority)});
  });

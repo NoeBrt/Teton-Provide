@@ -78,6 +78,6 @@ const s = StyleSheet.create({
   swatchWarnOn: { backgroundColor: C.warnBg },
   label: { fontFamily: F.regular, fontSize: 14, lineHeight: 18, color: C.muted },
   warn: { color: C.warn },
-  light: { color: '#ffffff' },
+  light: { color: C.onInk },
   disabled: { opacity: 0.45 },
 });

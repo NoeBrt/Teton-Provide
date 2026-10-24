@@ -29,7 +29,7 @@ function certificate(publicKey: Uint8Array, customer: string) {
   return concat(body, ed25519.sign(concat(enc.encode('iot-device-cert/1'), body), DEVICE_SEED));
 }
 
-/** A technician code (v2, holder-bound) for the demo customer, as `authority issue` prints it; valid ten years, so the
+/** A technician code (v2, holder-bound) for the demo customer, as `iot-workshop issue` prints it; valid ten years, so the
  * demo never asks for another one. */
 function demoToken(): Token {
   const holderPrivate = sha256(enc.encode('demo-holder'));
