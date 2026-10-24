@@ -1,0 +1,33 @@
+REAL HARDWARE — 24 October 2026
+Requested operation: uninstall Teton on Jetson 027; deconfigure Jetson 019 and noe-lab.
+Hostnames use the repository's aliases. No passwords or private keys are recorded.
+
+Jetson 027
+- Connected using the pinned SSH alias jetson-027-wifi; USB was unreachable.
+- Ran teton-workshop uninstall jetson-027-wifi --yes.
+- Workshop exited successfully and reported:
+    key kept in /root/teton-backup/teton-device-1792850138
+    service, files and teton account removed
+- Subsequent SSH to its former Wi-Fi address timed out after the profile was deleted.
+  A filesystem verification over USB was therefore not performed.
+- Its previous Teton advertisement was not seen during the subsequent 24-second scan.
+
+Jetson 019
+- Stopped teton-device and removed /var/lib/teton-device/provisioned.
+- Verified identity, certificate and technician-authority remained present.
+- Scheduled the existing service to restart after the SSH command returned.
+- Bluetooth manufacturer data observed: ffff014ff546816f.
+  Company FFFF, state 01 (ready), identity TETON-4FF546816F.
+
+noe-lab
+- Stopped teton-device, removed /var/lib/teton-device/provisioned, restarted the service.
+- Verified the marker remained absent and identity/certificate remained present.
+- Service active. Neither Teton NetworkManager profile remained:
+    4a7db77c-6fda-47aa-95ca-d186c5096b32
+    b5b2bc3f-8221-4a28-8c40-5e078953fcf2
+- Ethernet access remained available.
+- Bluetooth manufacturer data observed: ffff016b1e844588.
+  Company FFFF, state 01 (ready), identity TETON-6B1E844588.
+
+Bluetooth verification: three scan rounds, eight seconds each, filtered to the
+Teton service UUID 3b0a90ce-9564-40d1-b96b-14cf8858aba3, from the Mac.
