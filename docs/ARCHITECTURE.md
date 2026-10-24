@@ -8,10 +8,10 @@ it received for that exact attempt.
 
 | Part | Code | Runs on |
 | --- | --- | --- |
-| Configurator, **provide.** | `configurator/`: Expo / React Native, TypeScript; desktop shell in Tauri with a Rust Bluetooth bridge | iPhone and macOS (tested on hardware); Android and Windows/Linux desktop not run |
+| Configurator, **Provide.** | `configurator/`: Expo / React Native, TypeScript; desktop shell in Tauri with a Rust Bluetooth bridge | iPhone and macOS (tested on hardware); Android and Windows/Linux desktop not run |
 | Device service | `device/bin/main.rs`, `device/bin/wifi.rs`: Rust, BlueZ (`bluer`), NetworkManager over D-Bus | Ubuntu 22.04 with a BLE adapter and Wi-Fi |
 | Protocol library | `device/src/`: Noise (`snow`), certificates and codes (`ed25519-dalek`) | Shared by the device and its tools |
-| Staging and authority tools | `device/bin/stage.rs`, `device/bin/authority.rs` | The sensor once before deployment; the workshop, offline |
+| Staging and workshop tools | `device/bin/stage.rs`, `device/bin/workshop.rs` (`iot-workshop`) | The sensor once before deployment; the workshop, offline |
 
 How to run it: [SETUP.md](SETUP.md). Security design and its tests: [SECURITY.md](SECURITY.md). Every decision with
 its alternatives: [DECISIONS.md](DECISIONS.md). What is proven: the [requirements map](../README.md#requirements-map).
@@ -33,14 +33,14 @@ technician's side, no screen on the device.
 
 What BLE costs: the technician needs a prepared app (built once, installed before the visit); BLE pairing
 authenticates nobody useful ("Just Works" authenticates no one, a static passkey leaks, out-of-band pairing is closed
-to iOS apps), so we run our own authenticated channel above GATT; packets are small, so each Noise message is sized
+to iOS apps), so I run my own authenticated channel above GATT; packets are small, so each Noise message is sized
 to fit one GATT write.
 
 ### Other choices
 
 | Choice | Instead of | Why |
 | --- | --- | --- |
-| **Noise XX above GATT**, both sides proving a static key | BLE pairing, a per-sensor password | Works the same on every phone and laptop; authentication we control and can test byte for byte. |
+| **Noise XX above GATT**, both sides proving a static key | BLE pairing, a per-sensor password | Works the same on every phone and laptop; authentication I control and can test byte for byte. |
 | **Device certificates and technician codes** signed by two offline IoT authorities | A QR label scanned per sensor | Nothing to scan or print per sensor, so a wing of 200 becomes one tap; a rogue device cannot pass as a sensor; a code covers only its customers and expires within 30 days ([decision 27](DECISIONS.md#27-certified-sensors-and-technician-codes-for-200-devices)). |
 | **The sensor ID in the main advertisement packet** (5 bytes of the key hash) | The device name in the scan response | Phones and Macs do not always request the scan response and cache old names; the main packet always arrives. |
 | **One app for iPhone and desktop**: React Native, with react-native-web in a Tauri window | Two apps | Same screens and protocol code; only the Bluetooth, storage and camera adapters differ. |
@@ -59,7 +59,7 @@ flowchart LR
         svc["Device service, Rust<br/>BlueZ GATT, Noise responder"] -->|"D-Bus, password never in argv"| nm["NetworkManager"]
     end
     subgraph hallway["Hospital hallway: no Internet, no shared network"]
-        tech(["Technician"]) --> app["provide.<br/>iPhone or desktop"]
+        tech(["Technician"]) --> app["Provide.<br/>iPhone or desktop"]
     end
     stage -.-> svc
     code -.->|"scanned or pasted once"| app
@@ -80,7 +80,7 @@ carries Noise messages, one per acknowledged write.
 sequenceDiagram
     autonumber
     actor T as Technician
-    participant P as provide.
+    participant P as Provide.
     participant D as Device service
     participant N as NetworkManager
     T->>P: Set up (one sensor, or all ready)
@@ -143,8 +143,8 @@ stateDiagram-v2
 - **At rest.** iPhone: the code and each site password in the Keychain behind Face ID, locked again after 2 minutes
   away. Desktop: in memory only for now. Sensor: its key in a 0600 directory; NetworkManager keeps the PSK root-only.
 
-**Accepted risks for the demo:** the sensor's key sits in a file, not a secure element, and there is no revocation
-list; a leaked technician code works for its customers until it expires; with WPA2-Personal every sensor holds the
+**Accepted risks for the demo:** the sensor's key sits in a file, not a secure element, and the app has no list of
+revoked sensors; a leaked technician code works until it expires, 5 days at most; with WPA2-Personal every sensor holds the
 same site password. Details and tests: [SECURITY.md](SECURITY.md).
 
 ## 200 devices in a hospital wing
@@ -152,7 +152,7 @@ same site password. Details and tests: [SECURITY.md](SECURITY.md).
 | Change | Status | Why |
 | --- | --- | --- |
 | **Certified sensors** instead of labels | Built | Nothing to scan or print per sensor. |
-| **Technician codes** per customer, 30 days at most | Built | A sensor of another customer is skipped before the code leaves the phone. |
+| **Technician codes** per customer, 5 days at most | Built | A sensor of another customer is skipped before the code leaves the phone. |
 | **Set up all ready sensors**, six at a time | Built | One tap for a room or a corridor; link failures go back to the queue twice; sensors found during a batch can join it. |
 | **Stop on a site-wide error** | Built | A wrong password or a refused code would repeat on every sensor: the batch stops starting new ones. |
 | **One overall card** | Built | 200 cards are too many to read: counts of set up, errors and not set up, the time left, errors grouped by cause, **Retry failed** ([decision 28](DECISIONS.md#28-overall-of-the-sensors-in-range)). |
@@ -173,7 +173,7 @@ already set up, or staging before delivery. Their trade-offs are in [DECISIONS.m
 
 ## Code map
 
-The [README's folder tree](../README.md#folder-tree) lists every folder; the files that carry the design:
+The [README's repo map](../README.md#what-is-inside-the-repo) lists every folder; the files that carry the design:
 
 ```text
 device/src/authority.rs   certificates and technician codes: encoding, signatures, checks, device ID
@@ -182,7 +182,7 @@ device/src/protocol.rs    service and characteristic UUIDs, advertisement format
 device/bin/main.rs        BLE peripheral: hello and provisioning, one phone at a time, advertised state
 device/bin/wifi.rs        NetworkManager over D-Bus: two alternating profiles, rollback, failure reasons
 device/bin/stage.rs       staging: key, then certificate and technician authority
-device/bin/authority.rs   the authorities: certify a sensor, issue a technician code
+device/bin/workshop.rs    iot-workshop: the authorities; deploy and certify a sensor, issue a technician code
 configurator/src/         noise.ts (Noise initiator), authority.ts (certificate and code checks), probe.ts (scan,
                           state and ID), setup.ts (one sensor), batch.ts (queue, six at a time), demo.ts (200
                           simulated sensors)

@@ -10,14 +10,14 @@ earlier fallback guidance. Sections 19-20 require Android/iPhone coverage and
 preserve offline builds while the BLE dependency graph is unavailable.
 Radio acceptance remains pending.
 
-## The path we took (summary)
+## The path I took (summary)
 
-| Step | What we did | What changed our mind |
+| Step | What I did | What changed my mind |
 | --- | --- | --- |
 | 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match the fleet ([decision 11](#11-rust-to-align-with-the-fleet)). |
 | 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([simulation measurements](../evidence/simulation/README.md)). |
 | 3 | Wrote `audit-host`, a read-only preflight of BlueZ and NetworkManager, then inventoried the real host. | Bluetooth was soft-blocked by rfkill and BlueZ reported it as a generic "busy"; the device now names rfkill when it cannot power the adapter. |
-| 4 | Compared channels. SoftAP looked best for a zero-install web page. | We excluded it to stay clear of "no shared local network" ([decision 18](#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
+| 4 | Compared channels. SoftAP looked best for a zero-install web page. | I excluded it to stay clear of "no shared local network" ([decision 18](#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
 | 5 | Reviewed security before sending any secret: Just Works, static passkey, LE Secure Connections OOB, SRP6a, Noise. | iOS apps cannot use out-of-band pairing, so the channel had to live above GATT: Noise NKpsk2 keyed by a QR label. |
 | 6 | Built the BlueZ hello peripheral, then an Expo app; first real exchange from an iPhone 15 Pro to Ubuntu. | Six exchanges and a reconnect after a service restart worked ([evidence/real/phone-hello.txt](../evidence/real/phone-hello.txt)). |
 | 7 | Iterated the app with a facilities technician in mind: automatic scan, results inside the card, small screens and large text ([configurator history](media/ui-history/README.md)). | A result listed at the bottom went off-screen with ten sensors; it moved into the tested card. |
@@ -780,7 +780,7 @@ copier does not hold that key. The token keeps a stolen or borrowed app from con
 **Trade-off:** The device key sits in a 0600 file, not a secure element: whoever extracts it from one sensor can
 impersonate that one sensor until IoT revokes it (revocation lists are not built). It cannot replay the tokens it
 collects: each names a holder key whose private half only the code carries. A leaked code works for its customers
-on any phone until it expires; 30 days bounds that. Import inside the app costs the one-tap link; Universal Links
+on any phone until it expires; 5 days bounds that (30 at first). Import inside the app costs the one-tap link; Universal Links
 would bring it back without a scheme another app can claim. The clock floor follows a clock set far ahead only as
 fast as the uptime, so it cannot lock codes out, but after a long power-off it trails real time by the downtime.
 The authorities' private keys must stay offline at IoT; the
@@ -924,7 +924,7 @@ the repository. Nothing let a reviewer see a wing, and nothing loaded the phone'
 | Entry | Tap the logo and confirm; the chip reads **DEMO**; the logo or the chip leaves (not while a test or a batch runs). The launch argument `-demo 1` (simctl) starts in it. |
 | Isolation | Switching remounts the screen: no sensor, result, scan or credential crosses modes. The demo authority (seeds filled with 0x51 and 0x52, public) is passed to `setup()` only in demo mode; real sensors are always checked against `DEVICE_AUTHORITY`. The demo's code and site live in memory; nothing saved is read or written, and the code and site sheets never open. |
 | Demo wing | `configurator/src/demo.ts`: each sensor runs the sensor side of Noise `XX` with its own key. 6 set up before, 4 not prepared, 3 out of Wi-Fi range, 3 impostors (a copied certificate without its key), 2 of another customer, some slow joins. About half is heard within 4 s, the rest over a minute. |
-| Bench | `tools/iot_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `tools/mint-lab.sh` (`stage init`, `authority certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `tools/sim-lab.sh` stops `iot-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
+| Bench | `tools/iot_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `tools/mint-lab.sh` (`stage init`, `iot-workshop certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `tools/sim-lab.sh` stops `iot-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
 
 **Reason:** One app for both: the demo runs the real code paths (handshake, checks, batch, overall), so what a
 reviewer sees is what a technician gets. The bench measures what the Simulator cannot: the radio, iOS's links, the
