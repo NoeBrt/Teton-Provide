@@ -11,7 +11,9 @@ The iPhone app is not here: it installs from Xcode (see the README).
 
 **Sensor setup from your laptop.** `iot-workshop deploy user@192.168.55.1 --customer "Noé Home"` now downloads
 the sensor's Linux binaries, checks their SHA-256 and caches them before copying them over SSH. No Rust compiler
-or checkout is needed on the sensor. Install the workshop tool from this checkout; see the README's "Try it" section.
+or checkout is needed on the sensor. Install the workshop tool from the latest `main` checkout (includes
+private-download support); see the README's "Try it" section.
+For this private repository, install GitHub CLI and run `gh auth login` with an account that has access.
 The `iot-device-*-linux-{aarch64,x86_64}` and `iot-stage-*` files below are for the sensor, with a `.sha256`
 file each. They target Ubuntu 22.04 and later. Hardware support still needs BlueZ, NetworkManager and a BLE peripheral
 adapter. The first download needs internet on the laptop; subsequent sensors of the same architecture use the cache.

@@ -235,7 +235,8 @@ Use a blank Ubuntu 22.04 or later sensor with SSH, BlueZ, NetworkManager and a B
 over USB or Ethernet so that changing its Wi-Fi later will not cut the SSH link.
 
 The authorities' private keys stay on your laptop. A sensor only receives its certificate. Install the workshop tool
-once (macOS or Linux, Rust, OpenSSH and curl installed), from the checkout root, then run it from any folder:
+once (macOS or Linux, Rust, OpenSSH and GitHub CLI installed), from the latest `main` checkout root, then run it
+from any folder. Sign in with `gh auth login` using an account with access to this private repository:
 
 ```sh
 cargo install --path device --features stage --bin iot-workshop --locked   # first build: 1-2 minutes
