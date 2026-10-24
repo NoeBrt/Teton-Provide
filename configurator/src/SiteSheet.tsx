@@ -224,7 +224,7 @@ const s = StyleSheet.create({
   toggle: { minWidth: 72, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: C.line },
   warn: { fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.warn, backgroundColor: C.warnBg, borderRadius: 10, padding: 12, overflow: 'hidden' },
   primary: { backgroundColor: C.ink, borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-  primaryText: { fontFamily: F.medium, fontSize: 16, color: '#ffffff' },
+  primaryText: { fontFamily: F.medium, fontSize: 16, color: C.onInk },
   secondary: { borderRadius: 999, minHeight: 48, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line },
   secondaryText: { fontFamily: F.medium, fontSize: 16, color: C.ink },
   link: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },

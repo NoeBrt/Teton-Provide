@@ -31,7 +31,7 @@ import { Radar, RESIZE, SIZES } from './src/Radar';
 import './src/feedback';
 import './src/viewport';
 import { Summary, Swatch } from './src/Summary';
-import { groupOf, minutesLeft, type Group } from './src/wing';
+import { groupOf, isGone, minutesLeft, wasReset, without, type Group } from './src/wing';
 
 const TEST_STEPS: [Step, string][] = [['connect', 'Connecting'], ['services', 'provide service'], ['write', 'Writing “hello”'], ['read', 'Reading the reply']];
 const SETUP_STEPS: [SetupStep, string][] = [['connect', 'Connecting'], ['secure', 'Securing the channel'], ['send', 'Sending the network'], ['join', 'Joining the Wi‑Fi']];
@@ -79,7 +79,6 @@ let logKey = 0; // log lines finished in the same millisecond still get distinct
 const SHEET_GONE_MS = 600;
 // Leaving the app this long locks the code and the site password again (Face ID); a shorter switch keeps a batch going.
 const LOCK_AFTER_MS = 2 * 60_000;
-const STALE_MS = 15_000; // Refresh drops the sensors not heard for this long
 
 /** True once `shown` has been false for SHEET_GONE_MS. RN's Modal on iOS drops, and never retries, a sheet presented
  *  while another one is still sliding away. ponytail: a fixed delay; open from Modal onDismiss if it proves short. */
@@ -213,7 +212,7 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
               </Pressable>
               <Pressable style={[s.primary, s.grow, ((active && mine.kind !== 'setup') || !settable || batching) && s.disabled]} disabled={active || !settable || batching} onPress={() => actions.setUp(sensor)} accessibilityRole="button"
                 accessibilityLabel={`${state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'} the Wi-Fi of ${nameOf(sensor)}`}>
-                {mine?.kind === 'setup' ? <ActivityIndicator color="#ffffff" accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>{state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'}</Text>}
+                {mine?.kind === 'setup' ? <ActivityIndicator color={C.onInk} accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>{state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'}</Text>}
               </Pressable>
             </View>
             {/* One drawer of steady height: it opens once, shows progress, then the result fades in place.
@@ -383,6 +382,11 @@ function Provide({ demo, onDemo }: Mode) {
       if (latest.size === 0) return;
       const heard = [...latest.values()];
       latest.clear();
+      // A sensor reset since its result here (set up, failed) is ready again: Set up all ready offers it.
+      const before = sensorsRef.current;
+      setBatch(map => without(map, heard
+        .filter(peripheral => wasReset(sensorState(before[peripheral.id]?.advertising), sensorState(keepAdvertised(before[peripheral.id], peripheral).advertising), map[peripheral.id]))
+        .map(peripheral => peripheral.id)));
       setSensors(found => {
         const updates = heard.map(peripheral => keepAdvertised(found[peripheral.id], peripheral)).filter(peripheral => changed(found[peripheral.id], peripheral));
         return updates.length ? { ...found, ...Object.fromEntries(updates.map(peripheral => [peripheral.id, peripheral])) } : found;
@@ -618,9 +622,12 @@ function Provide({ demo, onDemo }: Mode) {
     refreshPending.current = true;
     const now = Date.now();
     // Nothing was heard while paused: resume before judging who is gone.
-    const gone = paused ? [] : Object.keys(sensors).filter(id => !running[id] && !batch[id] && now - (heardAt.current.get(id) ?? 0) > STALE_MS);
+    const gone = paused ? [] : Object.keys(sensors).filter(id => isGone(heardAt.current.get(id), now, batch[id], !!running[id]));
     gone.forEach(id => seenAt.current.delete(id)); // back later, it fades in again
-    if (gone.length) setSensors(found => Object.fromEntries(Object.entries(found).filter(([id]) => !gone.includes(id))));
+    if (gone.length) {
+      setSensors(found => without(found, gone));
+      setBatch(map => without(map, gone)); // back later and reset, it is offered with the ready ones
+    }
     setPaused(false);
     setRefreshStatus('refreshing');
     setRefreshRequest(request => request + 1);
@@ -937,6 +944,12 @@ function Provide({ demo, onDemo }: Mode) {
   // a 12 s timeout, a blank window all that time. The fonts are local there and in place before the intro ends.
   if (!fontsLoaded && !fontError && Platform.OS !== 'web') return null;
   const successes = attempts.filter(attempt => attempt.ok).length;
+  // The header chip: the radio the whole app works through, and whether it can work now.
+  const bluetooth = !radio || ble === BleState.Unsupported ? { text: 'NO BLUETOOTH', label: 'No Bluetooth', style: s.chipWarn }
+    : ready ? { text: 'BLUETOOTH ON', label: 'Bluetooth on', style: s.chipOn }
+    : ble === BleState.Off || ble === BleState.TurningOff ? { text: 'BLUETOOTH OFF', label: 'Bluetooth off', style: s.chipWarn }
+    : ble === BleState.Unauthorized ? { text: 'BLUETOOTH BLOCKED', label: 'Bluetooth access blocked', style: s.chipWarn }
+    : { text: 'BLUETOOTH…', label: 'Checking Bluetooth', style: s.chipWait };
   const caption = (
     !ready ? 'Search paused.'
       : anyRunning ? (Object.values(running).some(r => r.kind === 'setup') ? 'Setting up…' : 'Testing…')
@@ -1048,8 +1061,8 @@ function Provide({ demo, onDemo }: Mode) {
     <Animated.View style={[s.panel, panelStyle, desktop && s.desktopPanel, !measured && s.hidden]} pointerEvents={desktop || !collapsed ? 'box-none' : 'auto'}>
       <View style={[s.panelInner, desktop && { left: 0, right: 0 }]} pointerEvents="box-none">
         <Animated.View style={[s.titleBlock, titleStyle]} pointerEvents="none" onLayout={event => setTitleH(event.nativeEvent.layout.height)}>
-          <Text style={s.label} maxFontSizeMultiplier={1.3}>ENCRYPTED BLUETOOTH LINK</Text>
-          <Text style={s.title} maxFontSizeMultiplier={1.3}>Set up sensors. <Text style={s.tone}>Each proves it is a Teton sensor, then joins the site Wi‑Fi.</Text></Text>
+          <Text style={s.title} maxFontSizeMultiplier={1.3}>Connect Teton sensors to Wi‑Fi.</Text>
+          <Text style={s.subtitle} maxFontSizeMultiplier={1.3}>One tap sets up every sensor in range.</Text>
           {!radio && (
             <View style={[s.card, s.warnCard]} accessibilityRole="alert">
               <Text style={s.warnText}>{Platform.OS === 'web' ? 'Open the Provide desktop app to use Bluetooth.' : 'Bluetooth is unavailable in Expo Go. Install the development build to test a sensor.'}</Text>
@@ -1082,7 +1095,7 @@ function Provide({ demo, onDemo }: Mode) {
     <SafeAreaProvider>
       {/* No bottom edge: the list scrolls under the home indicator instead of being cut by a white band. */}
       <SafeAreaView style={s.screen} edges={['top', 'left', 'right']}>
-        <StatusBar style="dark" />
+        <StatusBar style={Platform.OS === 'android' ? 'dark' : 'auto'} /> {/* Android keeps the light palette */}
         <View style={[s.header, s.headerFixed]}>
           {/* A tap on the logo opens the demo with simulated sensors, or leaves it (each asks first). */}
           <Pressable style={s.brand} onPress={askDemo} hitSlop={8} accessibilityRole="button"
@@ -1091,12 +1104,14 @@ function Provide({ demo, onDemo }: Mode) {
             <Image source={require('./assets/teton-mark.png')} style={s.mark} accessibilityIgnoresInvertColors />
             <Text style={s.wordmark} maxFontSizeMultiplier={1.2}>provide.</Text>
           </Pressable>
-          {/* In the demo the chip says so, and a tap on it leaves too. */}
+          {/* In the demo the chip says so, and a tap on it leaves too; otherwise it shows the Bluetooth the app works over. */}
           {demo ? (
             <Pressable onPress={askDemo} hitSlop={8} accessibilityRole="button" accessibilityLabel="Demo with simulated sensors. Leave the demo">
               <Text style={[s.chip, s.chipDemo]} maxFontSizeMultiplier={1.2}>DEMO</Text>
             </Pressable>
-          ) : <Text style={s.chip} maxFontSizeMultiplier={1.2}>WI‑FI SETUP</Text>}
+          ) : (
+            <Text style={[s.chip, bluetooth.style]} maxFontSizeMultiplier={1.2} accessibilityLabel={bluetooth.label}>{bluetooth.text}</Text>
+          )}
         </View>
 
         <View style={[s.body, desktop && s.workspace]} onLayout={event => { setBodyH(event.nativeEvent.layout.height); if (WEB) setBodyW(event.nativeEvent.layout.width); }}>
@@ -1172,7 +1187,7 @@ const s = StyleSheet.create({
   hidden: { opacity: 0 }, // until the first layout pass, so the radar appears in its final place
   panel: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: C.bg, overflow: 'hidden' },
   panelInner: { position: 'absolute', top: 0, bottom: 0, left: PAD, right: PAD },
-  titleBlock: { position: 'absolute', top: 0, left: 0, right: 0, gap: 14, paddingTop: 6 },
+  titleBlock: { position: 'absolute', top: 0, left: 0, right: 0, gap: 14, paddingTop: 22 },
   floating: { position: 'absolute', top: 0, left: 0 },
   largeCaption: { position: 'absolute', top: 0, left: 0, right: 0 },
   compactCaption: { position: 'absolute', left: 48 + 12, right: 0, top: 0, height: COMPACT_H, justifyContent: 'center' },
@@ -1181,11 +1196,14 @@ const s = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mark: { width: 28, height: 28, tintColor: C.ink },
   wordmark: { fontFamily: 'Onest_600SemiBold', fontSize: 26, letterSpacing: -1.2, color: C.ink },
-  chipDemo: { backgroundColor: C.ink, color: '#ffffff' },
+  chipDemo: { backgroundColor: C.ink, color: C.onInk },
+  chipOn: { backgroundColor: C.blueBg, color: C.blue }, // the app's link blue, on a light tint of it
+  chipWarn: { backgroundColor: C.warnBg, color: C.warn },
+  chipWait: { backgroundColor: C.card, color: C.muted },
   chip: { fontFamily: 'Onest_600SemiBold', fontSize: 11, letterSpacing: 0.6, color: C.ink, backgroundColor: C.mint, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   label: { fontFamily: 'Onest_500Medium', fontSize: 12, letterSpacing: 0.7, color: C.blue, marginTop: 6 },
   title: { fontFamily: 'Onest_500Medium', fontSize: 30, lineHeight: 32, letterSpacing: -1, color: C.ink },
-  tone: { color: C.tone },
+  subtitle: { fontFamily: 'Onest_400Regular', fontSize: 17, lineHeight: 22, color: C.muted, marginTop: -6 },
   card: { backgroundColor: C.card, borderRadius: 10, padding: 16, gap: 6 },
   okCard: { backgroundColor: C.mint },
   frame: { backgroundColor: C.card, borderRadius: 10, overflow: 'hidden' }, // the web card's clipping frame (SensorCard)
@@ -1230,11 +1248,11 @@ const s = StyleSheet.create({
   requirementTodo: { backgroundColor: C.warnBg },
   check: { width: 22, height: 22, lineHeight: 22, borderRadius: 11, overflow: 'hidden', textAlign: 'center', fontFamily: 'Onest_600SemiBold', fontSize: 13 },
   checkDone: { backgroundColor: C.mint, color: C.ink },
-  checkTodo: { backgroundColor: C.warn, color: '#ffffff' },
+  checkTodo: { backgroundColor: C.warn, color: C.onInk },
   requirementText: { fontFamily: 'Onest_500Medium', fontSize: 15, color: C.ink },
   requirementAction: { fontFamily: 'Onest_500Medium', fontSize: 15, color: C.blue },
   primary: { backgroundColor: C.ink, borderRadius: 999, minHeight: 44, minWidth: 92, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  primaryText: { fontFamily: 'Onest_500Medium', fontSize: 15, color: '#ffffff' },
+  primaryText: { fontFamily: 'Onest_500Medium', fontSize: 15, color: C.onInk },
   disabled: { opacity: 0.45 },
   log: { gap: 4, paddingTop: 6 },
   logLine: { fontFamily: 'Onest_400Regular', fontSize: 13, color: C.ink, fontVariant: ['tabular-nums'] },
