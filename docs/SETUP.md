@@ -2,7 +2,7 @@
 
 **Send Wi-Fi credentials from a technician’s phone or laptop to a headless Linux device over Bluetooth, then confirm that the device joined the network.** No internet, cloud relay or shared network is needed during provisioning.
 
-The repository contains both sides: the **provide. configurator** (React Native / Expo, with a Tauri desktop shell) and the **Linux device service** (Rust, BlueZ and NetworkManager).
+The repository contains both sides: the **Provide. configurator** (React Native / Expo, with a Tauri desktop shell) and the **Linux device service** (Rust, BlueZ and NetworkManager).
 
 ```text
 Technician → provide. → BLE + authenticated Noise XX → Linux device → Wi-Fi network
@@ -19,7 +19,7 @@ Technician → provide. → BLE + authenticated Noise XX → Linux device → Wi
 | See the technician experience | [42-second demo video](media/overall-200-sensors.mp4) — simulated sensors, no real Wi-Fi joins |
 | Explore the UI on Ubuntu without hardware | [Local preview](#preview-without-hardware) |
 | Reproduce a real Wi-Fi join | [Hardware and assumptions](#hardware-and-assumptions), then [Ubuntu setup](#prepare-the-ubuntu-device) |
-| Use the app as a technician | [Use provide.](#use-provide) |
+| Use the app as a technician | [Use Provide.](#use-provide) |
 | Check the four challenge constraints | [Requirements map](../README.md#requirements-map) |
 | Review channel choice, security and 200-device deployment | [Architecture](ARCHITECTURE.md#why-bluetooth-low-energy), [security](SECURITY.md), [200-device design](ARCHITECTURE.md#200-devices-in-a-hospital-wing) |
 
@@ -34,7 +34,7 @@ npm ci
 npm run web
 ```
 
-Open the local URL printed by Expo and append `?demo=1`, or tap the **provide.** logo to enter demo mode. Try **Set up all ready**, the error filter and **Retry failed**.
+Open the local URL printed by Expo and append `?demo=1`, or tap the **Provide.** logo to enter demo mode. Try **Set up all ready**, the error filter and **Retry failed**.
 
 Demo mode uses 200 fake sensors with the real application handshake and certificate checks, under a separate demo authority. It sends nothing over Bluetooth and never joins Wi-Fi. A plain browser supports this preview only; real Bluetooth provisioning requires the native phone or desktop app.
 
@@ -79,11 +79,11 @@ The service runs as `teton`. Its private state lives in `/var/lib/teton-device`,
 
 ### 2. Create your evaluation authorities
 
-For a self-contained evaluation, generate your own authorities. `cargo authority` (an alias in `device/.cargo/config.toml`) builds and runs the authority tool in one step; its short forms keep the authority in `~/teton-authority` (or `$TETON_AUTHORITY`), outside the checkout, and use the customer `DEMO`. In production these would be kept at the workshop, separate from deployed devices.
+For a self-contained evaluation, generate your own authorities. Install the workshop tool once, from the checkout (`cargo install --path device --features stage --bin teton-workshop --locked`; the first build takes 1-2 minutes). Its short forms keep the authority in `~/teton-authority` (or `$TETON_AUTHORITY`), outside the checkout, and need a customer: `--customer "Noé Home"`, or the last one used after a yes on a terminal. In production these would be kept at the workshop, separate from deployed devices.
 
 ```sh
-cargo authority init        # creates ~/teton-authority (private keys 0600) and prints both public keys
-cargo authority public      # prints them again
+teton-workshop init        # creates ~/teton-authority (private keys 0600) and prints both public keys
+teton-workshop public      # prints them again
 ```
 
 The output names two **public** keys. In `../configurator/src/authority.ts`, replace both `DEVICE_AUTHORITY` and `TECHNICIAN_AUTHORITY` with these values **before building the configurator**. The first verifies devices; the second verifies imported technician codes. The checked-in public keys belong to the existing test deployment; its private keys are not included.
@@ -99,8 +99,11 @@ sudo -u teton teton-stage init /var/lib/teton-device
 Copy the device public key printed by this command, then run:
 
 ```sh
-cargo authority certify <DEVICE_PUBLIC_KEY_HEX>
+teton-workshop certify <DEVICE_PUBLIC_KEY_HEX> --customer "Noé Home"
 ```
+
+A customer is a name or an ID (`"Noé Home"` is `NOE-HOME`). One authority serves every customer: never run `init`
+again for a new one.
 
 Copy the certificate hex and the technician authority public key from step 2:
 
@@ -115,12 +118,14 @@ Expected: a `TETON-XXXXXXXXXX` identifier and an advertising message. The identi
 ### 4. Issue a technician code
 
 ```sh
-cargo authority issue "Evaluator"
+teton-workshop issue "Evaluator" --customer "Noé Home"
 ```
 
-This prints a QR code and a text code valid for one day, authorized for customer `DEMO`. The code contains a private holder key: treat it as a credential. Import it directly inside provide.; do not include it in screenshots or logs.
+This prints a QR code and a text code valid for one day, authorized for that customer. Repeat `--customer` for a code
+that covers several (8 at most): `--customer "Noé Home" --customer "Hôpital Saint-Louis"`. Without `--customer`, the
+tool offers the last customer again and waits for a yes; with no terminal, it stops instead of waiting. The code contains a private holder key: treat it as a credential. Import it directly inside Provide.; do not include it in screenshots or logs.
 
-One code per technician: run the command again with another name. The authority tool also runs on macOS (it needs no Bluetooth), so codes can be issued from the examiner's laptop. For several customers or a longer validity (30 days at most), use the full form: `cargo authority issue ~/teton-authority "Name" DEMO,OTHER 7`. `cargo authority` alone prints the usage.
+One code per technician: run the command again with another name. Name each technician by their full name, or a distinctive nickname: it is only a readable label. A name is letters (accents included), digits, spaces, `-`, `'` or `.`; anything else is refused. `issue` logs each code's ID, name, customers and expiry in `issued.tsv` next to the keys. The authority tool also runs on macOS (it needs no Bluetooth), so codes can be issued from the examiner's laptop. For a longer validity (5 days at most), use the full form with exact IDs: `teton-workshop issue ~/teton-authority "Name" NOE-HOME,HOPITAL-SAINT-LOUIS 5`. `teton-workshop` alone prints the usage.
 
 ## Prepare the configurator
 
@@ -139,7 +144,7 @@ The device instructions target Ubuntu. The desktop configurator’s Linux and Wi
 
 On iPhone, the technician code and site credentials use native secure storage with authentication. The desktop implementation currently keeps them **in memory only**: closing the app loses them. Persistent desktop keychain storage is not implemented.
 
-## Use provide.
+## Use Provide.
 
 This is what the technician does; the [README videos](../README.md#how-to-use-provide) show each step with a pointer.
 
@@ -171,7 +176,7 @@ The sensor needs no screen, keyboard or SSH.
 
 ### A real session, step by step
 
-1. Open provide. in normal mode; there must be no **DEMO** indicator. Keep Bluetooth enabled. To demonstrate independence from networking, turn off the configurator's Wi-Fi and mobile data, and ensure the device is not already on the target network.
+1. Open Provide. in normal mode; there must be no **DEMO** indicator. Keep Bluetooth enabled. To demonstrate independence from networking, turn off the configurator's Wi-Fi and mobile data, and ensure the device is not already on the target network.
 2. Add the technician code from [step 4](#4-issue-a-technician-code) by scanning or pasting it inside the app.
 3. Wait for the device's `TETON-XXXXXXXXXX` identifier. **Test** exchanges `hello` / `world`.
 4. Tap **Set up**, enter the facility name, target SSID and password, and confirm.
@@ -225,4 +230,4 @@ Tests cover Rust/TypeScript Noise interoperability, certificate and technician-t
 
 ## Code map
 
-The [folder tree in the README](../README.md#folder-tree) describes every folder.
+The [repo map in the README](../README.md#what-is-inside-the-repo) describes every folder.
