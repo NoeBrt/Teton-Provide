@@ -9,7 +9,7 @@ export type MenuSnapshot = {
   canRefresh: boolean;
   refresh: 'idle' | 'refreshing' | 'updated' | 'failed' | 'cancelled';
   canSetUpAll: boolean;
-  sensors: { id: string; name: string; status: string; group: Group; busy: boolean; canSetUp: boolean }[];
+  sensors: { id: string; name: string; status: string; group: Group; busy: boolean; canSetUp: boolean; setUpLabel: string }[];
 };
 export type MenuBarApi = Tauri & {
   event: Tauri['event'] & { emitTo(target: string, event: string, payload: unknown): Promise<void> };

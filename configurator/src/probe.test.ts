@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changed, keepAdvertised, probe, sensorId, sensorLabel, sensorState, type Advertising, type BleLink } from './probe.ts';
+import { changed, keepAdvertised, probe, sensorId, sensorLabel, sensorState, setUpLabel, type Advertising, type BleLink } from './probe.ts';
 
 const text = (data: number[]) => String.fromCharCode(...data);
 
@@ -117,4 +117,14 @@ test('packets without manufacturer identity retain the last complete record atom
   const malformed = { rssi: -40, advertising: { manufacturerData: { ffff: { bytes: [1] } } } };
   assert.equal(sensorId(keepAdvertised(before, malformed).advertising), null, 'a new record is not patched with an old ID');
   assert.equal(keepAdvertised(undefined, bare), bare);
+});
+
+test('a sensor that already joined a network offers Reconfigure, in the card and the menu-bar panel alike', () => {
+  assert.equal(setUpLabel('ready'), 'Set up');
+  assert.equal(setUpLabel('not-staged'), 'Set up');
+  assert.equal(setUpLabel(null), 'Set up');
+  assert.equal(setUpLabel('online'), 'Reconfigure');
+  assert.equal(setUpLabel('offline'), 'Reconfigure');
+  assert.equal(setUpLabel('ready', true), 'Reconfigure', 'set up here: the scan has not heard the new state yet');
+  assert.equal(setUpLabel('ready', false), 'Set up');
 });

@@ -76,9 +76,20 @@ Both videos show a wing of 200 simulated sensors: batch progress, errors and ret
 All results in these videos are simulated; they show no real credentials.
 
 On macOS, click Provide.'s icon in the menu bar for a compact sensor list: refresh or cancel a refresh, test a sensor,
-set one up, or set up all ready sensors. It shares the app's live state. Click a sensor to open its full card, or press
-Escape to dismiss the panel. **Window → Nearby Sensors** (⌘⇧P) also opens it. Closing the main window keeps Provide.
-available in the menu bar; right-click the icon and choose **Quit Provide.** to exit.
+set one up or reconfigure it, or set up all ready sensors. It shares the app's live state. Click a sensor to open its
+full card, or press Escape to dismiss the panel. **Window → Nearby Sensors** (⌘⇧P) also opens it. Closing the main
+window keeps Provide. available in the menu bar; right-click the icon and choose **Quit Provide.** to exit.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/media/menu-panel-ready.png" alt="Provide.'s menu-bar panel on macOS: three real IoT sensors, ready to set up" width="320" /></td>
+    <td align="center"><img src="docs/media/menu-panel-set-up.png" alt="The same panel once the three sensors joined the Wi-Fi: each offers Reconfigure" width="320" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Three real sensors, ready to set up</sub></td>
+    <td align="center"><sub>Set up and on the site's Wi-Fi: Reconfigure</sub></td>
+  </tr>
+</table>
 
 The desktop app requires macOS 14 or later. The panel uses Liquid Glass on macOS 26+ and the system popover material
 on older versions.
