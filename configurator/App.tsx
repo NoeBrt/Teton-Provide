@@ -22,6 +22,8 @@ import { expiryText, loadTokenInfo, TechnicianSheet, tokenProblem, unlockToken, 
 import { loadSetups, loadSites, saveSetups, setActiveSite, SitesSheet, unlockPassword } from './src/SiteSheet';
 import { stateText, type Setups, type Site, type SiteNetwork } from './src/sites';
 import { C, DESKTOP_MIN_WIDTH } from './src/theme';
+import { MenuPanel } from './src/MenuPanel';
+import { connectMenuBar, menuBarApi, type MenuAction, type MenuSnapshot } from './src/menuBar';
 import Animated, {
   cancelAnimation, Easing, FadeIn, FadeOut, interpolate, LinearTransition, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
   useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming, type SharedValue,
@@ -939,17 +941,83 @@ function Provide({ demo, onDemo }: Mode) {
   const codeShown = tokenSheet.open && siteGone;
   const codeGone = useGone(codeShown);
   const siteShown = choosingSite && codeGone;
-
-  // Not on the web: expo-font's load detector hangs in the desktop window's WebKit (its user agent says no Safari) until
-  // a 12 s timeout, a blank window all that time. The fonts are local there and in place before the intro ends.
-  if (!fontsLoaded && !fontError && Platform.OS !== 'web') return null;
-  const successes = attempts.filter(attempt => attempt.ok).length;
-  // The header chip: the radio the whole app works through, and whether it can work now.
   const bluetooth = !radio || ble === BleState.Unsupported ? { text: 'NO BLUETOOTH', label: 'No Bluetooth', style: s.chipWarn }
     : ready ? { text: 'BLUETOOTH ON', label: 'Bluetooth on', style: s.chipOn }
     : ble === BleState.Off || ble === BleState.TurningOff ? { text: 'BLUETOOTH OFF', label: 'Bluetooth off', style: s.chipWarn }
     : ble === BleState.Unauthorized ? { text: 'BLUETOOTH BLOCKED', label: 'Bluetooth access blocked', style: s.chipWarn }
     : { text: 'BLUETOOTH…', label: 'Checking Bluetooth', style: s.chipWait };
+
+  const menuState: MenuSnapshot = {
+    demo: !!demo,
+    bluetooth: bluetooth.label,
+    site: activeSite?.name ?? null,
+    canRefresh: ready && !anyRunning && !batching,
+    refresh: refreshStatus,
+    canSetUpAll: ready && !anyRunning && !batching && readyIds.length > 0,
+    sensors: menuBarApi ? Object.values(sensors).map(sensor => {
+      const state = sensorState(sensor.advertising);
+      const site = sites.find(site => site.id === setups[nameOf(sensor)])?.name ?? null;
+      return {
+        id: sensor.id, name: nameOf(sensor), group: groups[sensor.id], busy: !!running[sensor.id] || batch[sensor.id]?.state === 'queued',
+        canSetUp: ready && state !== 'not-staged',
+        status: running[sensor.id] ? `${running[sensor.id].kind === 'test' ? 'Testing' : 'Setting up'}…`
+          : outcomes[sensor.id]?.title ?? (batch[sensor.id]?.state === 'queued' ? 'Waiting in the batch'
+            : batch[sensor.id]?.state === 'failed' || batch[sensor.id]?.state === 'stopped' ? 'Setup failed · open for details'
+              : batch[sensor.id]?.state === 'ok' && state !== 'offline' ? 'Joined the Wi-Fi'
+                : state ? stateText(state, site) : 'State unknown'),
+      };
+    }) : [],
+  };
+  const menuAction = async (action: MenuAction) => {
+    if (!menuBarApi) return;
+    if (action.kind === 'refresh') { if (menuState.canRefresh) refresh(); return; }
+    if (action.kind === 'open') {
+      if (!sensors[action.id]) return;
+      await menuBarApi.core.invoke('open_main');
+      pickFilter('all');
+      setOpenId(action.id);
+      focused.current = { id: action.id, until: Date.now() + FOCUS_MS };
+      if (!desktop && y.get() < travel - 1) fold(RESIZE);
+      return;
+    }
+    if (!ready || busy.current.size || batchActive.current) return;
+    if (!demo && leftAt.current !== null && Date.now() - leftAt.current > LOCK_AFTER_MS) {
+      flow.current.token = null;
+      flow.current.network = null;
+    }
+    if (action.kind === 'set-up-all') {
+      if (!menuState.canSetUpAll) return;
+      if (!flow.current.token || expired(flow.current.token) || !flow.current.network) await menuBarApi.core.invoke('open_main');
+      startBatch(readyIds);
+    } else if (action.kind === 'test' || action.kind === 'set-up') {
+      const sensor = sensors[action.id];
+      if (!sensor) return;
+      if (action.kind === 'test') { await test(sensor); return; }
+      if (sensorState(sensor.advertising) === 'not-staged') return;
+      if (!flow.current.token || expired(flow.current.token) || !flow.current.network) await menuBarApi.core.invoke('open_main');
+      setUp(sensor);
+    }
+  };
+  const menuRef = useRef({ state: menuState, action: menuAction });
+  menuRef.current = { state: menuState, action: menuAction };
+  const menuConnection = useRef<ReturnType<typeof connectMenuBar> | null>(null);
+  useEffect(() => {
+    if (!menuBarApi) return;
+    const connection = connectMenuBar(menuBarApi, () => menuRef.current.state, action => { menuRef.current.action(action).catch(console.error); });
+    menuConnection.current = connection;
+    connection.ready.then(connection.publish).catch(console.error);
+    return () => { connection.dispose(); menuConnection.current = null; };
+  }, []);
+  const menuJson = menuBarApi ? JSON.stringify(menuState) : '';
+  useEffect(() => { menuConnection.current?.publish().catch(console.error); }, [menuJson]);
+  useEffect(() => {
+    if (choosingSite || tokenSheet.open) menuBarApi?.core.invoke('open_main').catch(console.error);
+  }, [choosingSite, tokenSheet.open]);
+
+  // Not on the web: expo-font's load detector hangs in the desktop window's WebKit (its user agent says no Safari) until
+  // a 12 s timeout, a blank window all that time. The fonts are local there and in place before the intro ends.
+  if (!fontsLoaded && !fontError && Platform.OS !== 'web') return null;
+  const successes = attempts.filter(attempt => attempt.ok).length;
   const caption = (
     !ready ? 'Search paused.'
       : anyRunning ? (Object.values(running).some(r => r.kind === 'setup') ? 'Setting up…' : 'Testing…')
@@ -1262,6 +1330,11 @@ const s = StyleSheet.create({
 // sensor, result, scan or credential crosses from one mode to the other. Launched with `-demo 1` (simctl) on iOS, or
 // `?demo=1` on the web build, it opens in the demo.
 export default function App() {
+  return Platform.OS === 'web' && new URLSearchParams(globalThis.location?.search).get('menubar') === '1'
+    ? <MenuPanel /> : <AppMode />;
+}
+
+function AppMode() {
   const [demo, setDemo] = useState<Demo | null>(() => (launchedInDemo() ? startDemo(Crypto.getRandomBytes) : null));
   useEffect(() => () => demo?.stop(), [demo]);
   return <Provide key={demo ? 'demo' : 'real'} demo={demo} onDemo={on => setDemo(on ? startDemo(Crypto.getRandomBytes) : null)} />;
