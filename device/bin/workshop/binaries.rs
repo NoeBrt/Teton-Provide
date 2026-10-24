@@ -4,40 +4,33 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub(super) const RELEASE: &str = "v1.1.0";
-const REPOSITORY: &str = "https://github.com/NoeBrt/teton-provisioning";
+const REPOSITORY: &str = "NoeBrt/teton-provisioning";
 
 pub(super) fn prepare(arch: &str, crate_dir: &Path) -> Result<PathBuf, String> {
     prepare_with(arch, crate_dir, download)
 }
 
 fn download(asset: &str) -> Result<Vec<u8>, String> {
-    let url = format!("{REPOSITORY}/releases/download/{RELEASE}/{asset}");
-    let output = Command::new("curl")
+    download_with(asset, Command::new("gh"))
+}
+
+fn download_with(asset: &str, mut command: Command) -> Result<Vec<u8>, String> {
+    let output = command
         .args([
-            "--fail",
-            "--location",
-            "--silent",
-            "--show-error",
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=https",
-            "--connect-timeout",
-            "15",
-            "--max-time",
-            "180",
-            "--retry",
-            "2",
-            &url,
+            "release", "download", RELEASE, "--repo", REPOSITORY,
+            "--pattern", asset, "--output", "-",
         ])
+        .env("GH_HOST", "github.com")
+        .env("GH_PROMPT_DISABLED", "1")
+        .stdin(Stdio::null())
         .output()
-        .map_err(|e| format!("curl (needed to download sensor binaries): {e}"))?;
+        .map_err(|e| format!("GitHub CLI (gh) is needed for private release downloads: {e}; install it and run `gh auth login`"))?;
     if !output.status.success() {
         return Err(format!(
-            "cannot download {url}: {}. Check internet access and the {RELEASE} release; no sensor was installed",
+            "cannot download {asset} from {REPOSITORY} ({RELEASE}): {}. Run `gh auth login` with access to this repository and check internet access; no sensor was installed",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
@@ -113,6 +106,27 @@ mod tests {
             Some(name) => format!("{:x}  {name}\n", Sha256::digest(bytes)).into_bytes(),
             None => bytes.to_vec(),
         })
+    }
+
+    #[test]
+    fn private_releases_use_the_authenticated_client_and_report_access_failures() {
+        let root = fixture("private");
+        let client = root.join("gh");
+        fs::write(&client, "#!/bin/sh\n[ \"$GH_HOST\" = github.com ] && [ \"$GH_PROMPT_DISABLED\" = 1 ] || exit 78\n[ \"$*\" = 'release download v1.1.0 --repo NoeBrt/teton-provisioning --pattern sensor --output -' ] || exit 78\nprintf 'private binary'\n").unwrap();
+        fs::set_permissions(&client, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(
+            download_with("sensor", Command::new(&client)).unwrap(),
+            b"private binary"
+        );
+        fs::write(
+            &client,
+            "#!/bin/sh\necho 'authentication required' >&2\nexit 4\n",
+        )
+        .unwrap();
+        let error = download_with("sensor", Command::new(&client)).unwrap_err();
+        assert!(error.contains("authentication required"));
+        assert!(error.contains("gh auth login"));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -51,7 +51,8 @@ Dependencies, authorities and apps are prepared before the visit. Those preparat
 
 ## Deploy over SSH from your laptop
 
-From the checkout root on macOS or Linux, with Rust, OpenSSH and curl installed:
+From the latest `main` checkout on macOS or Linux, with Rust, OpenSSH and GitHub CLI installed. Sign in with
+`gh auth login` using an account with access to this private repository:
 
 ```sh
 cargo install --path device --features stage --bin teton-workshop --locked
