@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ble;
+mod secrets;
 
 use tauri::Manager;
 
@@ -18,6 +19,9 @@ fn main() {
             ble::ble_write,
             ble::ble_read,
             ble::ble_disconnect,
+            secrets::secret_get,
+            secrets::secret_set,
+            secrets::secret_delete,
         ])
         .setup(|app| {
             // `--demo` opens the demo, as `?demo=1` does on the web build (App.tsx, launchedInDemo).
