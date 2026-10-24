@@ -15,13 +15,10 @@ test('the secure store keeps, replaces and forgets a value', async () => {
   assert.equal(store.canUseBiometricAuthentication(), true, 'the keychain protects it, no biometric gate');
 });
 
-test('a question with a choice runs the chosen button, or the cancel one', () => {
+test('a question runs its choice: the desktop window answers "cancel" to every confirm() and shows no dialog', () => {
   const ran: string[] = [];
-  const buttons = [{ text: 'Stay', style: 'cancel' as const, onPress: () => ran.push('stay') }, { text: 'Leave', onPress: () => ran.push('leave') }];
-  const g = globalThis as { confirm?: (message: string) => boolean };
-  g.confirm = () => true;
-  ask('Leave the demo?', 'Back to the sensors around you.', buttons);
-  g.confirm = () => false;
-  ask('Leave the demo?', 'Back to the sensors around you.', buttons);
-  assert.deepEqual(ran, ['leave', 'stay']);
+  (globalThis as { confirm?: () => boolean }).confirm = () => false; // what WKWebView does without a dialog
+  ask('Demo with simulated sensors', '200 simulated sensors.', [{ text: 'Cancel', style: 'cancel', onPress: () => ran.push('cancel') }, { text: 'Start the demo', onPress: () => ran.push('demo') }]);
+  ask('Leave the demo?', 'Back to the sensors around you.', [{ text: 'Stay', style: 'cancel', onPress: () => ran.push('stay') }, { text: 'Leave', onPress: () => ran.push('leave') }]);
+  assert.deepEqual(ran, ['demo', 'leave']);
 });
