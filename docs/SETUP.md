@@ -28,8 +28,8 @@ Technician → provide. → BLE + authenticated Noise XX → Linux device → Wi
 Requires Node.js 22.18 or later. From a fresh checkout:
 
 ```sh
-git clone https://github.com/NoeBrt/teton-provisioning.git
-cd teton-provisioning/configurator
+git clone https://github.com/NoeBrt/Teton-Provide.git
+cd Teton-Provide/configurator
 npm ci
 npm run web
 ```
@@ -55,7 +55,7 @@ From the latest `main` checkout on macOS or Linux, with Rust, OpenSSH and GitHub
 `gh auth login` using an account with access to this private repository:
 
 ```sh
-cargo install --path device --features stage --bin teton-workshop --locked
+cargo install --path workshop --locked
 teton-workshop init                 # once; reuse an existing authority
 teton-workshop deploy user@192.168.55.1 --customer "Noé Home"
 teton-workshop issue "Evaluator" --customer "Noé Home"
@@ -92,8 +92,8 @@ Run these commands from the `device/` folder of a checkout, on a dedicated test 
 Install Rust 1.88.0 with rustup if it is not already available. The crate pins that toolchain in `device/rust-toolchain.toml`.
 
 ```sh
-git clone https://github.com/NoeBrt/teton-provisioning.git
-cd teton-provisioning/device
+git clone https://github.com/NoeBrt/Teton-Provide.git
+cd Teton-Provide/device
 sudo apt update
 sudo apt install build-essential pkg-config libdbus-1-dev bluez network-manager curl rfkill
 curl --proto '=https' -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.88.0 --profile minimal
@@ -113,7 +113,7 @@ The service runs as `teton`. Its private state lives in `/var/lib/teton-device`,
 
 ### 2. Create your evaluation authorities
 
-For a self-contained evaluation, generate your own authorities. Install the workshop tool once, from the checkout (`cargo install --path device --features stage --bin teton-workshop --locked`; the first build takes 1-2 minutes). Its short forms keep the authority in `~/teton-authority` (or `$TETON_AUTHORITY`), outside the checkout, and need a customer: `--customer "Noé Home"`, or the last one used after a yes on a terminal. In production these would be kept at the workshop, separate from deployed devices.
+For a self-contained evaluation, generate your own authorities. Install the workshop tool once, from the checkout (`cargo install --path workshop --locked`; the first build takes 1-2 minutes). Its short forms keep the authority in `~/teton-authority` (or `$TETON_AUTHORITY`), outside the checkout, and need a customer: `--customer "Noé Home"`, or the last one used after a yes on a terminal. In production these would be kept at the workshop, separate from deployed devices.
 
 ```sh
 teton-workshop init        # creates ~/teton-authority (private keys 0600) and prints both public keys

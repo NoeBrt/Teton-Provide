@@ -7,10 +7,29 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 pub(super) const RELEASE: &str = "v1.1.0";
-const REPOSITORY: &str = "NoeBrt/teton-provisioning";
+const REPOSITORY: &str = "NoeBrt/Teton-Provide";
+/// SHA-256 of each RELEASE asset, pinned here: a replaced release asset (with its published .sha256) is refused.
+const PINNED: [(&str, &str); 4] = [
+    (
+        "teton-device-v1.1.0-linux-aarch64",
+        "62a1b7aa29786e6edb7e114a9953dd6688e32f33cbf2e8c21b82e4297dd588b4",
+    ),
+    (
+        "teton-stage-v1.1.0-linux-aarch64",
+        "0f4d6047a5bbea2948b2c2f1a4536af5c69f89a3f1d37a4b26d012b12ac5395a",
+    ),
+    (
+        "teton-device-v1.1.0-linux-x86_64",
+        "7645f2d8bca8ca3157dfe70eed9cf4f26b88a50da53b943e041d0663e2dfa2d7",
+    ),
+    (
+        "teton-stage-v1.1.0-linux-x86_64",
+        "c889d1f464311d6a87812b82ff134b58f391225ab31d39935bf19a0cace21a70",
+    ),
+];
 
-pub(super) fn prepare(arch: &str, crate_dir: &Path) -> Result<PathBuf, String> {
-    prepare_with(arch, crate_dir, download)
+pub(super) fn prepare(arch: &str, device_dir: &Path) -> Result<PathBuf, String> {
+    prepare_with(arch, device_dir, &PINNED, download)
 }
 
 fn download(asset: &str) -> Result<Vec<u8>, String> {
@@ -39,14 +58,15 @@ fn download_with(asset: &str, mut command: Command) -> Result<Vec<u8>, String> {
 
 fn prepare_with(
     arch: &str,
-    crate_dir: &Path,
+    device_dir: &Path,
+    pinned: &[(&str, &str)],
     mut fetch: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<PathBuf, String> {
     let arch = arch.trim();
     if arch.is_empty() || !arch.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return Err(format!("unexpected sensor architecture {arch:?}"));
     }
-    let local = crate_dir.join(format!("target/linux-{arch}"));
+    let local = device_dir.join(format!("target/linux-{arch}"));
     if ["device", "stage"]
         .iter()
         .all(|name| local.join(name).is_file())
@@ -59,7 +79,7 @@ fn prepare_with(
             local.display()
         ));
     }
-    let cache = crate_dir.join(format!("target/sensor-{RELEASE}-linux-{arch}"));
+    let cache = device_dir.join(format!("target/sensor-{RELEASE}-linux-{arch}"));
     fs::create_dir_all(&cache).map_err(|e| format!("{}: {e}", cache.display()))?;
     for name in ["device", "stage"] {
         let destination = cache.join(name);
@@ -69,9 +89,11 @@ fn prepare_with(
         let asset = format!("teton-{name}-{RELEASE}-linux-{arch}");
         eprintln!("Downloading {asset}");
         let bytes = fetch(&asset)?;
-        let checksum = fetch(&format!("{asset}.sha256"))?;
-        let expected = format!("{:x}  {asset}\n", Sha256::digest(&bytes));
-        if bytes.is_empty() || checksum != expected.as_bytes() {
+        let pin = pinned
+            .iter()
+            .find(|(name, _)| *name == asset)
+            .map(|(_, hash)| *hash);
+        if bytes.is_empty() || pin != Some(format!("{:x}", Sha256::digest(&bytes)).as_str()) {
             return Err(format!(
                 "SHA-256 check failed for {asset}; no sensor was installed"
             ));
@@ -100,19 +122,34 @@ mod tests {
         path
     }
 
-    fn release_asset(asset: &str) -> Result<Vec<u8>, String> {
-        let bytes = b"a Linux binary";
-        Ok(match asset.strip_suffix(".sha256") {
-            Some(name) => format!("{:x}  {name}\n", Sha256::digest(bytes)).into_bytes(),
-            None => bytes.to_vec(),
-        })
+    fn release_asset(_asset: &str) -> Result<Vec<u8>, String> {
+        Ok(b"a Linux binary".to_vec())
+    }
+
+    /// The pins of a release whose assets are all `release_asset`'s bytes.
+    fn pins() -> Vec<(String, String)> {
+        let hash = format!("{:x}", Sha256::digest(b"a Linux binary"));
+        PINNED
+            .iter()
+            .map(|(name, _)| (name.to_string(), hash.clone()))
+            .collect()
+    }
+
+    fn prepare_test(
+        arch: &str,
+        root: &Path,
+        fetch: impl FnMut(&str) -> Result<Vec<u8>, String>,
+    ) -> Result<PathBuf, String> {
+        let pins = pins();
+        let pins: Vec<(&str, &str)> = pins.iter().map(|(a, h)| (a.as_str(), h.as_str())).collect();
+        prepare_with(arch, root, &pins, fetch)
     }
 
     #[test]
     fn private_releases_use_the_authenticated_client_and_report_access_failures() {
         let root = fixture("private");
         let client = root.join("gh");
-        fs::write(&client, "#!/bin/sh\n[ \"$GH_HOST\" = github.com ] && [ \"$GH_PROMPT_DISABLED\" = 1 ] || exit 78\n[ \"$*\" = 'release download v1.1.0 --repo NoeBrt/teton-provisioning --pattern sensor --output -' ] || exit 78\nprintf 'private binary'\n").unwrap();
+        fs::write(&client, "#!/bin/sh\n[ \"$GH_HOST\" = github.com ] && [ \"$GH_PROMPT_DISABLED\" = 1 ] || exit 78\n[ \"$*\" = 'release download v1.1.0 --repo NoeBrt/Teton-Provide --pattern sensor --output -' ] || exit 78\nprintf 'private binary'\n").unwrap();
         fs::set_permissions(&client, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(
             download_with("sensor", Command::new(&client)).unwrap(),
@@ -133,7 +170,7 @@ mod tests {
     fn deploy_downloads_verified_executables_for_both_architectures_then_works_offline() {
         let root = fixture("download");
         for arch in ["aarch64", "x86_64"] {
-            let path = prepare_with(arch, &root, release_asset).unwrap();
+            let path = prepare_test(arch, &root, release_asset).unwrap();
             for name in ["device", "stage"] {
                 assert_eq!(fs::read(path.join(name)).unwrap(), b"a Linux binary");
                 assert_eq!(
@@ -142,7 +179,7 @@ mod tests {
                 );
             }
             assert_eq!(
-                prepare_with(arch, &root, |_| panic!("cached binaries need no internet")),
+                prepare_test(arch, &root, |_| panic!("cached binaries need no internet")),
                 Ok(path)
             );
         }
@@ -159,7 +196,7 @@ mod tests {
                 fs::write(path.join(name), b"local").unwrap();
             }
             assert_eq!(
-                prepare_with(&format!("{arch}\n"), &root, |_| panic!("local override")),
+                prepare_test(&format!("{arch}\n"), &root, |_| panic!("local override")),
                 Ok(path)
             );
         }
@@ -171,18 +208,12 @@ mod tests {
         let root = fixture("failure");
         for bad in [Vec::new(), b"tampered".to_vec()] {
             assert!(
-                prepare_with("aarch64", &root, |asset| {
-                    if asset.ends_with(".sha256") {
-                        release_asset(asset)
-                    } else {
-                        Ok(bad.clone())
-                    }
-                })
-                .unwrap_err()
-                .contains("SHA-256")
+                prepare_test("aarch64", &root, |_| Ok(bad.clone()))
+                    .unwrap_err()
+                    .contains("SHA-256")
             );
         }
-        assert!(prepare_with("aarch64", &root, |_| Err("network down".into())).is_err());
+        assert!(prepare_test("aarch64", &root, |_| Err("network down".into())).is_err());
         let cache = root.join(format!("target/sensor-{RELEASE}-linux-aarch64"));
         assert!(!cache.join("device").exists());
         assert!(!cache.join("stage").exists());
@@ -196,7 +227,7 @@ mod tests {
         fs::create_dir_all(&local).unwrap();
         fs::write(local.join("device"), b"incomplete local build").unwrap();
         assert!(
-            prepare_with("aarch64", &root, |asset| {
+            prepare_test("aarch64", &root, |asset| {
                 if asset.starts_with("teton-stage-") {
                     Err("network down".into())
                 } else {
@@ -205,7 +236,7 @@ mod tests {
             })
             .is_err()
         );
-        let path = prepare_with("aarch64", &root, |asset| {
+        let path = prepare_test("aarch64", &root, |asset| {
             assert!(
                 asset.starts_with("teton-stage-"),
                 "reuse the verified device binary"
@@ -219,10 +250,25 @@ mod tests {
     }
 
     #[test]
+    fn every_downloadable_asset_of_the_release_is_pinned() {
+        for arch in ["aarch64", "x86_64"] {
+            for name in ["device", "stage"] {
+                let asset = format!("teton-{name}-{RELEASE}-linux-{arch}");
+                assert!(
+                    PINNED
+                        .iter()
+                        .any(|(pinned, hash)| *pinned == asset && hash.len() == 64),
+                    "{asset}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn deploy_refuses_unsupported_or_path_like_architectures_before_downloading() {
         for arch in ["../x", "armv7l", "", "aarch64; reboot"] {
             assert!(
-                prepare_with(arch, Path::new("unused"), |_| panic!("must not download")).is_err()
+                prepare_test(arch, Path::new("unused"), |_| panic!("must not download")).is_err()
             );
         }
     }

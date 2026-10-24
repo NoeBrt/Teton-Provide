@@ -8,8 +8,10 @@ Guide for AI coding agents working on this repo. Read [README.md](README.md) fir
 - `configurator/`: Provide., the technician app (Expo / React Native, TypeScript). One code base for iPhone and
   desktop; `desktop/` holds the Tauri shell and its Rust Bluetooth bridge. Expo specifics:
   [configurator/AGENTS.md](configurator/AGENTS.md).
-- `device/`: the sensor service and the workshop tools, one Rust crate. `bin/` for the programs, `src/` for the
+- `device/`: the sensor service and its staging tool, one Rust crate. `bin/` for the programs, `src/` for the
   protocol library, `tests/` for integration tests.
+- `workshop/`: `teton-workshop`, Teton's CLI for the authorities, sensor deployment and technician codes. A Rust
+  crate that reuses `device/`'s protocol library.
 - `docs/`, `evidence/`, `tools/`: documentation, logs of real and simulated runs, test bench and demo scripts.
 
 ## Commands
@@ -25,10 +27,13 @@ cd desktop/src-tauri && cargo test            # desktop Bluetooth bridge
 cargo test --features provision,stage         # macOS: everything except BlueZ and the host audit
 cargo test --features ble,stage --all-targets --locked                       # Ubuntu: the full suite
 cargo clippy --features ble,stage --all-targets --locked -- -D warnings      # Ubuntu
-cargo install --path . --features stage --bin teton-workshop --locked   # the workshop tool, once
+
+# Workshop (from workshop/)
+cargo test && cargo clippy --all-targets -- -D warnings
+cargo install --path . --locked               # the workshop tool, once
 teton-workshop uninstall <ssh-host>         # undo deploy on a test sensor: Wi-Fi forgotten, service removed
 teton-workshop issue "Name" --customer DEMO  # a technician code, for manual tests
-teton-workshop deploy <ssh-host> --customer DEMO   # install, key and certify a blank sensor over SSH, from target/linux-<arch>/
+teton-workshop deploy <ssh-host> --customer DEMO   # install, key and certify a blank sensor over SSH (released binaries, or device/target/linux-<arch>/)
 ```
 
 ## Rules

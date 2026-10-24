@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="configurator/desktop/src-tauri/icons/icon.png" alt="Provide. logo" width="112" />
+  <img src="docs/media/ios-icon.png" alt="Provide. iOS app icon" width="128" />
 </p>
 
 <h1 align="center">Provide.</h1>
@@ -193,7 +193,7 @@ Threats and limits: [docs/SECURITY.md](docs/SECURITY.md).
 
 | Stack | Why |
 | --- | --- |
-| **Rust CLIs** `authority` and `stage`, in the device crate | They share the device's certificate and code types, so the workshop and the sensor cannot disagree on a format. |
+| **Rust CLI** `teton-workshop`, its own crate on top of the device's protocol library | The workshop and the sensor share one certificate and code format, so they cannot disagree on it. |
 | **Two Ed25519 authorities**, kept off the sensors | One certifies sensors, one issues technician codes. |
 
 ## Why an app, not a website
@@ -212,8 +212,8 @@ A web page needs no install, but it fails the challenge:
   checks their certificate and sends the Wi-Fi encrypted, one sensor or a whole wing.
 - **[The device](device/)**: a Rust service for the sensor, on Ubuntu. It answers over Bluetooth, checks the
   technician's code and joins the Wi-Fi through NetworkManager.
-- **The workshop**: two Rust CLIs in the device crate. `authority` certifies sensors and issues technician codes;
-  `stage` installs a certificate on a sensor before delivery.
+- **[The workshop](workshop/)**: `teton-workshop`, the Rust CLI Teton runs on its own laptop. It keeps the two
+  authority keys, deploys and certifies sensors over SSH, and issues technician codes.
 - **Tests** on both sides: Noise vectors shared by the device and the app, refusal cases, the batch queue, a
   200-sensor simulation.
 - **[docs/](docs/)**: setup and usage on Ubuntu, architecture, security, decision log.
@@ -226,8 +226,8 @@ A web page needs no install, but it fails the challenge:
 ### Demo in a browser, no hardware
 
 ```sh
-git clone https://github.com/NoeBrt/teton-provisioning.git
-cd teton-provisioning/configurator && npm ci && npm run web
+git clone https://github.com/NoeBrt/Teton-Provide.git
+cd Teton-Provide/configurator && npm ci && npm run web
 ```
 
 Open the URL Expo prints with `?demo=1`: 200 simulated sensors, no Bluetooth. Needs Node.js 22.18 or later.
@@ -247,28 +247,29 @@ once (macOS or Linux, Rust, OpenSSH and GitHub CLI installed), from the latest `
 from any folder. Sign in with `gh auth login` using an account with access to this private repository:
 
 ```sh
-cargo install --path device --features stage --bin teton-workshop --locked   # first build: 1-2 minutes
+cargo install --path workshop --locked        # first build: 1-2 minutes
 teton-workshop init                           # once, for every customer: two authorities, their public keys
 teton-workshop deploy user@192.168.55.1 --customer "Noé Home"
 teton-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
 ```
 
-`deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It reads
-the sensor's architecture, downloads the v1.1.0 Linux binaries to your laptop, checks their SHA-256 and caches them.
-It then asks for the sensor's sudo password once, copies the binaries, runs the installer, has the sensor create its key,
-certifies that key for the customer, records your laptop's time as the sensor's earliest clock and starts the
-service. Add the Wi-Fi interface after the host (`deploy <ssh-host> wlo1`) to pin one; by default NetworkManager
-picks. `deploy` refuses a sensor that already runs the service: run `teton-workshop uninstall <ssh-host>` first. It
-removes the service and the Wi-Fi the sensor was given, and moves the sensor's key to `/root/teton-backup`.
+`deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It reads the
+sensor's architecture, downloads the v1.1.0 Linux binaries to your laptop, checks them against the SHA-256 pinned in
+the tool and caches them. It then asks for the sensor's sudo password once, copies the binaries, runs the installer,
+has the sensor create its key, certifies that key for the customer, records your laptop's time as the sensor's
+earliest clock and starts the service. Add the Wi-Fi interface after the host (`deploy <ssh-host> wlo1`) to pin one;
+by default NetworkManager picks. `deploy` refuses a sensor that already runs the service: run `teton-workshop
+uninstall <ssh-host>` first. It removes the service and the Wi-Fi the sensor was given, and moves the sensor's key to
+`/root/teton-backup`.
 
-No Linux build is needed on your laptop or on the sensor. The first download per architecture needs internet on the
-laptop; later deployments use its cache. Keep the checkout in place after installing the tool. For a local build or
-a sensor without SSH, see [the manual setup](docs/SETUP.md#prepare-the-ubuntu-device).
+You build nothing for Linux, on the laptop or on the sensor. The first deployment per architecture needs internet on
+the laptop; later ones use its cache. Keep the checkout in place after installing the tool: `deploy` reads the
+installer from `device/`. For a local build or a sensor without SSH, see
+[the manual setup](docs/SETUP.md#prepare-the-ubuntu-device).
 
 A customer is a name or an ID: `"Noé Home"` becomes `NOE-HOME`, the ID that certificates and codes carry. Leave out
 `--customer` and the tool offers the last customer again and waits for your yes. A script with no terminal must name
-the customer. `teton-workshop help` lists every command, and [docs/SETUP.md](docs/SETUP.md) describes the manual
-path (`teton-stage init`, `teton-workshop certify`) for a sensor without SSH.
+the customer. `teton-workshop help` lists every command.
 
 Copy the two public keys from `teton-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
 `TECHNICIAN_AUTHORITY`) before you build the app.
