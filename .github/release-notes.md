@@ -14,9 +14,10 @@ the sensor's Linux binaries, checks their SHA-256 and caches them before copying
 or checkout is needed on the sensor. Install the workshop tool from the latest `main` checkout (includes
 private-download support); see the README's "Try it" section.
 For this private repository, install GitHub CLI and run `gh auth login` with an account that has access.
-The `teton-device-*-linux-{aarch64,x86_64}` and `teton-stage-*` files below are for the sensor, with a `.sha256`
-file each. They target Ubuntu 22.04 and later. Hardware support still needs BlueZ, NetworkManager and a BLE peripheral
-adapter. The first download needs internet on the laptop; subsequent sensors of the same architecture use the cache.
+The workshop reuses the ARM64 and x86_64 sensor binaries from [v1.1.0](https://github.com/NoeBrt/teton-provisioning/releases/tag/v1.1.0);
+application releases do not rebuild them. They target Ubuntu 22.04 and later. Hardware support still needs BlueZ,
+NetworkManager and a BLE peripheral adapter. The first download needs internet on the laptop; subsequent sensors
+of the same architecture use the cache.
 
 **These builds are unsigned.** Your system warns before the first launch:
 
