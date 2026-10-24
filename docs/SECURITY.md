@@ -66,7 +66,10 @@ The [requirements map](../README.md#requirements-map) tracks which of the tests 
 
 ## Site credentials versus device secrets
 
-The storage policies below describe the iPhone. On desktop, the current adapter keeps secrets only in memory; persistent system-keychain storage is not implemented, and closing the app loses the code and site credentials.
+The biometric policies below describe the iPhone. Desktop uses the operating system's credential store: macOS
+Keychain, Windows Credential Manager or Linux Secret Service. The code and site credentials survive a restart.
+On macOS, Keychain authorizes the signed app. Local installation uses an existing Apple signing identity when
+available so updates retain that identity; ad-hoc builds can trigger new access prompts after every update.
 
 - **Device key:** unique per sensor, never leaves its state directory. The certificate is public.
 - **Technician code:** `<token hex>.<holder private key hex>`, which `teton-workshop issue` prints as text and as a QR
