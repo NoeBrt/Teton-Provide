@@ -7,7 +7,7 @@ import { Onest_400Regular } from '@expo-google-fonts/onest/400Regular';
 import { Onest_500Medium } from '@expo-google-fonts/onest/500Medium';
 import { Onest_600SemiBold } from '@expo-google-fonts/onest/600SemiBold';
 import { BleState, type Peripheral } from 'react-native-ble-manager/src/types';
-import { changed, keepAdvertised, probe, SERVICE_UUID, sensorLabel as nameOf, sensorState, type ProbeResult, type SensorState, type Step } from './src/probe';
+import { changed, keepAdvertised, probe, SERVICE_UUID, sensorLabel as nameOf, sensorState, setUpLabel, type ProbeResult, type SensorState, type Step } from './src/probe';
 import { BleManager, bleStarted } from './src/ble';
 import { startDemo, type Demo } from './src/demo';
 import { ask } from './src/ask';
@@ -213,8 +213,8 @@ const SensorCard = memo(function SensorCard({ sensor, mine, entry, outcome, site
                 {mine?.kind === 'test' ? <ActivityIndicator color={C.ink} accessibilityLabel="Testing" /> : <Text style={s.secondaryText}>Test</Text>}
               </Pressable>
               <Pressable style={[s.primary, s.grow, ((active && mine.kind !== 'setup') || !settable || batching) && s.disabled]} disabled={active || !settable || batching} onPress={() => actions.setUp(sensor)} accessibilityRole="button"
-                accessibilityLabel={`${state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'} the Wi-Fi of ${nameOf(sensor)}`}>
-                {mine?.kind === 'setup' ? <ActivityIndicator color={C.onInk} accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>{state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up'}</Text>}
+                accessibilityLabel={`${setUpLabel(state, entry?.state === 'ok')} the Wi-Fi of ${nameOf(sensor)}`}>
+                {mine?.kind === 'setup' ? <ActivityIndicator color={C.onInk} accessibilityLabel="Setting up" /> : <Text style={s.primaryText}>{setUpLabel(state, entry?.state === 'ok')}</Text>}
               </Pressable>
             </View>
             {/* One drawer of steady height: it opens once, shows progress, then the result fades in place.
@@ -960,6 +960,7 @@ function Provide({ demo, onDemo }: Mode) {
       return {
         id: sensor.id, name: nameOf(sensor), group: groups[sensor.id], busy: !!running[sensor.id] || batch[sensor.id]?.state === 'queued',
         canSetUp: ready && state !== 'not-staged',
+        setUpLabel: setUpLabel(state, batch[sensor.id]?.state === 'ok'),
         status: running[sensor.id] ? `${running[sensor.id].kind === 'test' ? 'Testing' : 'Setting up'}…`
           : outcomes[sensor.id]?.title ?? (batch[sensor.id]?.state === 'queued' ? 'Waiting in the batch'
             : batch[sensor.id]?.state === 'failed' || batch[sensor.id]?.state === 'stopped' ? 'Setup failed · open for details'

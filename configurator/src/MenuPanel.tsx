@@ -80,8 +80,8 @@ export function MenuPanel() {
               <Pressable accessibilityRole="button" accessibilityLabel={`Test ${sensor.name}`} disabled={!state.canRefresh} style={[s.smallButton, !state.canRefresh && s.disabled]} onPress={() => action({ kind: 'test', id: sensor.id })}>
                 <Text style={s.buttonText}>Test</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Set up ${sensor.name}`} disabled={busy || !sensor.canSetUp} style={[s.smallButton, (busy || !sensor.canSetUp) && s.disabled]} onPress={() => action({ kind: 'set-up', id: sensor.id })}>
-                <Text style={s.buttonText}>Set up</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={`${sensor.setUpLabel} ${sensor.name}`} disabled={busy || !sensor.canSetUp} style={[s.smallButton, (busy || !sensor.canSetUp) && s.disabled]} onPress={() => action({ kind: 'set-up', id: sensor.id })}>
+                <Text style={s.buttonText}>{sensor.setUpLabel}</Text>
               </Pressable>
             </>}
           </View>

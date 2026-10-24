@@ -11,6 +11,11 @@ export type Advertising = { localName?: string; manufacturerData?: Record<string
 export const sensorState = (advertising?: Advertising): SensorState | null =>
   STATES[advertising?.manufacturerData?.ffff?.bytes[0] ?? -1] ?? null;
 
+/** The setup button's name, in the card and the menu-bar panel: Reconfigure for a sensor that already joined a network,
+ * as it advertises or as this session set it up (`joined`, before the next scan hears its new state). */
+export const setUpLabel = (state: SensorState | null, joined = false) =>
+  joined || state === 'online' || state === 'offline' ? 'Reconfigure' : 'Set up';
+
 /** The primary advertisement's untrusted claim; setup must still verify the certificate and proven key. */
 export function sensorId(advertising?: Advertising): string | null {
   const data = advertising?.manufacturerData?.ffff?.bytes;
