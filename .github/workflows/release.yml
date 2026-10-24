@@ -1,4 +1,4 @@
-# Builds Provide. for Android, macOS and Windows on a version tag (git tag v1.0.0 && git push origin v1.0.0) and
+# Builds Provide. for Android, macOS, Windows and Linux on a version tag (git tag v1.0.0 && git push origin v1.0.0) and
 # attaches them to a GitHub pre-release. The builds are unsigned: see the release notes.
 name: release
 
@@ -79,9 +79,37 @@ jobs:
           name: windows
           path: Provide-*-windows-x64-setup.exe
 
+  linux:
+    name: Linux AppImage and deb
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: configurator/package-lock.json
+      # Tauri's webview, and D-Bus for BlueZ (btleplug) and the Secret Service (keyring).
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config
+      - run: npm ci
+        working-directory: configurator
+      - run: npx tauri build --bundles appimage,deb
+        working-directory: configurator/desktop
+      - run: |
+          mv configurator/desktop/src-tauri/target/release/bundle/appimage/*.AppImage "Provide-${GITHUB_REF_NAME}-linux-x64.AppImage"
+          mv configurator/desktop/src-tauri/target/release/bundle/deb/*.deb "Provide-${GITHUB_REF_NAME}-linux-x64.deb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            Provide-*-linux-x64.AppImage
+            Provide-*-linux-x64.deb
+
   release:
     name: GitHub release
-    needs: [android, macos, windows]
+    needs: [android, macos, windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
