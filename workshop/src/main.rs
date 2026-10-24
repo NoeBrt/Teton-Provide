@@ -30,7 +30,6 @@
 //! send it to the technician only, over a channel you trust; the technician imports it inside the app (scan or
 //! paste), never through a link another app could claim.
 
-#[path = "workshop/binaries.rs"]
 mod binaries;
 
 use ed25519_dalek::SigningKey;
@@ -99,9 +98,9 @@ Example
 /// Where `deploy` copies the binaries and the installer on the sensor, removed once installed.
 const REMOTE_DIR: &str = "iot-deploy";
 const STATE_DIR: &str = "/var/lib/iot-device";
-/// The checkout this binary was built from: `deploy` takes the sensor binaries and systemd/ from there, so it runs from
-/// any folder. Reinstall after moving the checkout.
-const CRATE_DIR: &str = env!("CARGO_MANIFEST_DIR");
+/// The sensor crate of the checkout this binary was built from: `deploy` takes the sensor binaries and systemd/ from
+/// there, so it runs from any folder. Reinstall after moving the checkout.
+const DEVICE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../device");
 /// The last customer chosen, `ID<TAB>name`: offered again, after a yes, when a command names none.
 const LAST_CUSTOMER: &str = "last-customer";
 // ANSI styles.
@@ -557,7 +556,7 @@ fn deploy(dir: &Path, host: &str, interface: Option<&str>, given: &[String]) -> 
                 ));
             }
             let arch = answer.lines().next().unwrap_or_default().to_string();
-            let binaries = binaries::prepare(&arch, Path::new(CRATE_DIR))?;
+            let binaries = binaries::prepare(&arch, Path::new(DEVICE_DIR))?;
             detail(&format!(
                 "{}, Linux binaries from {}",
                 arch.trim(),
@@ -586,7 +585,7 @@ fn deploy(dir: &Path, host: &str, interface: Option<&str>, given: &[String]) -> 
             copy(
                 host,
                 ssh_options,
-                &[Path::new(CRATE_DIR).join("systemd")],
+                &[Path::new(DEVICE_DIR).join("systemd")],
                 &format!("{REMOTE_DIR}/"),
             )
         })?;
@@ -1333,11 +1332,11 @@ mod tests {
 
     #[test]
     fn uninstall_forgets_the_profiles_the_service_creates() {
-        let service = include_str!("wifi.rs");
+        let service = include_str!("../../device/bin/wifi.rs");
         for uuid in WIFI_PROFILES {
             assert!(
                 service.contains(uuid),
-                "{uuid} is one of PROFILE_UUIDS in bin/wifi.rs"
+                "{uuid} is one of PROFILE_UUIDS in device/bin/wifi.rs"
             );
         }
     }

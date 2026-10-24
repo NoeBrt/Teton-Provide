@@ -28,7 +28,7 @@ jobs:
       - run: npm run lint
 
   device:
-    name: Sensor and workshop (Ubuntu, BlueZ)
+    name: Sensor (Ubuntu, BlueZ)
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -43,6 +43,22 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --features ble,stage --all-targets --locked -- -D warnings
       - run: cargo test --features ble,stage --all-targets --locked
+
+  workshop:
+    name: Workshop CLI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workshop
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show # installs the toolchain pinned in workshop/rust-toolchain.toml
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: workshop
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
 
   desktop:
     name: Desktop bridges (macOS)
