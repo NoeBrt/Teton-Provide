@@ -1,0 +1,46 @@
+{
+  "name": "desktop",
+  "width": 1280,
+  "height": 800,
+  "setupEnd": 18.381,
+  "batchStart": 81.699,
+  "end": 132.912,
+  "captures": [
+    {
+      "label": "technician",
+      "at": 3.903
+    },
+    {
+      "label": "wifi",
+      "at": 13.664
+    },
+    {
+      "label": "fleet",
+      "at": 81.721
+    },
+    {
+      "label": "sensor",
+      "at": 85.422
+    },
+    {
+      "label": "test",
+      "at": 86.791
+    },
+    {
+      "label": "manual",
+      "at": 90.871
+    },
+    {
+      "label": "running",
+      "at": 97.41
+    },
+    {
+      "label": "errors",
+      "at": 127.488
+    }
+  ],
+  "errors": [],
+  "result": "PASS",
+  "scope": "SIMULATION; setup authority replaced only in intercepted browser bundle",
+  "video": "/private/tmp/teton-gif-desktop/page@1be9daab016ea8de3404095e0eaa8e22.webm"
+}

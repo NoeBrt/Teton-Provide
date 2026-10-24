@@ -1,0 +1,46 @@
+{
+  "name": "mobile",
+  "width": 390,
+  "height": 844,
+  "setupEnd": 18.389,
+  "batchStart": 82.73,
+  "end": 133.981,
+  "captures": [
+    {
+      "label": "technician",
+      "at": 3.889
+    },
+    {
+      "label": "wifi",
+      "at": 13.664
+    },
+    {
+      "label": "fleet",
+      "at": 82.765
+    },
+    {
+      "label": "sensor",
+      "at": 86.468
+    },
+    {
+      "label": "test",
+      "at": 87.848
+    },
+    {
+      "label": "manual",
+      "at": 91.948
+    },
+    {
+      "label": "running",
+      "at": 98.481
+    },
+    {
+      "label": "errors",
+      "at": 128.567
+    }
+  ],
+  "errors": [],
+  "result": "PASS",
+  "scope": "SIMULATION; setup authority replaced only in intercepted browser bundle",
+  "video": "/private/tmp/teton-gif-mobile/page@2ca0301f052d9e96099506530d2b6a6c.webm"
+}

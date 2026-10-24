@@ -1,0 +1,30 @@
+[package]
+name = "provide-desktop"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+btleplug = "0.13.5"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["sync", "time"] }
+uuid = "1"
+
+# The system keychain, for the technician code and the site passwords (src/secrets.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }

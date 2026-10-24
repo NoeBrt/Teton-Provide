@@ -1,0 +1,56 @@
+Evidence class: ACTUAL (real phone, real BLE, real Wi-Fi join), 2026-10-20
+The site network name is replaced by <site network>; it is a WPA2-Personal home router (same LAN as the
+admin link). noe-lab administration and the user's jobs ran over Ethernet (eno1), so only wlo1 was provisioned.
+
+Configurator: iPhone 15 Pro, iOS 27.0, app "provide." from commit 327edf0, phone network on (site entered
+              from the network's Wi-Fi QR code, kept behind Face ID); the device's printed QR label scanned.
+Device:       noe-lab, Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MediaTek MT7921; teton-device service
+              (systemd, user teton, TETON_WIFI_INTERFACE=wlo1), device code 12b6e19 plus this step's fixes.
+Capture:      sudo btmon -w on the device during each attempt; checked with a script, raw capture not kept.
+
+== Run 1 (17:48): the device joined, the phone never got the result ==
+journalctl -u teton-device:
+2026-10-20T17:48:24+0200 attempt ce8f639904db97b974b0e746df5adcfb pending
+2026-10-20T17:48:30+0200 attempt ce8f639904db97b974b0e746df5adcfb connected
+2026-10-20T17:48:50+0200 provisioning closed; accepts only hello
+NetworkManager: 'teton-provisioned' (4a7db77c-...) activated on wlo1 at 17:48:30, WPA2 4-way handshake
+completed, DHCP address 192.168.1.12; autoconnect turned on by uid 999 (teton).
+App: "Wi-Fi setup failed. The sensor did not join in time. Try again."
+
+Cause, from the capture (packet numbers of that capture):
+#2916 phone -> device  ATT Write Request len 36 (encrypted status request), answered
+#2917 device -> phone  ATT Read Request, handle 0x001b = the iPhone's Battery Level (0x2a19), read by BlueZ's
+                       battery plugin
+#2922 phone -> device  ATT Error Response: Insufficient Authentication
+#2923 phone -> device  ATT Read Request on the provisioning characteristic (the status reply)
+#2924 device -> phone  SMP Security Request (bonding, MITM, SC); the phone asks to pair, the device is not
+                       pairable and answers "Pairing not supported"
+      no Read Response to #2923 is ever sent; the phone disconnects 30 s later (ATT transaction timeout).
+Fix: bluetoothd runs with --noplugin=battery (device/systemd/install.sh, drop-in for bluetooth.service); the
+provisioning service stays 2 min after success instead of 20 s, so Try again can recover a lost result.
+
+== Run 2 (17:57), after the fix: success end to end ==
+journalctl -u teton-device:
+2026-10-20T17:54:36+0200 TETON-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning
+2026-10-20T17:57:10+0200 attempt e3bdeb73cb8e9de812705b84e95a2234 pending
+2026-10-20T17:57:16+0200 attempt e3bdeb73cb8e9de812705b84e95a2234 connected
+journalctl -u NetworkManager:
+2026-10-20T17:57:10+0200 device (wlo1): Activation: starting connection 'teton-provisioned' (4a7db77c-6fda-47aa-95ca-d186c5096b32)
+2026-10-20T17:57:16+0200 device (wlo1): Activation: (wifi) Stage 2 of 5 (Device Configure) successful. Connected to wireless network "<site network>"
+2026-10-20T17:57:16+0200 dhcp4 (wlo1): state changed new lease, address=192.168.1.12
+2026-10-20T17:57:16+0200 device (wlo1): Activation: successful, device activated.
+2026-10-20T17:57:16+0200 audit: op="connection-update" uuid="4a7db77c-6fda-47aa-95ca-d186c5096b32" name="teton-provisioned" args="802-11-wireless-security.auth-alg,connection.interface-name,connection.autoconnect" pid=2039672 uid=999 result="success"
+nmcli connection show --active: teton-provisioned 4a7db77c-6fda-47aa-95ca-d186c5096b32 wlo1 (wpa-psk, autoconnect yes)
+App: "Device connected", joined the site network with 192.168.1.12 (reported by the user).
+
+Over the air (run 2 capture, provisioning characteristic = handle 0x0017 after the BlueZ restart):
+17:57:10  ATT Write len 51  frame 00  Noise handshake message 1
+          ATT Read  len 48            Noise handshake message 2 (the device proved its key)
+17:57:10  ATT Write len 68  frame 01  encrypted Provision: 01a6027f6e499c62b1e417c1b7ae5e42... (ciphertext)
+          ATT Read  len 33            encrypted Pending
+          ATT Write len 36  frame 01  encrypted Status, x2
+          ATT Read  len 37            encrypted Connected with the IPv4 address
+SSID bytes in the raw capture: not found (both runs). SMP security requests: 0, "Pairing not supported": 0,
+"Insufficient Authentication": 0 (run 1 had them; the battery plugin was the only reader).
+Not checked here: the password bytes; demo/check_capture.py asks for the password without echo and checks them.
+Known leak: message sizes reveal the SSID and password lengths (Noise adds no padding).

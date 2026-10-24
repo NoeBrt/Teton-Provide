@@ -1,0 +1,22 @@
+# COMMAND_FIXTURE red/green for device/main.rs GATT slot logic, 2026-10-17T16:26:58+02:00
+# Command per mutation: cargo test --features ble --bin device --locked --offline
+# The 3 first mutations passed the original 4 tests (independent review); 3 tests were added.
+
+== mutation: clear slot after offset check
+test tests::offset_write_is_rejected_and_clears_pending_response ... FAILED
+thread 'tests::offset_write_is_rejected_and_clears_pending_response' panicked at device/main.rs:168:9:
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== mutation: offset read consumes response
+test tests::offset_read_is_rejected_without_consuming_response ... FAILED
+thread 'tests::offset_read_is_rejected_without_consuming_response' panicked at device/main.rs:177:9:
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== mutation: other client write does not clear
+test tests::any_write_from_another_client_clears_pending_response ... FAILED
+thread 'tests::any_write_from_another_client_clears_pending_response' panicked at device/main.rs:159:9:
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== mutation: no owner check
+test tests::response_is_not_readable_by_another_client ... FAILED
+thread 'tests::response_is_not_readable_by_another_client' panicked at device/main.rs:137:9:
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+== unmutated
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
