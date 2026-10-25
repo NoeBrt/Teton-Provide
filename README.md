@@ -38,47 +38,101 @@ desktop; a Rust service runs on the sensor.
 
 ## Watch the demo
 
+[![Provide. walkthrough: offline Wi-Fi provisioning architecture with Noé Breton](docs/media/walkthrough-preview.jpg)](https://youtu.be/-atIeGAGa_Q)
+
 [▶ Watch the full walkthrough on YouTube · 8 min 15 s](https://youtu.be/-atIeGAGa_Q)
 
 The walkthrough covers the trust model, workshop deployment, desktop and iPhone apps, and offline
 setup with three real test devices. It also shows the simulated demo and a proposed sensor-to-sensor relay.
 
-The two short clips below show a wing of 200 simulated sensors: batch progress, errors and retries.
+The clips below play here on GitHub. They show simulated sensors and no real credentials.
 
-<table>
-  <tr>
-    <th>Mobile</th>
-    <th>Desktop</th>
-  </tr>
-  <tr>
-    <td align="center">
-      <a href="docs/media/overall-200-sensors.mp4">
-        <img src="docs/media/mobile-200-preview.png" alt="Watch the mobile demo with 200 simulated sensors" width="165" />
-      </a>
-    </td>
-    <td align="center">
-      <a href="docs/media/desktop-200-sensors.mp4">
-        <img src="docs/media/desktop-200-preview.png" alt="Watch the desktop demo with 200 simulated sensors" width="640" />
-      </a>
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/media/overall-200-sensors.mp4">▶ Mobile · 41 s</a></td>
-    <td align="center"><a href="docs/media/desktop-200-sensors.mp4">▶ Desktop · 25 s</a></td>
-  </tr>
-</table>
+#### Mobile · 200 sensors · 41 s
+
+https://github.com/user-attachments/assets/64a72a2a-83fc-4806-b0eb-70f072001e63
+
+#### Desktop · 200 sensors · 25 s
+
+https://github.com/user-attachments/assets/2a7f79eb-06bb-4747-998f-8064231e7f87
 
 ### How to use Provide.
 
-| Step | Mobile | Desktop |
-| --- | --- | --- |
-| **1. Add the technician code**: paste, check, save | [▶ Watch](docs/media/mobile-technician-code.mp4) | [▶ Watch](docs/media/desktop-technician-code.mp4) |
-| **2. Set up the site Wi-Fi**: site, SSID, password, save | [▶ Watch](docs/media/mobile-site-wifi.mp4) | [▶ Watch](docs/media/desktop-site-wifi.mp4) |
-| **3. Open and test a sensor**: Test, then “world” received | [▶ Watch](docs/media/mobile-sensor-test.mp4) | [▶ Watch](docs/media/desktop-sensor-test.mp4) |
-| **4. Configure one sensor**: Set up, then Device connected | [▶ Watch](docs/media/mobile-sensor-setup.mp4) | [▶ Watch](docs/media/desktop-sensor-setup.mp4) |
-| **5. Configure all ready sensors**: batch, errors, retry | [▶ Watch](docs/media/mobile-configure-all.mp4) | [▶ Watch](docs/media/desktop-configure-all.mp4) |
+Expand a step to watch it on mobile or desktop.
 
-All results in these videos are simulated; they show no real credentials.
+<details>
+<summary><strong>1. Add the technician code</strong></summary>
+
+Paste, check and save the code.
+
+**Mobile**
+
+https://github.com/user-attachments/assets/c451a006-583e-492d-ba80-6c06efb6d1d0
+
+**Desktop**
+
+https://github.com/user-attachments/assets/00c94fe8-52e9-4819-b4ff-821ba9e92c6d
+
+</details>
+
+<details>
+<summary><strong>2. Set up the site Wi-Fi</strong></summary>
+
+Enter the site, SSID and password, then save.
+
+**Mobile**
+
+https://github.com/user-attachments/assets/503ebac3-e911-4185-a54b-7fdc6b1c3551
+
+**Desktop**
+
+https://github.com/user-attachments/assets/439bbb12-5517-46b7-a025-7df12d4179bd
+
+</details>
+
+<details>
+<summary><strong>3. Open and test a sensor</strong></summary>
+
+Run Test and receive “world”.
+
+**Mobile**
+
+https://github.com/user-attachments/assets/ebeff38b-a5b8-4f66-adbb-6424c0945b6b
+
+**Desktop**
+
+https://github.com/user-attachments/assets/f0840c17-014c-4b63-b9eb-5da8031d8d97
+
+</details>
+
+<details>
+<summary><strong>4. Configure one sensor</strong></summary>
+
+Tap Set up and wait for Device connected.
+
+**Mobile**
+
+https://github.com/user-attachments/assets/5e1eb7c4-f259-4969-927e-7facb28cc63e
+
+**Desktop**
+
+https://github.com/user-attachments/assets/fba67b90-9398-44d7-93a6-dad88780de59
+
+</details>
+
+<details>
+<summary><strong>5. Configure all ready sensors</strong></summary>
+
+Watch batch progress, errors and retries.
+
+**Mobile**
+
+https://github.com/user-attachments/assets/78f60113-6d55-448e-bbc7-7c9039de5997
+
+**Desktop**
+
+https://github.com/user-attachments/assets/1df923c4-5e56-4d0d-b431-a2858a2b8f6e
+
+</details>
 
 On macOS, click Provide.'s icon in the menu bar for a compact sensor list: refresh or cancel a refresh, test a sensor,
 set one up or reconfigure it, or set up all ready sensors. It shares the app's live state. Click a sensor to open its
