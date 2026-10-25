@@ -13,10 +13,7 @@ on reboot, so their sensor-side phases are not measured.
 == Client side: tap -> Device connected ==
 Run                          Tap        First sensor connected    All 3 connected
 Mac, rush 003 (00:55)        15.9 s     19.2 s  (+3.3 s, 027)     23.6 s (+7.7 s)
-Mac, rush 002 (00:35)        360 s      376 s   (+8.4 s *)        378.5 s (+10.9 s *)
 iPhone, rush 006 (01:22)     76.5 s     ~80 s   (+3.5 s, 027) **  86.0 s (+9.5 s)
- *  measured from the last keychain "Allow" (367.6 s): the first run after launch asks twice for the login
-    keychain password (7.6 s of typing, left out).
  ** hidden by the site sheet; from the app log line 01:22:31 and the tap mapped to 01:22:28.0 +- 0.4 s.
     The iPhone time includes Face ID (0.5 s, 76.5-77.0 s).
 
@@ -26,4 +23,4 @@ session start -> technician accepted          0.12 s   0.12 s  0.24 s   (Noise X
 accepted -> Wi-Fi attempt pending             0.12 s   0.12 s  0.15 s   (encrypted credentials)
 pending -> connected (NetworkManager join)    5.90 s   5.83 s  6.08 s
 total                                         6.14 s   6.07 s  6.47 s
-The 2026-10-25 sessions: 00:35:00 Mac (002), 00:55:21 Mac (003), 01:22:30 iPhone (006).
+The 2026-10-25 sessions: 00:55:21 Mac (003), 01:22:30 iPhone (006).

@@ -567,10 +567,8 @@ the tap to the last **Device connected**. Details and method:
 
 | Client | First sensor connected | All 3 connected |
 | --- | --- | --- |
-| Desktop app, MacBook (run 1) | 3.3 s | 7.7 s |
-| Desktop app, MacBook (run 2) | 8.4 s | 10.9 s |
+| Desktop app, MacBook | 3.3 s | 7.7 s |
 | iPhone 15 Pro, Face ID included | ~3.5 s | 9.5 s |
 
 The Bluetooth part is short: the Noise handshake and the technician check take 0.12 s, the encrypted Wi-Fi credentials
 another 0.12 s (median of 13 sessions on noe-lab). The sensor joining the Wi-Fi takes the rest, 5.9 s on noe-lab.
-Run 2 leaves out 7.6 s spent typing the Mac keychain password, which the app asks for once after launch.
