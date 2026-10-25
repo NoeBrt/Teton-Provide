@@ -526,8 +526,8 @@ of the installer on the Edge, and a result per Edge even when it fails: see
 
 **Limits today**
 
-- **Proven on one real sensor at a time.** The 200-sensor runs are simulations; the six-link pace is not measured on
-  real hardware.
+- **Proven on three real sensors at a time** (see [Pairing time](#pairing-time)). The 200-sensor runs are
+  simulations; the six-link pace is not measured on real hardware.
 - **Not run:** Android, the desktop app on Windows and Linux, a clean Ubuntu reproduction, a radio capture of the
   current protocol, a full offline setup on record.
 - **The sensor's key sits in a file** on an unencrypted disk. A stolen sensor gives up its key and the site password.
@@ -558,3 +558,19 @@ of the installer on the Edge, and a result per Edge even when it fails: see
 6. Ship signed builds (TestFlight, notarized desktop app).
 7. Run Android and the Windows and Linux desktop builds on hardware.
 8. Move the exchange into the IoT Alerts app, in place of *WiFi Broadcast*.
+
+## Pairing time
+
+Measured on 2026-10-25 with three real sensors (two Jetsons and noe-lab) set up together with **Set up all**, from
+the tap to the last **Device connected**. Details and method:
+[evidence/real/pairing-times-2026-10-25.txt](evidence/real/pairing-times-2026-10-25.txt).
+
+| Client | First sensor connected | All 3 connected |
+| --- | --- | --- |
+| Desktop app, MacBook (run 1) | 3.3 s | 7.7 s |
+| Desktop app, MacBook (run 2) | 8.4 s | 10.9 s |
+| iPhone 15 Pro, Face ID included | ~3.5 s | 9.5 s |
+
+The Bluetooth part is short: the Noise handshake and the technician check take 0.12 s, the encrypted Wi-Fi credentials
+another 0.12 s (median of 13 sessions on noe-lab). The sensor joining the Wi-Fi takes the rest, 5.9 s on noe-lab.
+Run 2 leaves out 7.6 s spent typing the Mac keychain password, which the app asks for once after launch.
