@@ -38,39 +38,50 @@ desktop; a Rust service runs on the sensor.
 
 ## Watch the demo
 
-[![Provide. walkthrough: offline Wi-Fi provisioning architecture with Noé Breton](docs/media/walkthrough-preview.jpg)](https://youtu.be/-atIeGAGa_Q)
-
 [▶ Watch the full walkthrough on YouTube · 8 min 15 s](https://youtu.be/-atIeGAGa_Q)
-
-The walkthrough covers the trust model, workshop deployment, desktop and iPhone apps, and offline
-setup with three real test devices. It also shows the simulated demo and a proposed sensor-to-sensor relay.
 
 The clips below play here on GitHub. They show simulated sensors and no real credentials.
 
-#### Mobile · 200 sensors · 41 s
+<table>
+  <tr><th width="25%">iPhone · 200 sensors · 41 s</th><th width="75%">Desktop · 200 sensors · 25 s</th></tr>
+  <tr>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/64a72a2a-83fc-4806-b0eb-70f072001e63
 
-#### Desktop · 200 sensors · 25 s
+</td>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/2a7f79eb-06bb-4747-998f-8064231e7f87
 
+</td>
+  </tr>
+</table>
+
 ### How to use Provide.
 
-Expand a step to watch it on mobile or desktop.
+Expand a step to watch it on iPhone and desktop.
 
 <details>
 <summary><strong>1. Add the technician code</strong></summary>
 
 Paste, check and save the code.
 
-**Mobile**
+<table>
+  <tr><th width="25%">iPhone</th><th width="75%">Desktop</th></tr>
+  <tr>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/c451a006-583e-492d-ba80-6c06efb6d1d0
 
-**Desktop**
+</td>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/00c94fe8-52e9-4819-b4ff-821ba9e92c6d
+
+</td>
+  </tr>
+</table>
 
 </details>
 
@@ -79,13 +90,21 @@ https://github.com/user-attachments/assets/00c94fe8-52e9-4819-b4ff-821ba9e92c6d
 
 Enter the site, SSID and password, then save.
 
-**Mobile**
+<table>
+  <tr><th width="25%">iPhone</th><th width="75%">Desktop</th></tr>
+  <tr>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/503ebac3-e911-4185-a54b-7fdc6b1c3551
 
-**Desktop**
+</td>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/439bbb12-5517-46b7-a025-7df12d4179bd
+
+</td>
+  </tr>
+</table>
 
 </details>
 
@@ -94,13 +113,21 @@ https://github.com/user-attachments/assets/439bbb12-5517-46b7-a025-7df12d4179bd
 
 Run Test and receive “world”.
 
-**Mobile**
+<table>
+  <tr><th width="25%">iPhone</th><th width="75%">Desktop</th></tr>
+  <tr>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/ebeff38b-a5b8-4f66-adbb-6424c0945b6b
 
-**Desktop**
+</td>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/f0840c17-014c-4b63-b9eb-5da8031d8d97
+
+</td>
+  </tr>
+</table>
 
 </details>
 
@@ -109,13 +136,21 @@ https://github.com/user-attachments/assets/f0840c17-014c-4b63-b9eb-5da8031d8d97
 
 Tap Set up and wait for Device connected.
 
-**Mobile**
+<table>
+  <tr><th width="25%">iPhone</th><th width="75%">Desktop</th></tr>
+  <tr>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/5e1eb7c4-f259-4969-927e-7facb28cc63e
 
-**Desktop**
+</td>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/fba67b90-9398-44d7-93a6-dad88780de59
+
+</td>
+  </tr>
+</table>
 
 </details>
 
@@ -124,13 +159,21 @@ https://github.com/user-attachments/assets/fba67b90-9398-44d7-93a6-dad88780de59
 
 Watch batch progress, errors and retries.
 
-**Mobile**
+<table>
+  <tr><th width="25%">iPhone</th><th width="75%">Desktop</th></tr>
+  <tr>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/78f60113-6d55-448e-bbc7-7c9039de5997
 
-**Desktop**
+</td>
+    <td valign="top">
 
 https://github.com/user-attachments/assets/1df923c4-5e56-4d0d-b431-a2858a2b8f6e
+
+</td>
+  </tr>
+</table>
 
 </details>
 
