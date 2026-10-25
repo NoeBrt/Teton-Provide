@@ -38,7 +38,12 @@ desktop; a Rust service runs on the sensor.
 
 ## Watch the demo
 
-Both videos show a wing of 200 simulated sensors: batch progress, errors and retries.
+[▶ Watch the full walkthrough on YouTube · 8 min 15 s](https://youtu.be/-atIeGAGa_Q)
+
+The walkthrough covers the trust model, workshop deployment, desktop and iPhone apps, and offline
+setup with three real test devices. It also shows the simulated demo and a proposed sensor-to-sensor relay.
+
+The two short clips below show a wing of 200 simulated sensors: batch progress, errors and retries.
 
 <table>
   <tr>
