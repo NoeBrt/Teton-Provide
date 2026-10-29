@@ -252,7 +252,7 @@ unchanged simulation. It adds no real BLE, security, or fleet-capacity evidence.
 **Question.** Does the phone stay responsive with 200 sensors in range, while the scan reports every advertisement
 (`allowDuplicates`) and three setups run at once?
 
-**Method.** iOS Simulator "The manufacturer 16 Pro" (iOS 27.0, Apple silicon), Release build, Hermes. A temporary harness, not
+**Method.** iOS Simulator "iPhone 16 Pro" (iOS 27.0, Apple silicon), Release build, Hermes. A temporary harness, not
 in the repository, replaced the radio with 200 fake sensors advertising twice a second each (400 advertisements a
 second) with a drifting signal (±4 dB per advertisement), and measured over 20 s after an 8 s warm-up:
 `App` renders per second, the time from render start to commit (`useLayoutEffect`), JS thread lag (drift of a

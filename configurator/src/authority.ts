@@ -1,4 +1,4 @@
-// The manufacturer's two authorities, phone side (device/src/authority.rs on the device): the app checks a sensor's certificate
+// The two authorities, phone side (device/src/authority.rs on the device): the app checks a sensor's certificate
 // before anything secret leaves the phone, and reads and checks the technician token it imports.
 import { ed25519, x25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -40,7 +40,7 @@ const verified = (domain: Uint8Array, body: Uint8Array, signature: Uint8Array, a
 
 export type Certificate = { publicKey: Uint8Array; customer: string };
 
-/** `[1][public key 32][customer len][customer]` + signature. The certificate if the manufacturer's device authority signed it. */
+/** `[1][public key 32][customer len][customer]` + signature. The certificate if the device authority signed it. */
 export function verifyCertificate(bytes: Uint8Array, authority = DEVICE_AUTHORITY): Certificate | null {
   const parts = signed(bytes, CERTIFICATE_VERSION);
   if (!parts || parts.body.length < 1 + KEY_LEN + 1) return null;

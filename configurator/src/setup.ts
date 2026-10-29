@@ -1,5 +1,5 @@
 // Wi-Fi setup of one sensor over the encrypted channel (docs/SECURITY.md):
-// connect → Noise XX → the sensor proves it is genuine (a certificate from the manufacturer's device authority, for the key it
+// connect → Noise XX → the sensor proves it is genuine (a certificate from the device authority, for the key it
 // just proved, matching the ID it advertises) → only then the technician token → encrypted credentials → the
 // sensor's own result. Nothing secret leaves the phone for a sensor that is not genuine or not this customer's.
 import { x25519 } from '@noble/curves/ed25519.js';

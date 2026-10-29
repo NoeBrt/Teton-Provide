@@ -1,4 +1,4 @@
-//! The manufacturer's two offline authorities (docs/SECURITY.md):
+//! The two offline authorities (docs/SECURITY.md):
 //! - a **device certificate**, signed at staging by the device authority, proves a sensor is genuine; the app
 //!   checks it during the handshake, before anything secret leaves the phone;
 //! - a **technician token**, signed by the technician authority, proves the phone holds an authorized technician's

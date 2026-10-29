@@ -14,7 +14,7 @@ Radio acceptance remains pending.
 
 | Step | What I did | What changed my mind |
 | --- | --- | --- |
-| 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match the manufacturer's fleet ([decision 11](#11-rust-to-align-with-the-fleet)). |
+| 1 | Planned a Jetson as the device and Python as the stack. | No Jetson was available; Rust replaced Python to match the target fleet ([decision 11](#11-rust-to-align-with-the-fleet)). |
 | 2 | Built a dependency-free simulation of a `hello`/`world` exchange, with recovery tests and benchmarks up to 1,000 jobs. | The contract and its failure modes got pinned down before any radio ([simulation measurements](../evidence/simulation/README.md)). |
 | 3 | Wrote `audit-host`, a read-only preflight of BlueZ and NetworkManager, then inventoried the real host. | Bluetooth was soft-blocked by rfkill and BlueZ reported it as a generic "busy"; the device now names rfkill when it cannot power the adapter. |
 | 4 | Compared channels. SoftAP looked best for a zero-install web page. | I excluded it to stay clear of "no shared local network" ([decision 18](#18-exclude-softap-from-the-mvp)) and required both iPhone and Android. |
@@ -275,7 +275,7 @@ library family already used by `bluer`. One Cargo package: shared protocol
 library, simulation example, and two explicit binary targets under `device/`
 and `configurator/`. Retain systemd and optional Docker test packaging.
 
-**Reason:** The user reports the manufacturer's fleet uses Rust and explicitly requests
+**Reason:** The user reports the target fleet uses Rust and explicitly requests
 alignment. [BlueR (`bluer`)](https://docs.rs/bluer/0.17.4/bluer/) covers local
 and remote GATT, advertising, and discovery using Tokio. Its
 [manifest](https://docs.rs/crate/bluer/0.17.4/source/Cargo.toml.orig) declares
@@ -625,7 +625,7 @@ WPA2 password, or per-device credentials) lives in the phone's secure storage
 per device and only protects the BLE channel. Per room: enter the room number,
 scan each sensor label, tap one button; the app provisions the sensors one at a
 time and shows one status per sensor, with targeted retries. The app records
-sensor ↔ room for Smith.
+sensor ↔ room for the fleet manager.
 
 **Reason:** The challenge PDF targets "thousands of IoT devices", "200 devices
 simultaneously in a hospital wing" and a non-technical facilities team; rooms hold
@@ -635,7 +635,7 @@ QR label already disambiguates sensors that advertise side by side.
 **Trade-off:** With WPA2-Personal every device holds the same site password: one
 compromised sensor exposes the network, and revoking one device means changing the
 password everywhere. Production should prefer per-device credentials: EAP-TLS
-certificates or per-device PSKs (PPSK/iPSK) issued through Smith. Storing the site
+certificates or per-device PSKs (PPSK/iPSK) issued through the fleet manager. Storing the site
 password on the phone during the intervention is an accepted, bounded exposure.
 
 **Evidence / test:** Design and mockup only. The Playwright run must show a second
@@ -657,16 +657,15 @@ while SDK 55+ runs only on the New Architecture. The first version is the hello
 probe in `configurator/`. The user will test physically on an iPhone only; the
 code stays cross-platform, but Android has no physical evidence.
 
-**Reason:** The manufacturer's own mobile stack is Expo + React Native + TypeScript (their
-mobile job post and their `street-food-safari` challenge). EAS builds iOS in the
+**Reason:** Expo + React Native + TypeScript gives one code base for iPhone and the desktop. EAS builds iOS in the
 cloud, so no Mac is needed, and development builds reload from a QR code. A web
 page cannot work on iPhone: Safari has no Web Bluetooth.
 
 **Trade-off:** iPhone installs need a paid Apple Developer account. The Noise
 channel will run in TypeScript on the phone and in Rust (`snow`) on the device;
 interoperability must be proven with the official Noise test vectors. Later, the
-device's Wi-Fi apply should reuse Smith's connectivity guard and error names
-(`WrongPSK`, `NotInRange`, `NmcliError`) so technician messages match Smith.
+device's Wi-Fi apply should reuse the fleet manager's connectivity guard and error names
+(`WrongPSK`, `NotInRange`, `NmcliError`) so technician messages match the fleet manager.
 
 **Evidence / test:** `npm test` (6 probe tests, 6 mutations caught,
 `evidence/tests/tdd-configurator.txt`), an independent review with its fixes applied, `tsc`, `expo lint`, `expo-doctor` 20/20, an iOS
@@ -691,22 +690,22 @@ architecture writeup and for production.
 | --- | --- |
 | **No proof** (anonymous key exchange, BLE "Just Works") | Rejected. It meets "no plaintext over the air" literally but anyone in range can advertise `IOT-DEMO-001`, receive the password, and even relay to the real sensor so the app still shows *Device connected*. It saves the technician one scan. |
 | **Short code on the label** (8 digits, HomeKit style) + PAKE (SRP6a or SPAKE2) | Viable if sensor labels cannot carry a QR. Each wrong guess costs one live attempt. Needs a different protocol: `NKpsk2` requires a 256-bit secret that nobody can type. |
-| **Sensor list sent by Smith** before the visit (IDs, keys, work order) | Production target for 200 devices: no secret on the label, authorization comes with the work order. Needs the phone to sync before the visit. |
-| **Sensor device attestation** (per-device key, certificate signed by a manufacturer CA, CA public key in the app; Matter's model) | Best long-term identity proof: nothing secret printed in patient rooms. Must be per-device (one shared fleet key extracted from one sensor would impersonate all), ideally in a secure element; the app must still match the certificate's device ID to the sensor in front of the technician, and Smith revokes stolen units. Authorization stays separate (single use, work order). |
+| **Sensor list sent by the fleet manager** before the visit (IDs, keys, work order) | Production target for 200 devices: no secret on the label, authorization comes with the work order. Needs the phone to sync before the visit. |
+| **Device attestation** (per-device key, certificate signed by a device CA, CA public key in the app; Matter's model) | Best long-term identity proof: nothing secret printed in patient rooms. Must be per-device (one shared fleet key extracted from one sensor would impersonate all), ideally in a secure element; the app must still match the certificate's device ID to the sensor in front of the technician, and the fleet manager revokes stolen units. Authorization stays separate (single use, work order). |
 
 **Reason:** The QR is built, tested byte for byte against snow, needs one scan from a non-developer, and stops
 both a fake sensor and a real but different one. Changing the protocol now would delay the real Wi-Fi test.
 
 **Trade-off:** A photographed label lets someone provision a sensor that is not yet provisioned (accepted risk,
-`docs/SECURITY.md`); attestation or a Smith manifest removes it.
+`docs/SECURITY.md`); attestation or a fleet manager manifest removes it.
 
 **Evidence / test:** `evidence/tests/tdd-provision.txt`, `configurator/src/setup.test.ts` (a sensor failing the handshake
 never receives the credentials).
 
-## 25. Channel if the manufacturer's own sensors have no BLE
+## 25. Channel if production sensors have no BLE
 
-**Decision:** BLE stays the demo channel; its availability on the manufacturer's production hardware is an assumption, asked
-to the manufacturer on 2026-10-20.
+**Decision:** BLE stays the demo channel; its availability on production hardware is an assumption, still to
+confirm (asked on 2026-10-20).
 
 **Original proposal:** Decisions 1 and 18 chose BLE from the challenge constraints; nothing checked a real
 sensor. The challenge PDF names "your computer" as the device, which noe-lab satisfies (MT7921, BLE + Wi-Fi).
@@ -715,7 +714,7 @@ sensor. The challenge PDF names "your computer" as the device, which noe-lab sat
 
 | Fallback | Conclusion |
 | --- | --- |
-| **Phone shows a QR to the sensor's camera** (sensors are camera based) | First fallback: optical, short range, works with an iPhone. One way only, so success needs feedback (LED, sound, or Smith once online); the QR must carry credentials encrypted with the label key. |
+| **Phone shows a QR to the sensor's camera** (sensors are camera based) | First fallback: optical, short range, works with an iPhone. One way only, so success needs feedback (LED, sound, or the fleet manager once online); the QR must carry credentials encrypted with the label key. |
 | **Wi-Fi Easy Connect (DPP)**, QR on the label as its bootstrap | The standard for this exact problem, no IP network. Android only as configurator: no iPhone, macOS or browser API. Driver support on the device unverified. |
 | **SoftAP** (temporary access point on the sensor) | Works on any Wi-Fi hardware, but it is a shared local network created during the process; excluded by decision 18. |
 | **USB** | No radio at all, but needs a port on a mounted sensor. |
@@ -725,7 +724,7 @@ sensor. The challenge PDF names "your computer" as the device, which noe-lab sat
 **Trade-off:** A camera channel would reuse the configurator, the label key and the NetworkManager code; only the
 transport changes.
 
-**Evidence / test:** None yet; depends on the manufacturer's answer.
+**Evidence / test:** None yet; depends on that confirmation.
 
 ## 26. Saved sites behind Face ID
 
@@ -744,7 +743,7 @@ unreadable, so the site is entered again.
 Face ID limits what a lost or unlocked phone exposes.
 
 **Trade-off:** A phone now holds several facilities' passwords. Production should replace them with expiring site
-profiles issued by Smith, or per-device credentials (EAP-TLS, PPSK) so no shared password reaches the phone.
+profiles issued by the fleet manager, or per-device credentials (EAP-TLS, PPSK) so no shared password reaches the phone.
 
 **Evidence / test:** `configurator/src/sites.test.ts`; simulator layout checks. Face ID itself is NOT_RUN (the
 Simulator does not prompt).
@@ -766,11 +765,11 @@ a sensor get a unique ID on a channel that no malicious device can use to pass a
 | Question | Choice |
 | --- | --- |
 | Threat | A rogue device in radio range that advertises like a sensor (to collect the site password or mislead the technician). Labels are dropped: scanning 200 of them is the bottleneck. |
-| Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
+| Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and the fleet manager are out of scope for the demo. |
 | Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as the code `<token hex>.<holder key hex>`, a QR code scanned inside the app or pasted text, kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. The first build delivered it as a `provide://technician/` link; the link was removed after the security review, since another app could claim the scheme and receive the code. Not bound to one phone, but bound to a holder key the code carries (added after review). The sensor's clock floor is the later of its firmware build date and the time it last recorded, and rises no faster than its uptime. |
 | Reconfiguration | Allowed with a valid token. The device keeps two NetworkManager profiles and rolls back to the working one if the new network fails. |
 | Batch | Every ready sensor in range, six BLE links at a time (three before 2026-10-21). A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters and **Retry failed** (the overall card of decision 28 replaced the filters and their failures-first sort). |
-| Rooms | Later, in Smith; not in the app. |
+| Rooms | Later, in the fleet manager; not in the app. |
 | Proof | A 200-sensor test with fakes, a Simulator video, one real run on noe-lab. |
 
 **Reason:** The certificate removes per-sensor secrets and per-sensor scans, which is what a 200-sensor wing needs.
@@ -778,12 +777,12 @@ A rogue device cannot present a valid certificate for a key it can prove, and a 
 copier does not hold that key. The token keeps a stolen or borrowed app from configuring sensors.
 
 **Trade-off:** The device key sits in a 0600 file, not a secure element: whoever extracts it from one sensor can
-impersonate that one sensor until the manufacturer revokes it (revocation lists are not built). It cannot replay the tokens it
+impersonate that one sensor until it is revoked (revocation lists are not built). It cannot replay the tokens it
 collects: each names a holder key whose private half only the code carries. A leaked code works for its customers
 on any phone until it expires; 5 days bounds that (30 at first). Import inside the app costs the one-tap link; Universal Links
 would bring it back without a scheme another app can claim. The clock floor follows a clock set far ahead only as
 fast as the uptime, so it cannot lock codes out, but after a long power-off it trails real time by the downtime.
-The authorities' private keys must stay offline at the manufacturer; the
+The authorities' private keys must stay offline at the workshop; the
 demo keeps them in `~/noe-ws/iot-authority` on noe-lab (0600, outside the repository).
 
 **Evidence / test:** `device/src/authority.rs` and `device/src/provision.rs` tests (impostor with a copied certificate, other
@@ -807,7 +806,7 @@ judge panel:
 | Approach | Limit | Cost |
 | --- | --- | --- |
 | A. Summary and failures by cause | Does not show where the sensors are. | S (the same components) |
-| B. The whole wing as a grid of tiles | The order has no physical meaning until Smith maps rooms. | M |
+| B. The whole wing as a grid of tiles | The order has no physical meaning until the fleet manager maps rooms. | M |
 | C. Dense list, search by the end of the ID | A long list with little overview. | S |
 | D. Find a failed sensor by its signal (radar, warmer or colder) | RSSI is noisy (walls, bodies) and gives no direction. | M |
 | E. End-of-visit report for a supervisor (totals, pace, PDF or CSV) | Useful after the batch, not during it. | M |
@@ -853,7 +852,7 @@ cause, each card with its reason, and **Retry failed** covers them (it leaves ou
 sensor set up before but offline counts as an error, though this session did not touch it. The overall and the
 compact rows show only from five sensors in range; with one to four, the cards say enough. Without a sort, a failure
 in the full list sits where the scan found it: the Errors tab is the way to the failures. Where a sensor is waits for
-rooms from Smith. The time left assumes the pace so far holds. The code is about 95 lines (`wing.ts`,
+rooms from the fleet manager. The time left assumes the pace so far holds. The code is about 95 lines (`wing.ts`,
 `Summary.tsx`) instead of about 470 for the three views.
 
 **Evidence / test:** `configurator/src/wing.test.ts` (each sensor in one group, this session's result first, a

@@ -10,7 +10,7 @@ Guide for AI coding agents working on this repo. Read [README.md](README.md) fir
   [configurator/AGENTS.md](configurator/AGENTS.md).
 - `device/`: the sensor service and its staging tool, one Rust crate. `bin/` for the programs, `src/` for the
   protocol library, `tests/` for integration tests.
-- `workshop/`: `iot-workshop`, the manufacturer's CLI for the authorities, sensor deployment and technician codes. A Rust
+- `workshop/`: `iot-workshop`, the CLI for the authorities, sensor deployment and technician codes. A Rust
   crate that reuses `device/`'s protocol library.
 - `docs/`, `evidence/`, `tools/`: documentation, logs of real and simulated runs, test bench and demo scripts.
 

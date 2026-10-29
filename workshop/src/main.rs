@@ -1,4 +1,4 @@
-//! iot-workshop: The manufacturer's authorities, run at the workshop. Offline except the first deployment downloads.
+//! iot-workshop: the two authorities, run at the workshop. Offline except the first deployment downloads.
 //! Two Ed25519 keys, kept apart from the devices:
 //!
 //! ```text
@@ -60,7 +60,7 @@ const USAGE: &str = "usage: iot-workshop init | public | certify DEVICE_PUBLIC_K
                      iot-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C   (default: the first Wi-Fi device) | uninstall SSH_HOST [--yes]\n\
                      Run `iot-workshop help` for what each command does.";
 /// `iot-workshop help`, by what the user wants to do; `{dir}` is the authority folder in use.
-const HELP: &str = "iot-workshop: The manufacturer's workshop tool. It holds the two authority keys, on this machine only.
+const HELP: &str = "iot-workshop: the workshop tool. It holds the two authority keys, on this machine only.
 
 Authority folder: {dir}
   ($IOT_AUTHORITY, else ~/iot-authority. One folder for every customer; the short forms below use it.)

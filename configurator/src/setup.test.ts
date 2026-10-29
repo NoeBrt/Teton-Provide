@@ -57,7 +57,7 @@ test('an impostor never receives the token: forged reply, another advertised ID,
   const cases: [number[][], SetupOptions, string][] = [
     [[forged], {}, vectors.deviceId],
     [[m2], {}, 'IOT-0000000000'], // a genuine certificate, but advertised under another sensor's ID
-    [[m2], { deviceAuthority: fromHex(vectors.technicianAuthority) }, vectors.deviceId], // not the manufacturer's device authority
+    [[m2], { deviceAuthority: fromHex(vectors.technicianAuthority) }, vectors.deviceId], // not the device authority
     [[hex(vectors.impostorReply)], {}, vectors.deviceId], // a copied genuine certificate, but the handshake proved another key
   ];
   for (const [replies, extra, sensor] of cases) {

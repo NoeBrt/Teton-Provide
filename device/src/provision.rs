@@ -4,8 +4,8 @@
 //! acknowledged write carries one Noise message and the following read returns the device's reply.
 //! - message 1, phone: `-> e`, empty;
 //! - message 2, device: `<- e, ee, s, es`, carrying its device certificate: the phone checks it was signed by
-//!   The manufacturer's device authority for the static key it just proved, before anything secret leaves the phone;
-//! - message 3, phone: `-> s, se`, carrying the technician token: the device checks it was signed by the manufacturer's
+//!   the device authority for the static key it just proved, before anything secret leaves the phone;
+//! - message 3, phone: `-> s, se`, carrying the technician token: the device checks it was signed by the
 //!   technician authority, names this device's customer, has not expired and names the static key the phone just
 //!   proved as its holder, and answers accepted or refused.
 //!
@@ -175,7 +175,7 @@ fn take_field(bytes: &[u8]) -> Result<(&[u8], &[u8]), ProtocolError> {
     Ok(rest.split_at(len))
 }
 
-/// Why an activation did not connect. Names follow Smith's connectivity guard where they overlap.
+/// Why an activation did not connect. Names follow the fleet manager's connectivity guard where they overlap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Failure {
@@ -353,8 +353,8 @@ impl KeyPair {
     }
 }
 
-/// Everything the device needs to provision: its key pair, its certificate from the manufacturer's device authority, and
-/// the public key of the manufacturer's technician authority, which signs the tokens it accepts.
+/// Everything the device needs to provision: its key pair, its certificate from the device authority, and
+/// the public key of the technician authority, which signs the tokens it accepts.
 pub struct Identity {
     pub keys: KeyPair,
     pub certificate: DeviceCertificate,
@@ -826,7 +826,7 @@ mod tests {
             out[..len].to_vec()
         }
 
-        /// Reads message 2 and checks the certificate: The manufacturer's signature, and the key the device just proved.
+        /// Reads message 2 and checks the certificate: the device authority's signature, and the key the device just proved.
         fn certificate(&mut self, reply: &[u8]) -> Result<DeviceCertificate, String> {
             let mut out = [0u8; MAX_MESSAGE];
             let handshake = self.handshake.as_mut().unwrap();
@@ -956,7 +956,7 @@ mod tests {
             certificate: genuine.certificate.clone(),
             technician_authority: genuine.technician_authority,
         };
-        // Its own key, certified by an authority that is not the manufacturer's device authority.
+        // Its own key, certified by an authority that is not the device authority.
         let keys = KeyPair::generate().unwrap();
         let rogue_certificate =
             DeviceCertificate::sign(&SigningKey::from_bytes(&[9; 32]), keys.public_key, CUSTOMER)

@@ -120,8 +120,8 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
     case 'old-firmware': return 'Update this sensor’s software before setting up its Wi-Fi. Nothing was sent to it.';
     case 'not-genuine': return 'This is not a genuine sensor. Nothing was sent to it.';
     case 'other-customer': return 'This sensor belongs to a customer your technician code does not cover.';
-    case 'token-invalid': return 'The sensor refused your technician code. Ask the manufacturer for a new one.';
-    case 'token-expired': return 'Your technician code has expired. Ask the manufacturer for a new one.';
+    case 'token-invalid': return 'The sensor refused your technician code. Ask for a new one.';
+    case 'token-expired': return 'Your technician code has expired. Ask for a new one.';
     case 'closed': return 'This sensor is not prepared for setup yet. Test still checks that it answers.';
     case 'unknown': return 'The sensor restarted and lost the result. Try again.';
     case 'locked': return 'The technician code or the site Wi‑Fi is no longer unlocked (the app was left for more than 2 minutes, or the site was changed). Tap Retry failed to unlock them.';

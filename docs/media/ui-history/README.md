@@ -15,7 +15,7 @@ channel; those screens and a video are in [`docs/ARCHITECTURE.md`](../../SETUP.m
 | 1 | ![](evolution/01-original-search-button.png) | Starting point: a **Rechercher les capteurs** button, 5-second scan, French UI. | First working probe (commit `85f8b61`). |
 | 2 | ![](evolution/02-auto-scan-radar-paused.png) | The button becomes an **automatic scan** with a radar animation. | A technician should not have to know when to search; the app looks as soon as Bluetooth is on. |
 | 3 | ![](evolution/03-auto-scan-radar-blue.png) | Sensors appear under the radar as they are found. | Discovery is visible without any action. |
-| 4 | ![](evolution/04-black-waves-large-dot.png) | Waves become black, slower, with a constant-width stroke; larger dot. | Match the Onest typography and the manufacturer's ink colour; make the dot an obvious tap target. |
+| 4 | ![](evolution/04-black-waves-large-dot.png) | Waves become black, slower, with a constant-width stroke; larger dot. | Match the Onest typography and a darker ink colour; make the dot an obvious tap target. |
 | 5 | ![](evolution/05-compact-radar-renamed-provide.png) | Radar shrinks beside a caption once sensors exist; app renamed **provide.** | Leave room for the list without stopping the search. |
 | 6 | ![](evolution/06-ten-sensors-english.png) | English UI, tested with ten sensors. | Check layout and ergonomics at room scale (decision 22: several sensors per room). |
 | 7 | ![](evolution/07-result-inside-card.png) | Result shown **inside the tested card** instead of at the end of the list. | With ten sensors the result was off-screen after tapping Test. |

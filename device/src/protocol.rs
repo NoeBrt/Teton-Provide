@@ -8,7 +8,7 @@ pub const SERVICE_UUID: u128 = 0x3b0a90ce_9564_40d1_b96b_14cf8858aba3;
 pub const CHARACTERISTIC_UUID: u128 = 0x29b3765c_de49_4114_889e_89b05852c968;
 
 /// Manufacturer data starts with state, followed by the five identity bytes when the sensor has a key.
-/// 0xFFFF is the company ID reserved for tests; a production sensor would use the manufacturer's own.
+/// 0xFFFF is the company ID reserved for tests; a production sensor would use a company ID registered with the Bluetooth SIG.
 pub const STATE_COMPANY_ID: u16 = 0xFFFF;
 pub const STATE_NOT_STAGED: u8 = 0;
 pub const STATE_READY: u8 = 1;

@@ -7,7 +7,7 @@ sooner. This page sets out the problem and the plan.
 
 | Stage | Where | Network on the sensor |
 | --- | --- | --- |
-| 1. `iot-workshop deploy`: install, key, certify for one customer | The manufacturer's workshop | None |
+| 1. `iot-workshop deploy`: install, key, certify for one customer | The workshop | None |
 | 2. Shipping and mounting | Hospital | None |
 | 3. Wi-Fi setup from Provide., over Bluetooth | Hospital | None, then the hospital Wi-Fi |
 | 4. In service | Hospital | Hospital Wi-Fi |
@@ -33,7 +33,7 @@ sends it back.
 
 ## What offline systems do
 
-| System | Offline revocation | The manufacturer equivalent |
+| System | Offline revocation | Equivalent here |
 | --- | --- | --- |
 | [Salto JustIN Mobile](https://support.saltosystems.com/space/justin/faqs/) | The phone key opens doors offline; the app revalidates it every 7 days | The phone renews short codes |
 | [igloohome algoPIN](https://docs.getseam.com/latest/device-and-system-integration-guides/igloohome-locks) | Codes valid 24 h, generated without contacting the lock | Today's 1-day codes |
@@ -46,7 +46,7 @@ None of them revokes an offline device at once; each bounds the delay with expir
 
 ## Plan
 
-1. **The phone renews short codes.** When it has signal, Provide. asks a manufacturer service for a new code, valid about
+1. **The phone renews short codes.** When it has signal, Provide. asks an online service for a new code, valid about
    a day, for the same holder key. Revoking a technician means the service stops renewing. Setup stays offline: the
    phone needs signal once a day, not in the hallway.
 2. **Phones carry the revocation list.** Each setup hands the sensor the newest list signed by the technician
@@ -55,9 +55,9 @@ None of them revokes an offline device at once; each bounds the delay with expir
 3. **A newer code moves the clock.** Each code carries its signed issue time, and the sensor raises its clock floor
    to the newest one it has seen, as a hotel lock does with key sequence numbers. An old code then expires on every
    sensor a newer code has reached.
-4. **Smith pushes the list** to sensors in service, once they are on the hospital Wi-Fi.
-5. **A configured sensor accepts a new network** only for a few minutes after a local action, like the 5 minutes of
-   the manufacturer's *WiFi Broadcast*. A code alone then cannot move it.
+4. **The fleet manager pushes the list** to sensors in service, once they are on the hospital Wi-Fi.
+5. **A configured sensor accepts a new network** only for a few minutes after a local action, like the setup window of a
+   Wi-Fi broadcast. A code alone then cannot move it.
 
 Items 2 and 3 change the Bluetooth protocol or the code format. Item 1 needs an online signing key, certified by
 the offline technician authority, which stays at the workshop.
@@ -71,5 +71,5 @@ and an outage or a basement with no signal would block a wing of 200 sensors.
 ## Open questions
 
 - How the phone authenticates to the renewal service: the holder key is an X25519 key and cannot sign.
-- Whether the manufacturer's Edge already has a channel to Smith that item 4 could reuse.
+- Whether sensors already have a channel to the fleet manager that item 4 could reuse.
 - The local action for item 5 on a sensor with no button, and how the technician sees the window open.

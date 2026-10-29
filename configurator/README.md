@@ -6,7 +6,7 @@ Start with the [root README](../README.md) for videos or the [Ubuntu setup guide
 
 Stack: Expo SDK 57, React Native 0.86 (New Architecture), TypeScript,
 [`react-native-ble-manager`](https://github.com/innoveit/react-native-ble-manager)
-12.5 for Bluetooth. It matches the manufacturer's mobile stack (Expo + React Native).
+12.5 for Bluetooth.
 Bluetooth needs native code, so **Expo Go cannot run it**: use a development build.
 
 ## Checks (Linux, no phone needed)

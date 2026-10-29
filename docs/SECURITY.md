@@ -23,12 +23,12 @@ The [requirements map](../README.md#requirements-map) tracks which of the tests 
 | Static passkey printed on the label | Rejected | A reused passkey leaks to an active attacker in at most ~19 reconnects ([Insinuator](https://insinuator.net/2021/10/change-your-ble-passkey-like-you-change-your-underwear/), [CVE-2020-26558](https://nvd.nist.gov/vuln/detail/CVE-2020-26558)). |
 | LE Secure Connections OOB (key from QR) | Rejected | Not available to iOS apps ([Apple DTS](https://developer.apple.com/forums/thread/758122)); on Android `createBondOutOfBand` is a `@SystemApi`, absent from the public SDK ([AOSP](https://android.googlesource.com/platform/packages/modules/Bluetooth/+/refs/heads/main/framework/java/android/bluetooth/BluetoothDevice.java)). |
 | Noise `NKpsk2`, key and secret in a QR label (first milestone) | Replaced | Sound, but one label scan per sensor and a secret printed in every patient room. |
-| **Noise `XX`, device certificate from an authority, technician token** | **Implemented** | Matter's model (device attestation) without a secure element: the sensor proves a key that the manufacturer certified; the phone proves a code that the manufacturer issued. Plain GATT on both platforms, no OS pairing UI, nothing to scan per sensor. |
-| Sensor list from Smith before the visit | Later | Adds room mapping and revocation; needs the phone to sync before the visit. Out of scope for the demo. |
+| **Noise `XX`, device certificate from an authority, technician token** | **Implemented** | Matter's model (device attestation) without a secure element: the sensor proves a key that the device authority certified; the phone proves a code that the technician authority issued. Plain GATT on both platforms, no OS pairing UI, nothing to scan per sensor. |
+| Sensor list from the fleet manager before the visit | Later | Adds room mapping and revocation; needs the phone to sync before the visit. Out of scope for the demo. |
 
 ## Design
 
-1. **Two authorities, at the manufacturer.** `iot-workshop init` creates two Ed25519 keys (0600, kept offline): the **device
+1. **Two offline authorities.** `iot-workshop init` creates two Ed25519 keys (0600, kept offline): the **device
    authority** certifies sensors, the **technician authority** issues technician codes. The app embeds the device
    authority's public key; each sensor stores the technician authority's.
 2. **Staging, not BLE.** On the sensor, `stage init` creates its static X25519 key (0600, never regenerated) and
@@ -84,7 +84,7 @@ available so updates retain that identity; ad-hoc builds can trigger new access 
   Face ID asks for them at the next use; a shorter switch keeps them, so it does not stop a running batch.
 - **Shared password risk:** with WPA2-Personal all sensors hold the same password, so one extracted sensor exposes
   the network and revocation means rotating it everywhere. Prefer per-device credentials in production: EAP-TLS
-  certificates or per-device PSKs (PPSK/iPSK), issued by Smith. The demo uses WPA2-Personal.
+  certificates or per-device PSKs (PPSK/iPSK), issued by the fleet manager. The demo uses WPA2-Personal.
 
 ## Policies
 
@@ -135,7 +135,7 @@ available so updates retain that identity; ad-hoc builds can trigger new access 
   token recorded by a sensor, without the code's holder key, is refused.
 - `iot-workshop deploy` trusts the sensor's SSH host key on first use: it certifies whatever key answers at that
   address. Deploy over USB, and check the host key fingerprint on first contact.
-- The code reaches the technician outside the app (a printed QR code, or text over a channel the manufacturer trusts). After a
+- The code reaches the technician outside the app (a printed QR code, or text over a trusted channel). After a
   paste, the app does not clear the clipboard, so the code stays there (and in Universal Clipboard) until something
   else is copied.
 - No signed time source (Roughtime, NTS): the clock floor bounds a wrong clock but does not correct it (see Clock).

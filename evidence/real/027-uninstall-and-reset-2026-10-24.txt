@@ -1,5 +1,5 @@
 REAL HARDWARE — 24 October 2026
-Requested operation: uninstall the manufacturer on Jetson 027; deconfigure Jetson 019 and noe-lab.
+Requested operation: uninstall the IoT service on Jetson 027; deconfigure Jetson 019 and noe-lab.
 Hostnames use the repository's aliases. No passwords or private keys are recorded.
 
 Jetson 027
@@ -10,7 +10,7 @@ Jetson 027
     service, files and iot account removed
 - Subsequent SSH to its former Wi-Fi address timed out after the profile was deleted.
   A filesystem verification over USB was therefore not performed.
-- Its previous the manufacturer advertisement was not seen during the subsequent 24-second scan.
+- Its previous advertisement was not seen during the subsequent 24-second scan.
 
 Jetson 019
 - Stopped iot-device and removed /var/lib/iot-device/provisioned.
@@ -22,7 +22,7 @@ Jetson 019
 noe-lab
 - Stopped iot-device, removed /var/lib/iot-device/provisioned, restarted the service.
 - Verified the marker remained absent and identity/certificate remained present.
-- Service active. Neither the manufacturer NetworkManager profile remained:
+- Service active. Neither provisioning NetworkManager profile remained:
     4a7db77c-6fda-47aa-95ca-d186c5096b32
     b5b2bc3f-8221-4a28-8c40-5e078953fcf2
 - Ethernet access remained available.

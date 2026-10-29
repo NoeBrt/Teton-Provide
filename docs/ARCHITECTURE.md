@@ -2,7 +2,7 @@
 
 A technician's phone or laptop hands Wi-Fi credentials to headless sensors over Bluetooth Low Energy, up to a
 whole wing at a time. The two sides share no network and no Internet. Each sensor proves it is a genuine sensor
-with a certificate the manufacturer signed for its key; the configurator proves its technician holds a code the manufacturer issued; only
+with a certificate the device authority signed for its key; the configurator proves its technician holds a code the technician authority issued; only
 then does the password travel, encrypted. The sensor joins the network through NetworkManager and reports the address
 it received for that exact attempt.
 
@@ -11,7 +11,7 @@ it received for that exact attempt.
 | Configurator, **Provide.** | `configurator/`: Expo / React Native, TypeScript; desktop shell in Tauri with a Rust Bluetooth bridge | iPhone and macOS (tested on hardware); Android and Windows/Linux desktop not run |
 | Device service | `device/bin/main.rs`, `device/bin/wifi.rs`: Rust, BlueZ (`bluer`), NetworkManager over D-Bus | Ubuntu 22.04 with a BLE adapter and Wi-Fi |
 | Protocol library | `device/src/`: Noise (`snow`), certificates and codes (`ed25519-dalek`) | Shared by the device and its tools |
-| Staging and workshop tools | `device/bin/stage.rs`, `workshop/` (`iot-workshop`) | The sensor once before deployment; the manufacturer's workshop, offline |
+| Staging and workshop tools | `device/bin/stage.rs`, `workshop/` (`iot-workshop`) | The sensor once before deployment; the workshop, offline |
 
 How to run it: [SETUP.md](SETUP.md). Security design and its tests: [SECURITY.md](SECURITY.md). Every decision with
 its alternatives: [DECISIONS.md](DECISIONS.md). What is proven: the [requirements map](../README.md#requirements-map).
@@ -29,7 +29,7 @@ technician's side, no screen on the device.
 | SoftAP (the device hosts a setup Wi-Fi) | Excluded | The phone would join a network the device creates: a shared local network, which the brief forbids at the start ([decision 18](DECISIONS.md#18-exclude-softap-from-the-mvp)). |
 | Wi-Fi Easy Connect (DPP) | Excluded | Built for this job, but iPhone gives apps no configurator API. |
 | Web Bluetooth page | Excluded | Not in Safari on iPhone, and the page must still reach the phone offline. |
-| QR shown to the device's camera, USB cable | Fallbacks | One-way (QR) or a reachable port (USB); kept in case the manufacturer's sensors lack BLE ([decision 25](DECISIONS.md#25-channel-if-the-manufacturers-own-sensors-have-no-ble)). |
+| QR shown to the device's camera, USB cable | Fallbacks | One-way (QR) or a reachable port (USB); kept in case production sensors lack BLE ([decision 25](DECISIONS.md#25-channel-if-production-sensors-have-no-ble)). |
 
 What BLE costs: the technician needs a prepared app (built once, installed before the visit); BLE pairing
 authenticates nobody useful ("Just Works" authenticates no one, a static passkey leaks, out-of-band pairing is closed
@@ -44,7 +44,7 @@ to fit one GATT write.
 | **Device certificates and technician codes** signed by two offline authorities | A QR label scanned per sensor | Nothing to scan or print per sensor, so a wing of 200 becomes one tap; a rogue device cannot pass as a sensor; a code covers only its customers and expires within 30 days ([decision 27](DECISIONS.md#27-certified-sensors-and-technician-codes-for-200-devices)). |
 | **The sensor ID in the main advertisement packet** (5 bytes of the key hash) | The device name in the scan response | Phones and Macs do not always request the scan response and cache old names; the main packet always arrives. |
 | **One app for iPhone and desktop**: React Native, with react-native-web in a Tauri window | Two apps | Same screens and protocol code; only the Bluetooth, storage and camera adapters differ. |
-| **Rust on the device**, NetworkManager over D-Bus | Python, `nmcli` | Matches the manufacturer's fleet ([decision 11](DECISIONS.md#11-rust-to-align-with-the-fleet)); the password never appears in a command line. |
+| **Rust on the device**, NetworkManager over D-Bus | Python, `nmcli` | Matches the target fleet ([decision 11](DECISIONS.md#11-rust-to-align-with-the-fleet)); the password never appears in a command line. |
 | **Attempt IDs and two alternating NetworkManager profiles** | Fire and forget | A lost link can be retried without joining twice; a wrong password never strands a sensor that was online. |
 
 ## Data flow
@@ -65,7 +65,7 @@ flowchart LR
     code -.->|"scanned or pasted once"| app
     app <-->|"BLE GATT<br/>Noise XX, ChaCha20-Poly1305"| svc
     nm -->|"WPA2 join, DHCP"| ap[("Site Wi-Fi")]
-    ap -.->|"once online"| smith["Smith"]
+    ap -.->|"once online"| fleet["Fleet manager"]
 ```
 
 **Discovery.** Each sensor advertises the provisioning service, its state (not staged, ready, online, Wi-Fi lost) and
@@ -87,7 +87,7 @@ sequenceDiagram
     P->>D: BLE connect, provisioning service
     P->>D: Noise message 1 (ephemeral key)
     D-->>P: Noise message 2, with its certificate
-    Note over P: Signed by the manufacturer's device authority, for the key the sensor just proved,<br/>for the ID it advertises, for a customer the code covers.<br/>Otherwise stop: nothing but an ephemeral key was sent.
+    Note over P: Signed by the device authority, for the key the sensor just proved,<br/>for the ID it advertises, for a customer the code covers.<br/>Otherwise stop: nothing but an ephemeral key was sent.
     P->>D: Noise message 3, with the technician code
     Note over D: Signed by the technician authority, for this sensor's customer,<br/>for the key the phone just proved, not expired.
     D-->>P: encrypted Accepted (or Refused with a reason)
@@ -127,7 +127,7 @@ stateDiagram-v2
 ## How credentials are protected in transit
 
 - **Handshake.** `Noise_XX_25519_ChaChaPoly_SHA256`. The sensor proves its key and sends a certificate for that key,
-  its ID and its customer; the app checks all three against the manufacturer's device authority before sending anything. A rogue
+  its ID and its customer; the app checks all three against the device authority before sending anything. A rogue
   device cannot forge the certificate, and one that copies a real sensor's certificate cannot prove the key in it.
 - **Technician code.** Sent only to a sensor that passed those checks. The sensor checks the technician authority's
   signature, its own customer in the code, that the phone proved the code's holder key, and the expiry against a
@@ -156,8 +156,8 @@ same site password. Details and tests: [SECURITY.md](SECURITY.md).
 | **Set up all ready sensors**, six at a time | Built | One tap for a room or a corridor; link failures go back to the queue twice; sensors found during a batch can join it. |
 | **Stop on a site-wide error** | Built | A wrong password or a refused code would repeat on every sensor: the batch stops starting new ones. |
 | **One overall card** | Built | 200 cards are too many to read: counts of set up, errors and not set up, the time left, errors grouped by cause, **Retry failed** ([decision 28](DECISIONS.md#28-overall-of-the-sensors-in-range)). |
-| **Room mapping in Smith** | Later | Smith links each sensor ID to its room once sensors check in. |
-| **Per-device Wi-Fi credentials** (EAP-TLS or per-device PSK) from Smith | Later | A stolen sensor no longer exposes the hospital's network. |
+| **Room mapping in the fleet manager** | Later | The fleet manager links each sensor ID to its room once sensors check in. |
+| **Per-device Wi-Fi credentials** (EAP-TLS or per-device PSK) from the fleet manager | Later | A stolen sensor no longer exposes the hospital's network. |
 | **Staggered joins, result sync** | Later | 200 DHCP requests at once can exhaust a pool; results upload once the phone is online. |
 
 **Pace.** The exchange is under a kilobyte; the network join dominates (about 5.5 s measured, NetworkManager allows
@@ -167,8 +167,8 @@ the link during the join would hold it about 3.3 s instead of 7.5 s ([decision 2
 
 **Beyond one phone (not built).** The phone is the bottleneck because every sensor proves itself to it. The first
 model to evaluate with a customer's IT is **802.1X with the device certificate** (EAP-TLS): each sensor already has a
-Manufacturer-certified key, so it could join the secure SSID by itself at power-on, with no phone and no shared password.
-Other options: per-device credentials from Smith, Wi-Fi Easy Connect from the access points, relaying through sensors
+Certified key, so it could join the secure SSID by itself at power-on, with no phone and no shared password.
+Other options: per-device credentials from the fleet manager, Wi-Fi Easy Connect from the access points, relaying through sensors
 already set up, or staging before delivery. Their trade-offs are in [DECISIONS.md](DECISIONS.md).
 
 ## Code map
@@ -182,7 +182,7 @@ device/src/protocol.rs    service and characteristic UUIDs, advertisement format
 device/bin/main.rs        BLE peripheral: hello and provisioning, one phone at a time, advertised state
 device/bin/wifi.rs        NetworkManager over D-Bus: two alternating profiles, rollback, failure reasons
 device/bin/stage.rs       staging: key, then certificate and technician authority
-workshop/src/main.rs      iot-workshop: The manufacturer's authorities; deploy and certify a sensor, issue a technician code
+workshop/src/main.rs      iot-workshop: the two authorities; deploy and certify a sensor, issue a technician code
 configurator/src/         noise.ts (Noise initiator), authority.ts (certificate and code checks), probe.ts (scan,
                           state and ID), setup.ts (one sensor), batch.ts (queue, six at a time), demo.ts (200
                           simulated sensors)
