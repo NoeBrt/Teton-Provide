@@ -12,12 +12,12 @@ use dbus::arg::{PropMap, Variant};
 use dbus::blocking::stdintf::org_freedesktop_dbus::Properties;
 use dbus::blocking::{Connection, Proxy};
 use dbus::message::MatchRule;
+use sensor_provisioning::provision::{Enterprise, Failure, Outcome};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use sensor_provisioning::provision::{Enterprise, Failure, Outcome};
 
 const NM: &str = "org.freedesktop.NetworkManager";
 const NM_PATH: &str = "/org/freedesktop/NetworkManager";

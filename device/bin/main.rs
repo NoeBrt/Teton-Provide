@@ -18,11 +18,6 @@ use bluer::gatt::local::{
     CharacteristicWriteMethod, ReqError, Service,
 };
 use bluer::{Adapter, Address, Uuid};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use sensor_provisioning::authority::{checked_now, device_id, device_id_bytes};
 use sensor_provisioning::protocol::{
     self, CHARACTERISTIC_UUID, SERVICE_UUID, STATE_COMPANY_ID, STATE_NOT_STAGED, STATE_OFFLINE,
@@ -32,6 +27,11 @@ use sensor_provisioning::provision::{
     Activation, FRAME_HANDSHAKE, FRAME_TRANSPORT, Failure, Identity, KeyPair, Outcome,
     PROVISION_CHARACTERISTIC_UUID, PROVISIONED_FILE, Provisioner, Session, hex,
 };
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::Notify;
 

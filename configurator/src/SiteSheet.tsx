@@ -201,7 +201,7 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
               <TextInput ref={domainField} style={s.input} value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false}
                 keyboardType="url" placeholder="radius.hospital.org" returnKeyType="next" onSubmitEditing={() => passwordField.current?.focus()}
                 submitBehavior="submit" accessibilityLabel="Server domain" />
-              <Text style={s.text}>The sensors join only if the network's sign-in server proves this name. Ask the site's IT team.</Text>
+              <Text style={s.text}>The sensors join only if the network’s sign-in server proves this name. Ask the site’s IT team.</Text>
             </>
           )}
           <Text style={s.label}>PASSWORD</Text>

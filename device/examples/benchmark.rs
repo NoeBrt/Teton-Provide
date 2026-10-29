@@ -1,9 +1,9 @@
 //! Simulation measurements only; no BLE, Wi-Fi, or 200-device throughput claims.
 
-use std::time::{Duration, Instant};
 use sensor_provisioning::protocol::{DEVICE_ID, REQUEST, RESPONSE};
 use sensor_provisioning::simulation::batch::run_batch;
 use sensor_provisioning::simulation::{Connection, Device, Error, Fault};
+use std::time::{Duration, Instant};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const SAMPLES: usize = 7;

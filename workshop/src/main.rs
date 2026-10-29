@@ -35,6 +35,10 @@ mod binaries;
 use ed25519_dalek::SigningKey;
 use qrcode::QrCode;
 use qrcode::render::unicode;
+use sensor_provisioning::authority::{
+    DeviceCertificate, MAX_CUSTOMER, MAX_CUSTOMERS, TechnicianToken, code_text, device_id,
+};
+use sensor_provisioning::provision::{KeyPair, NOISE_PARAMS, hex, unhex};
 use snow::Builder;
 use std::fmt::Display;
 use std::fs::{DirBuilder, OpenOptions};
@@ -43,10 +47,6 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
-use sensor_provisioning::authority::{
-    DeviceCertificate, MAX_CUSTOMER, MAX_CUSTOMERS, TechnicianToken, code_text, device_id,
-};
-use sensor_provisioning::provision::{KeyPair, NOISE_PARAMS, hex, unhex};
 
 const DEVICE_KEY: &str = "device-authority.key";
 const TECHNICIAN_KEY: &str = "technician-authority.key";
@@ -1282,7 +1282,8 @@ mod tests {
             assert!(command.contains(path), "systemd/install.sh puts {path}");
         }
         assert!(
-            command.contains("mv /var/lib/sensor-device /root/sensor-backup/sensor-device-1792879921"),
+            command
+                .contains("mv /var/lib/sensor-device /root/sensor-backup/sensor-device-1792879921"),
             "the sensor key is kept, root only"
         );
         assert!(command.contains("userdel sensor"));
@@ -1409,7 +1410,10 @@ mod tests {
 
     #[test]
     fn a_sensor_answer_is_printed_without_control_characters() {
-        assert_eq!(printable("SENSOR-1 advertising\n"), "SENSOR-1 advertising\n");
+        assert_eq!(
+            printable("SENSOR-1 advertising\n"),
+            "SENSOR-1 advertising\n"
+        );
         assert_eq!(
             printable("\x1b]52;c;bad\x07ok\x1b[2K"),
             "?]52;c;bad?ok?[2K",

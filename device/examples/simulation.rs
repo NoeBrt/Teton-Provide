@@ -1,6 +1,6 @@
-use std::time::Duration;
 use sensor_provisioning::protocol::{REQUEST, RESPONSE};
 use sensor_provisioning::simulation::{Device, Error, Fault};
+use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("SIMULATION — in-memory software transport; no BLE or Wi-Fi");

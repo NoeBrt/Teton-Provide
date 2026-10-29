@@ -6,12 +6,12 @@
 
 use curve25519_dalek::MontgomeryPoint;
 use ed25519_dalek::SigningKey;
-use snow::Builder;
 use sensor_provisioning::authority::{DeviceCertificate, TechnicianToken, code_text, device_id};
 use sensor_provisioning::provision::{
     NOISE_PARAMS, Outcome, PROLOGUE, REFUSED_EXPIRED, REFUSED_INVALID, Request, Response,
     TOKEN_ACCEPTED, TOKEN_REFUSED, hex,
 };
+use snow::Builder;
 
 const PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
