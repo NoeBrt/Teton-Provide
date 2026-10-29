@@ -9,17 +9,17 @@ import { spawnSync } from 'node:child_process';
 const install = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).scripts['desktop:install'] as string;
 
 test('installation never removes the existing app after a failed build or copy', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'iot-install-'));
+  const dir = mkdtempSync(join(tmpdir(), 'sensor-install-'));
   const trace = join(dir, 'trace');
   try {
     for (const command of ['npm', 'node', 'ditto', 'lsregister', 'rm', 'mv']) {
-      writeFileSync(join(dir, command), '#!/bin/sh\nname=${0##*/}\nprintf "%s\\n" "$name" >> "$IOT_INSTALL_TRACE"\n[ "$name" != "$IOT_INSTALL_FAIL" ]\n', { mode: 0o755 });
+      writeFileSync(join(dir, command), '#!/bin/sh\nname=${0##*/}\nprintf "%s\\n" "$name" >> "$SENSOR_INSTALL_TRACE"\n[ "$name" != "$SENSOR_INSTALL_FAIL" ]\n', { mode: 0o755 });
     }
     const script = install.replace('/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister', 'lsregister');
     for (const failed of ['npm', 'node', 'ditto', 'lsregister', 'none']) {
       writeFileSync(trace, '');
       const result = spawnSync('/bin/sh', ['-c', script], {
-        env: { ...process.env, PATH: dir, IOT_INSTALL_TRACE: trace, IOT_INSTALL_FAIL: failed },
+        env: { ...process.env, PATH: dir, SENSOR_INSTALL_TRACE: trace, SENSOR_INSTALL_FAIL: failed },
       });
       const calls = readFileSync(trace, 'utf8').trim().split('\n');
       if (failed === 'npm' || failed === 'node' || failed === 'ditto') {

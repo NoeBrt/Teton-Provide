@@ -13,7 +13,7 @@ page.on('console', message => { if (message.type() === 'error') errors.push(mess
 const capture = name => page.screenshot({ path: `${out}${name}.png` });
 const check = async () => {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'horizontal overflow');
-  const names = await page.getByText(/^IOT-[0-9A-F]{10}$/).allTextContents();
+  const names = await page.getByText(/^SENSOR-[0-9A-F]{10}$/).allTextContents();
   assert.equal(new Set(names).size, names.length, 'duplicate sensor');
 };
 try {
@@ -27,7 +27,7 @@ try {
   assert((await summary.boundingBox()).x > siteBox.x + siteBox.width);
   await capture('t7-1280-before');
   // Opening a row: full-size buttons from the first frame and no scaled card (Reanimated web layout transitions scale).
-  const frames = await page.getByRole('button', { name: /^IOT-/ }).first().evaluate(row => new Promise(resolve => {
+  const frames = await page.getByRole('button', { name: /^SENSOR-/ }).first().evaluate(row => new Promise(resolve => {
     const samples = [];
     row.click();
     const tick = () => {
@@ -39,7 +39,7 @@ try {
   }));
   assert(frames.every(f => f.scale === 'none'), 'the card is scaled while it opens');
   assert.equal(Math.round(frames.find(f => f.h)?.h ?? 0), 44, 'Test is not full size on its first frame');
-  await page.getByRole('button', { name: /^Test IOT-/ }).click();
+  await page.getByRole('button', { name: /^Test SENSOR-/ }).click();
   await page.getByText('“world” received').waitFor();
   await capture('t7-1280-open-test');
   await page.getByRole('button', { name: /Set up all ready/ }).click();
@@ -64,7 +64,7 @@ try {
   await capture('t7-1920-done');
   await page.getByRole('button', { name: /Refresh the list/ }).click();
   const top = (await summary.boundingBox()).y;
-  await page.getByRole('button', { name: /^IOT-/ }).last().scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: /^SENSOR-/ }).last().scrollIntoViewIfNeeded();
   assert.equal((await summary.boundingBox()).y, top, 'summary moved when list scrolled');
   assert.equal((await site.boundingBox()).y, siteBox.y, 'site moved when list scrolled');
   for (const width of [1280, 2560, 900, 899, 768, 400, 320, 1280]) {

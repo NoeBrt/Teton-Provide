@@ -1,4 +1,4 @@
-use iot_provisioning::simulation::batch::run_batch;
+use sensor_provisioning::simulation::batch::run_batch;
 
 #[test]
 fn each_queued_device_finishes_once_with_bounded_concurrency() {

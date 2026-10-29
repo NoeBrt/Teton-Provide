@@ -31,7 +31,7 @@ node tools/record-demos.mjs <PLAYWRIGHT_MODULE_PATH> [CHROMIUM_EXECUTABLE]
 python3 tools/build-tutorials.py
 ```
 
-The script asserts successful code import, site save, hello/world test, individual connection result, batch and retry completion, and absence of page errors and horizontal document overflow. Raw recordings and stage screenshots stay under `/private/tmp/iot-gif-*`; capture timings and the local render report support visual review. Public test credentials are safe for documentation and are not valid for the deployed authority.
+The script asserts successful code import, site save, hello/world test, individual connection result, batch and retry completion, and absence of page errors and horizontal document overflow. Raw recordings and stage screenshots stay under `/private/tmp/sensor-gif-*`; capture timings and the local render report support visual review. Public test credentials are safe for documentation and are not valid for the deployed authority.
 
 ## Render verification
 

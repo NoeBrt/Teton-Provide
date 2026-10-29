@@ -1,7 +1,7 @@
 Pairing times, real sensors, 2026-10-25
 Evidence class: ACTUAL (real BLE, real Wi-Fi join, WPA2-Personal home router)
 
-Sensors: IOT-478E7CFA25 (Jetson 027), IOT-4FF546816F (Jetson 019), IOT-6B1E844588 (noe-lab, MT7921).
+Sensors: SENSOR-478E7CFA25 (Jetson 027), SENSOR-4FF546816F (Jetson 019), SENSOR-6B1E844588 (noe-lab, MT7921).
 Clients: MacBook, desktop app (Tauri); iPhone 15 Pro, iOS 27.0, provide.
 Each run: "Set up all ready (3)", the three sensors in parallel.
 

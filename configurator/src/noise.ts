@@ -10,7 +10,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { hmac } from '@noble/hashes/hmac.js';
 
 export const NOISE_PARAMS = 'Noise_XX_25519_ChaChaPoly_SHA256';
-export const PROLOGUE = new TextEncoder().encode('iot-provision/2');
+export const PROLOGUE = new TextEncoder().encode('sensor-provision/2');
 const KEY_LEN = 32;
 const TAG_LEN = 16;
 

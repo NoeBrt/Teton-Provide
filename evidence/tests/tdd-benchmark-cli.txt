@@ -4,9 +4,9 @@ Original example source matches d3217fa; no real credentials used.
 RED
 Command: python3 tests/benchmark_cli.py target/release/examples/benchmark
 Traceback (most recent call last):
-  File "/home/noe/noe-ws/iot-provisioning/tests/benchmark_cli.py", line 33, in <module>
+  File "/home/noe/noe-ws/sensor-provisioning/tests/benchmark_cli.py", line 33, in <module>
     check(Path(sys.argv[1]).resolve(strict=True))
-  File "/home/noe/noe-ws/iot-provisioning/tests/benchmark_cli.py", line 21, in check
+  File "/home/noe/noe-ws/sensor-provisioning/tests/benchmark_cli.py", line 21, in check
     assert result.returncode == expected_code, result.returncode
 AssertionError: 101
 

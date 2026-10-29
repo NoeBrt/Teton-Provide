@@ -82,7 +82,7 @@ try {
   } else {
     assert.ok(motion.every(frame => frame.icon === 'none' && ['none', 'matrix(1, 0, 0, 1, 0, 0)'].includes(frame.list)), 'Reduce Motion has no rotation or translation');
   }
-  await page.screenshot({ path: `/private/tmp/iot-refresh-${engine}-${width}-progress.png` });
+  await page.screenshot({ path: `/private/tmp/sensor-refresh-${engine}-${width}-progress.png` });
   await page.getByText(/Reports set up · connected to/).waitFor();
   const completion = await page.evaluate(() => new Promise(resolve => {
     const frames = [];
@@ -110,7 +110,7 @@ try {
   }
   await page.getByText('List updated', { exact: true }).waitFor();
   assert.equal(await page.locator('[data-refresh-spin], [data-refresh-bounce]').count(), 0, 'motion ends with the refresh');
-  await page.screenshot({ path: `/private/tmp/iot-refresh-${engine}-${width}-updated.png` });
+  await page.screenshot({ path: `/private/tmp/sensor-refresh-${engine}-${width}-updated.png` });
   assert.equal(await refresh.isDisabled(), false);
   // The automatic next round is still starting when the user refreshes again.
   await page.evaluate(() => window.fixture.end());
@@ -147,6 +147,6 @@ try {
   await page.evaluate(() => window.fixture.end());
   await page.getByText('List updated', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
-  await page.screenshot({ path: '/private/tmp/iot-refresh-verified.png' });
+  await page.screenshot({ path: '/private/tmp/sensor-refresh-verified.png' });
   console.log(`PASS ${engine} ${width}px ${reducedMotion}: 2s refresh, cancellation, fixed viewport, completion and recovery`);
 } finally { await browser.close(); }

@@ -26,10 +26,10 @@ export const DEMO_SIZE = 200;
 
 function certificate(publicKey: Uint8Array, customer: string) {
   const body = concat(Uint8Array.of(1), publicKey, Uint8Array.of(customer.length), enc.encode(customer));
-  return concat(body, ed25519.sign(concat(enc.encode('iot-device-cert/1'), body), DEVICE_SEED));
+  return concat(body, ed25519.sign(concat(enc.encode('sensor-device-cert/1'), body), DEVICE_SEED));
 }
 
-/** A technician code (v2, holder-bound) for the demo customer, as `iot-workshop issue` prints it; valid ten years, so the
+/** A technician code (v2, holder-bound) for the demo customer, as `sensor-workshop issue` prints it; valid ten years, so the
  * demo never asks for another one. */
 function demoToken(): Token {
   const holderPrivate = sha256(enc.encode('demo-holder'));
@@ -37,7 +37,7 @@ function demoToken(): Token {
   new DataView(at.buffer).setBigUint64(0, BigInt(Math.floor(Date.now() / 1000) + 10 * 365 * 86400), false);
   const name = enc.encode('Demo technician');
   const body = concat(Uint8Array.of(2), at, x25519.getPublicKey(holderPrivate), Uint8Array.of(name.length), name, Uint8Array.of(1, 4), enc.encode('DEMO'));
-  const token = concat(body, ed25519.sign(concat(enc.encode('iot-technician-token/2'), body), TECHNICIAN_SEED));
+  const token = concat(body, ed25519.sign(concat(enc.encode('sensor-technician-token/2'), body), TECHNICIAN_SEED));
   return parseTokenText(`${toHex(token)}.${toHex(holderPrivate)}`)!;
 }
 

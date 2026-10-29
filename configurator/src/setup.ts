@@ -1,11 +1,11 @@
 // Wi-Fi setup of one sensor over the encrypted channel (docs/SECURITY.md):
-// connect → Noise XX → the sensor proves it is genuine (a certificate from the device authority, for the key it
+// connect → Noise XX → the sensor proves it is genuine (a certificate from the manufacturer's device authority, for the key it
 // just proved, matching the ID it advertises) → only then the technician token → encrypted credentials → the
 // sensor's own result. Nothing secret leaves the phone for a sensor that is not genuine or not this customer's.
 import { x25519 } from '@noble/curves/ed25519.js';
 import { initiator } from './noise.ts';
 import { DEVICE_AUTHORITY, deviceId, verifyCertificate, type Token } from './authority.ts';
-import { ATTEMPT_ID_LEN, decodeResponse, PROVISION_CHARACTERISTIC_UUID, provisionRequest, statusRequest, type Failure, type Outcome } from './provision.ts';
+import { ATTEMPT_ID_LEN, decodeResponse, PROVISION_CHARACTERISTIC_UUID, provisionRequest, statusRequest, type Enterprise, type Failure, type Outcome } from './provision.ts';
 import { SERVICE_UUID, TimeoutError, withTimeout, sensorId, sensorState, type Advertising, type BleLink } from './probe.ts';
 
 // First byte of every write (device/src/provision.rs FRAME_*): start a handshake, or continue the session.
@@ -21,7 +21,7 @@ export type SetupStep = 'connect' | 'secure' | 'send' | 'join';
 /**
  * `unidentified`: the sensor has not advertised its ID yet (nothing was sent; try again once it is heard);
  * `old-firmware`: state-only firmware requires an update (not contacted or retried);
- * `not-genuine`: no valid IoT certificate for the key and ID it shows (nothing secret was sent);
+ * `not-genuine`: no valid device certificate for the key and ID it shows (nothing secret was sent);
  * `other-customer`: a genuine sensor of a customer this token does not cover;
  * `token-invalid` / `token-expired`: the sensor refused the token (or the app holds the wrong key for it, nothing sent);
  * `closed`: the sensor is not staged;
@@ -45,6 +45,8 @@ export interface SetupOptions {
   pollMs?: number;
   sleep?: (ms: number) => Promise<void>;
   deviceAuthority?: Uint8Array;
+  /** Sign in to a WPA2-Enterprise network with this username; `password` is then the user's. */
+  enterprise?: Enterprise;
 }
 
 const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((byte, i) => byte === b[i]);
@@ -61,7 +63,7 @@ export async function setup(
   onStep: (step: SetupStep) => void = () => {},
   {
     attempt: resume, timeoutMs = 10_000, joinMs = 60_000, pollMs = 500,
-    sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), deviceAuthority = DEVICE_AUTHORITY,
+    sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), deviceAuthority = DEVICE_AUTHORITY, enterprise,
   }: SetupOptions = {},
 ): Promise<SetupResult> {
   const claimed = sensorId(advertising);
@@ -116,7 +118,7 @@ export async function setup(
 
     at('send');
     attempt = resume ?? random(ATTEMPT_ID_LEN);
-    const request = provisionRequest(attempt, ssid, password);
+    const request = provisionRequest(attempt, ssid, password, enterprise);
     const first = settled(decodeResponse(channel.open(await exchange(FRAME_TRANSPORT, channel.seal(request))), attempt), attempt);
     request.fill(0);
     if (first) return first;

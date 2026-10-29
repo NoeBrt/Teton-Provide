@@ -10,7 +10,7 @@ Guide for AI coding agents working on this repo. Read [README.md](README.md) fir
   [configurator/AGENTS.md](configurator/AGENTS.md).
 - `device/`: the sensor service and its staging tool, one Rust crate. `bin/` for the programs, `src/` for the
   protocol library, `tests/` for integration tests.
-- `workshop/`: `iot-workshop`, the CLI for the authorities, sensor deployment and technician codes. A Rust
+- `workshop/`: `sensor-workshop`, the manufacturer's CLI for the authorities, sensor deployment and technician codes. A Rust
   crate that reuses `device/`'s protocol library.
 - `docs/`, `evidence/`, `tools/`: documentation, logs of real and simulated runs, test bench and demo scripts.
 
@@ -31,9 +31,9 @@ cargo clippy --features ble,stage --all-targets --locked -- -D warnings      # U
 # Workshop (from workshop/)
 cargo test && cargo clippy --all-targets -- -D warnings
 cargo install --path . --locked               # the workshop tool, once
-iot-workshop uninstall <ssh-host>         # undo deploy on a test sensor: Wi-Fi forgotten, service removed
-iot-workshop issue "Name" --customer DEMO  # a technician code, for manual tests
-iot-workshop deploy <ssh-host> --customer DEMO   # install, key and certify a blank sensor over SSH (released binaries, or device/target/linux-<arch>/)
+sensor-workshop uninstall <ssh-host>         # undo deploy on a test sensor: Wi-Fi forgotten, service removed
+sensor-workshop issue "Name" --customer DEMO  # a technician code, for manual tests
+sensor-workshop deploy <ssh-host> --customer DEMO   # install, key and certify a blank sensor over SSH (released binaries, or device/target/linux-<arch>/)
 ```
 
 ## Rules

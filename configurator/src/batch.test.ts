@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { BATCH_CONCURRENCY, RETRIES, runBatch, type BatchControl, type BatchEntry } from './batch.ts';
 import type { SetupFailure, SetupResult } from './setup.ts';
 
-const sensors = Array.from({ length: 200 }, (_, i) => `IOT-${String(i).padStart(10, '0')}`);
+const sensors = Array.from({ length: 200 }, (_, i) => `SENSOR-${String(i).padStart(10, '0')}`);
 const tick = () => new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 3)));
 
 /** A fake fleet: each sensor answers after a short random delay, with `failure(index)` or success. */

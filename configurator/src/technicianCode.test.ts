@@ -26,12 +26,12 @@ test('a valid code says whose it is, never the code itself', () => {
   assert.ok(!JSON.stringify(card).includes(vectors.holderPrivate), 'the holder key never reaches the card');
 });
 
-test('an unusable code says why: expired, not IoT’s, not a code', () => {
+test('an unusable code says why: expired, not the manufacturer’s, not a code', () => {
   const expired = pastedCode(code, expires, authority);
   assert.equal(expired.kind, 'problem');
   assert.match(expired.kind === 'problem' ? expired.message : '', /^This code expired on/);
   const foreign = pastedCode(code, expires - 1); // the real technician authority did not sign the test code
-  assert.deepEqual(foreign, { kind: 'problem', message: 'This code was not issued by IoT.', length: code.length });
+  assert.deepEqual(foreign, { kind: 'problem', message: 'This code was not issued by the manufacturer.', length: code.length });
   const garbage = pastedCode('x'.repeat(305), 0, authority);
   assert.equal(garbage.kind, 'problem');
   assert.match(garbage.kind === 'problem' ? garbage.message : '', /^This is not a technician code/);

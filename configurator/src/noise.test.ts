@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { initiator, NOISE_PARAMS, PROLOGUE } from './noise.ts';
-import { decodeResponse, provisionRequest, statusRequest } from './provision.ts';
+import { credentialError, decodeResponse, provisionRequest, statusRequest } from './provision.ts';
 
 // Produced by snow on the device side (device/tests/noise_vectors.rs): fixed keys make every byte deterministic.
 const vectors = JSON.parse(readFileSync(new URL('./noise-vectors.json', import.meta.url), 'utf8'));
@@ -68,4 +68,20 @@ test('altered, replayed or reordered device replies are rejected', () => {
 test('keys must be 32 bytes', () => {
   assert.throws(() => initiator(new Uint8Array(31), new Uint8Array(32)));
   assert.throws(() => initiator(new Uint8Array(32), new Uint8Array(33)));
+});
+
+test('an 802.1X site appends its username and server domain; a shared password keeps the original layout', () => {
+  const attempt = new Uint8Array(16).fill(7);
+  const personal = provisionRequest(attempt, 'W', '12345678');
+  assert.deepEqual(Array.from(personal.slice(17)), [1, 87, 8, ...new TextEncoder().encode('12345678')]);
+  const enterprise = provisionRequest(attempt, 'W', 'p', { username: 'noe', domain: 'r.org' });
+  assert.deepEqual(Array.from(enterprise.slice(17)), [1, 87, 1, 112, 3, ...new TextEncoder().encode('noe'), 5, ...new TextEncoder().encode('r.org')]);
+});
+
+test('an 802.1X site needs a username and a server domain, and takes a short password', () => {
+  assert.equal(credentialError('Ward-3', 'p', { username: 'noe', domain: 'radius.example.org' }), null);
+  assert.match(credentialError('Ward-3', 'p', { username: 'noe', domain: '' }) ?? '', /server domain/);
+  assert.match(credentialError('Ward-3', 'p', { username: '', domain: 'radius.example.org' }) ?? '', /username/);
+  assert.match(credentialError('Ward-3', '', { username: 'noe', domain: 'radius.example.org' }) ?? '', /password/);
+  assert.match(credentialError('Ward-3', 'p') ?? '', /at least 8/);
 });

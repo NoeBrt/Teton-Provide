@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Provide finds IoT sensors nearby and sets up their Wi-Fi over an encrypted Bluetooth link.</string>
+  <string>Provide finds sensors nearby and sets up their Wi-Fi over an encrypted Bluetooth link.</string>
   <key>NSCameraUsageDescription</key>
   <string>The camera reads your technician QR code and the site's Wi-Fi QR code.</string>
 </dict>

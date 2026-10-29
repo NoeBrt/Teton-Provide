@@ -1,4 +1,4 @@
-	Command being timed: "/home/noe/noe-ws/iot-provisioning/target/release/examples/benchmark --soak 300"
+	Command being timed: "/home/noe/noe-ws/sensor-provisioning/target/release/examples/benchmark --soak 300"
 	User time (seconds): 9.41
 	System time (seconds): 45.67
 	Percent of CPU this job got: 18%

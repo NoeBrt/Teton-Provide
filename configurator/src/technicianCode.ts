@@ -10,14 +10,14 @@ export const validity = (expires: number, now = nowSeconds()) => `${expires <= n
 
 /** Why a scanned or pasted code cannot be used, or null if it can. */
 export function tokenProblem(token: Token | null, now = nowSeconds(), authority = TECHNICIAN_AUTHORITY): string | null {
-  if (!token) return 'This is not a technician code. Scan the code IoT sent you, or paste it.';
+  if (!token) return 'This is not a technician code. Scan the code the manufacturer sent you, or paste it.';
   const check = checkToken(token, now, authority);
-  if (check === 'invalid') return 'This code was not issued by IoT.';
-  if (check === 'expired') return `This code expired on ${expiryText(token.expires)}. Ask IoT for a new one.`;
+  if (check === 'invalid') return 'This code was not issued by the manufacturer.';
+  if (check === 'expired') return `This code expired on ${expiryText(token.expires)}. Ask the manufacturer for a new one.`;
   return null;
 }
 
-/** The pasted code card: what to show, never the code itself (about 300 characters: the signature and the holder's key). */
+/** The pasted code card: what to show, never the code itself (about 300 characters: the manufacturer's signature and the holder's key). */
 export type PastedCode =
   | { kind: 'empty' }
   | { kind: 'ok'; name: string; line: string; length: number }

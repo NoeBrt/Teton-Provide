@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, AppState, Image, Platform, Pressable, ScrollView, Settings, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, AppState, Platform, Pressable, ScrollView, Settings, StyleSheet, Text, useWindowDimensions, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -118,10 +118,10 @@ function reasonText(reason: SetupFailure | undefined, step: SetupStep = 'connect
     case 'Busy': return 'The sensor is busy with another phone. Wait a minute, then try again.';
     case 'unidentified': return 'This sensor has not announced its ID yet. Nothing was sent to it; try again in a moment.';
     case 'old-firmware': return 'Update this sensor’s software before setting up its Wi-Fi. Nothing was sent to it.';
-    case 'not-genuine': return 'This is not a genuine IoT sensor. Nothing was sent to it.';
+    case 'not-genuine': return 'This is not a genuine sensor. Nothing was sent to it.';
     case 'other-customer': return 'This sensor belongs to a customer your technician code does not cover.';
-    case 'token-invalid': return 'The sensor refused your technician code. Ask IoT for a new one.';
-    case 'token-expired': return 'Your technician code has expired. Ask IoT for a new one.';
+    case 'token-invalid': return 'The sensor refused your technician code. Ask the manufacturer for a new one.';
+    case 'token-expired': return 'Your technician code has expired. Ask the manufacturer for a new one.';
     case 'closed': return 'This sensor is not prepared for setup yet. Test still checks that it answers.';
     case 'unknown': return 'The sensor restarted and lost the result. Try again.';
     case 'locked': return 'The technician code or the site Wi‑Fi is no longer unlocked (the app was left for more than 2 minutes, or the site was changed). Tap Retry failed to unlock them.';
@@ -409,7 +409,7 @@ function Provide({ demo, onDemo }: Mode) {
 
   // Scan continuously, during batches too, reporting every advertisement, so a card follows its sensor's state within a second
   // (without duplicates iOS skips sensors for whole rounds); `changed` keeps re-renders to real changes.
-  // Only devices advertising the IoT service UUID are listed.
+  // Only devices advertising the sensor service UUID are listed.
   // A sensor that stops advertising stays listed until Refresh (STALE_MS).
   useEffect(() => {
     const ble = radio;
@@ -492,7 +492,7 @@ function Provide({ demo, onDemo }: Mode) {
     const single = !batchActive.current; // decided at the start: a batch may begin while this run lasts
     const done = radio && token && await run<SetupResult>(sensor, 'setup', async onStep => {
       try {
-        result = await setup(radio, sensor.id, sensor.advertising, token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority });
+        result = await setup(radio, sensor.id, sensor.advertising, token, site.ssid, site.password, Crypto.getRandomBytes, onStep, { attempt, deviceAuthority: demo?.deviceAuthority, enterprise: site.enterprise });
       } finally {
         flow.current.finished(sensor.id, result);
       }
@@ -559,7 +559,7 @@ function Provide({ demo, onDemo }: Mode) {
   const use = (site: Site, password: string) => {
     setActiveId(site.id);
     if (!demo) setActiveSite(site.id);
-    act(flow.current.networkSaved({ ssid: site.ssid, password } satisfies SiteNetwork));
+    act(flow.current.networkSaved({ ssid: site.ssid, password, enterprise: site.enterprise } satisfies SiteNetwork));
     resumeCredentials();
   };
 
@@ -1025,7 +1025,7 @@ function Provide({ demo, onDemo }: Mode) {
       : refreshStatus === 'refreshing' ? 'Refreshing the sensor list…'
       : refreshStatus === 'failed' ? 'Search failed. Tap refresh to try again.'
       : paused ? 'Search paused. Tap the dot to resume.'
-      : found === 0 ? 'Looking for IoT sensors…'
+      : found === 0 ? 'Looking for sensors…'
       : `${found} sensor${found > 1 ? 's' : ''} nearby · still searching`
   );
   // Progress lasts for the new scan round; success feedback happens only when that round finishes.
@@ -1130,7 +1130,7 @@ function Provide({ demo, onDemo }: Mode) {
     <Animated.View style={[s.panel, panelStyle, desktop && s.desktopPanel, !measured && s.hidden]} pointerEvents={desktop || !collapsed ? 'box-none' : 'auto'}>
       <View style={[s.panelInner, desktop && { left: 0, right: 0 }]} pointerEvents="box-none">
         <Animated.View style={[s.titleBlock, titleStyle]} pointerEvents="none" onLayout={event => setTitleH(event.nativeEvent.layout.height)}>
-          <Text style={s.title} maxFontSizeMultiplier={1.3}>Connect IoT sensors to Wi‑Fi.</Text>
+          <Text style={s.title} maxFontSizeMultiplier={1.3}>Connect sensors to Wi‑Fi.</Text>
           <Text style={s.subtitle} maxFontSizeMultiplier={1.3}>One tap sets up every sensor in range.</Text>
           {!radio && (
             <View style={[s.card, s.warnCard]} accessibilityRole="alert">
@@ -1166,11 +1166,9 @@ function Provide({ demo, onDemo }: Mode) {
       <SafeAreaView style={s.screen} edges={['top', 'left', 'right']}>
         <StatusBar style={Platform.OS === 'android' ? 'dark' : 'auto'} /> {/* Android keeps the light palette */}
         <View style={[s.header, s.headerFixed]}>
-          {/* A tap on the logo opens the demo with simulated sensors, or leaves it (each asks first). */}
+          {/* A tap on the wordmark opens the demo with simulated sensors, or leaves it (each asks first). */}
           <Pressable style={s.brand} onPress={askDemo} hitSlop={8} accessibilityRole="button"
-            accessibilityLabel={demo ? 'IoT provide. Leave the demo' : 'IoT provide.'} accessibilityHint={demo ? undefined : 'Opens a demo with simulated sensors'}>
-            {/* IoT mark from example.com's site header (SVG rendered to a transparent PNG). */}
-            <Image source={require('./assets/iot-mark.png')} style={s.mark} accessibilityIgnoresInvertColors />
+            accessibilityLabel={demo ? 'Provide. Leave the demo' : 'Provide.'} accessibilityHint={demo ? undefined : 'Opens a demo with simulated sensors'}>
             <Text style={s.wordmark} maxFontSizeMultiplier={1.2}>provide.</Text>
           </Pressable>
           {/* In the demo the chip says so, and a tap on it leaves too; otherwise it shows the Bluetooth the app works over. */}
@@ -1263,7 +1261,6 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottomWidth: 1, borderColor: C.line },
   headerFixed: { marginHorizontal: 20, marginTop: 8 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  mark: { width: 28, height: 28, tintColor: C.ink },
   wordmark: { fontFamily: 'Onest_600SemiBold', fontSize: 26, letterSpacing: -1.2, color: C.ink },
   chipDemo: { backgroundColor: C.ink, color: C.onInk },
   chipOn: { backgroundColor: C.blueBg, color: C.blue }, // the app's link blue, on a light tint of it

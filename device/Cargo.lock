@@ -826,6 +826,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
+name = "sensor-provisioning"
+version = "0.1.0"
+dependencies = [
+ "bluer",
+ "curve25519-dalek",
+ "dbus",
+ "ed25519-dalek",
+ "sha2",
+ "snow",
+ "tokio",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1012,19 +1025,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "iot-provisioning"
-version = "0.1.0"
-dependencies = [
- "bluer",
- "curve25519-dalek",
- "dbus",
- "ed25519-dalek",
- "sha2",
- "snow",
- "tokio",
 ]
 
 [[package]]

@@ -17,7 +17,7 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use iot_provisioning::provision::{Failure, Outcome};
+use sensor_provisioning::provision::{Enterprise, Failure, Outcome};
 
 const NM: &str = "org.freedesktop.NetworkManager";
 const NM_PATH: &str = "/org/freedesktop/NetworkManager";
@@ -49,20 +49,34 @@ pub fn next_profile(current: Option<&str>) -> &'static str {
     }
 }
 
+/// WPA2-Enterprise sign-in as NetworkManager takes it: PEAP with MSCHAPv2 inside, the server certificate checked
+/// against the system CAs and the site's RADIUS domain.
+struct Eap<'a> {
+    username: &'a str,
+    domain: &'a str,
+}
+
 /// Joins the network with the profile not in use and reports the outcome and that profile;
-/// `interface` pins the Wi-Fi device (`IOT_WIFI_INTERFACE`), `current` is the working profile, if any.
+/// `interface` pins the Wi-Fi device (`SENSOR_WIFI_INTERFACE`), `current` is the working profile, if any.
 pub fn activate(
     ssid: &[u8],
     password: &[u8],
+    enterprise: Option<&Enterprise>,
     interface: Option<&str>,
     current: Option<&str>,
 ) -> (Outcome, &'static str) {
     let profile = next_profile(current);
-    let Ok(password) = std::str::from_utf8(password) else {
-        return (Outcome::Failed(Failure::WrongPsk), profile); // a WPA2 passphrase is printable ASCII
+    let text = std::str::from_utf8;
+    let eap = match enterprise.map(|e| (text(&e.username), text(&e.domain))) {
+        None => Ok(None),
+        Some((Ok(username), Ok(domain))) => Ok(Some(Eap { username, domain })),
+        Some(_) => Err(()),
     };
-    let outcome =
-        run(ssid, password, interface, profile).unwrap_or(Outcome::Failed(Failure::NmcliError));
+    let (Ok(password), Ok(eap)) = (text(password), eap) else {
+        return (Outcome::Failed(Failure::WrongPsk), profile); // NetworkManager takes text only
+    };
+    let outcome = run(ssid, password, eap.as_ref(), interface, profile)
+        .unwrap_or(Outcome::Failed(Failure::NmcliError));
     if !matches!(outcome, Outcome::Connected { .. }) {
         roll_back(profile, current, interface);
     }
@@ -149,6 +163,7 @@ fn delete(bus: &Connection, uuid: &str) -> Result<(), dbus::Error> {
 fn run(
     ssid: &[u8],
     password: &str,
+    eap: Option<&Eap>,
     interface: Option<&str>,
     uuid: &str,
 ) -> Result<Outcome, dbus::Error> {
@@ -172,7 +187,7 @@ fn run(
         NM,
         "AddAndActivateConnection",
         (
-            settings(ssid, password, false, uuid),
+            settings(ssid, password, eap, false, uuid),
             device,
             Path::from("/"),
         ),
@@ -184,7 +199,7 @@ fn run(
         let enabled: Result<(), dbus::Error> = bus.with_proxy(NM, &profile, CALL).method_call(
             PROFILE,
             "Update",
-            (settings(ssid, password, true, uuid),),
+            (settings(ssid, password, eap, true, uuid),),
         );
         if enabled.is_err() {
             outcome = Outcome::Failed(Failure::NmcliError);
@@ -196,6 +211,7 @@ fn run(
 fn settings(
     ssid: &[u8],
     password: &str,
+    eap: Option<&Eap>,
     autoconnect: bool,
     uuid: &str,
 ) -> HashMap<&'static str, PropMap> {
@@ -206,12 +222,16 @@ fn settings(
             .map(|(key, value)| (key.to_string(), value))
             .collect()
     };
-    HashMap::from([
+    let security = match eap {
+        None => vec![("key-mgmt", text("wpa-psk")), ("psk", text(password))],
+        Some(_) => vec![("key-mgmt", text("wpa-eap"))],
+    };
+    let mut settings = HashMap::from([
         (
             "connection",
             section(vec![
                 ("type", text("802-11-wireless")),
-                ("id", text("iot-provisioned")),
+                ("id", text("sensor-provisioned")),
                 ("uuid", text(uuid)),
                 ("autoconnect", Variant(Box::new(autoconnect))),
             ]),
@@ -223,12 +243,23 @@ fn settings(
                 ("mode", text("infrastructure")),
             ]),
         ),
-        (
-            "802-11-wireless-security",
-            section(vec![("key-mgmt", text("wpa-psk")), ("psk", text(password))]),
-        ),
+        ("802-11-wireless-security", section(security)),
         ("ipv4", section(vec![("method", text("auto"))])),
-    ])
+    ]);
+    if let Some(eap) = eap {
+        settings.insert(
+            "802-1x",
+            section(vec![
+                ("eap", Variant(Box::new(vec!["peap".to_string()]))),
+                ("phase2-auth", text("mschapv2")),
+                ("identity", text(eap.username)),
+                ("password", text(password)),
+                ("system-ca-certs", Variant(Box::new(true))),
+                ("domain-suffix-match", text(eap.domain)),
+            ]),
+        );
+    }
+    settings
 }
 
 fn wifi_device(
@@ -319,13 +350,42 @@ mod tests {
 
     #[test]
     fn a_non_utf8_password_fails_without_touching_networkmanager() {
-        let (outcome, _) = activate(b"Ward-3", &[0xff; 8], Some("none"), None);
+        let (outcome, _) = activate(b"Ward-3", &[0xff; 8], None, Some("none"), None);
+        assert_eq!(outcome, Outcome::Failed(Failure::WrongPsk));
+        let username = Enterprise {
+            username: vec![0xff],
+            domain: b"radius.example.org".to_vec(),
+        };
+        let (outcome, _) = activate(b"Ward-3", b"secret", Some(&username), Some("none"), None);
         assert_eq!(outcome, Outcome::Failed(Failure::WrongPsk));
     }
 
     #[test]
+    fn enterprise_settings_check_the_radius_server() {
+        let eap = Eap {
+            username: "noe",
+            domain: "radius.example.org",
+        };
+        let settings = settings(b"Ward-3", "secret", Some(&eap), false, PROFILE_UUIDS[0]);
+        let key = |section: &str, key: &str| settings[section][key].0.as_str().map(str::to_string);
+        assert_eq!(
+            key("802-11-wireless-security", "key-mgmt").as_deref(),
+            Some("wpa-eap")
+        );
+        assert!(!settings["802-11-wireless-security"].contains_key("psk"));
+        assert_eq!(key("802-1x", "identity").as_deref(), Some("noe"));
+        assert_eq!(key("802-1x", "password").as_deref(), Some("secret"));
+        assert_eq!(key("802-1x", "phase2-auth").as_deref(), Some("mschapv2"));
+        assert_eq!(
+            key("802-1x", "domain-suffix-match").as_deref(),
+            Some("radius.example.org")
+        );
+        assert_eq!(settings["802-1x"]["system-ca-certs"].0.as_u64(), Some(1));
+    }
+
+    #[test]
     fn settings_ask_for_wpa_psk_with_dhcp() {
-        let settings = settings(b"Ward-3", "correct horse", false, PROFILE_UUIDS[1]);
+        let settings = settings(b"Ward-3", "correct horse", None, false, PROFILE_UUIDS[1]);
         let key = |section: &str, key: &str| settings[section][key].0.as_str().map(str::to_string);
         assert_eq!(
             key("802-11-wireless-security", "key-mgmt").as_deref(),

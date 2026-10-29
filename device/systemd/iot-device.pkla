@@ -1,7 +1,0 @@
-# polkit 0.105 (Ubuntu 22.04): lets the iot service create, activate and delete its NetworkManager profile.
-[IoT device service]
-Identity=unix-user:iot
-Action=org.freedesktop.NetworkManager.settings.modify.system;org.freedesktop.NetworkManager.network-control
-ResultAny=yes
-ResultInactive=yes
-ResultActive=yes

@@ -4,7 +4,7 @@
 
 <h1 align="center">Provide.</h1>
 
-<p align="center"><strong>Offline app to provide Wi-Fi credentials to IoT sensors, securely and frictionless.</strong></p>
+<p align="center"><strong>Offline app to provide Wi-Fi credentials to sensors, securely and frictionless.</strong></p>
 
 <p align="center">
   <a href="#what-provide-does">What it does</a> ·
@@ -28,12 +28,12 @@
 
 ## What Provide. does
 
-Open the app in the hallway and it lists the IoT sensors around you. Add your technician code and the site's Wi-Fi
+Open the app in the hallway and it lists the sensors around you. Add your technician code and the site's Wi-Fi
 once, tap **Set up all ready**, and watch the sensors join the network, six at a time. A sensor that fails tells you
 why in plain words, and one tap retries it.
 
 No internet, no shared network, no label to scan: the phone talks to the sensors over Bluetooth. Each sensor proves
-it is the before the app sends the password, and the password travels encrypted. The same app runs on iPhone and
+it is the manufacturer's before the app sends the password, and the password travels encrypted. The same app runs on iPhone and
 desktop; a Rust service runs on the sensor.
 
 ## Watch the demo
@@ -184,7 +184,7 @@ window keeps Provide. available in the menu bar; right-click the icon and choose
 
 <table>
   <tr>
-    <td align="center"><img src="docs/media/menu-panel-ready.png" alt="Provide.'s menu-bar panel on macOS: three real IoT sensors, ready to set up" width="320" /></td>
+    <td align="center"><img src="docs/media/menu-panel-ready.png" alt="Provide.'s menu-bar panel on macOS: three real sensors, ready to set up" width="320" /></td>
     <td align="center"><img src="docs/media/menu-panel-set-up.png" alt="The same panel once the three sensors joined the Wi-Fi: each offers Reconfigure" width="320" /></td>
   </tr>
   <tr>
@@ -205,7 +205,7 @@ A technician walks into a hospital with sensors that have no screen and no netwo
 <table>
   <tr>
     <td align="center" width="50%"><img src="docs/media/setup/iphone.jpg" alt="iPhone running Provide., one real sensor set up" width="400" /><br/><b>iPhone 15 Pro</b> · the technician's phone</td>
-    <td align="center" width="50%"><img src="docs/media/setup/macbook.jpg" alt="MacBook running the Provide. desktop app and the iOS Simulator" width="400" /><br/><b>MacBook</b> · desktop app and the workshop</td>
+    <td align="center" width="50%"><img src="docs/media/setup/macbook.jpg" alt="MacBook running the Provide. desktop app and the iOS Simulator" width="400" /><br/><b>MacBook</b> · desktop app and the manufacturer's workshop</td>
   </tr>
   <tr>
     <td align="center"><img src="docs/media/setup/noe-lab.jpg" alt="noe-lab laptop, thermal printer and internet box, annotated" width="400" /><br/><b>noe-lab</b> · Ubuntu device, QR printer, site Wi-Fi</td>
@@ -216,9 +216,9 @@ A technician walks into a hospital with sensors that have no screen and no netwo
 | Machine | What it did |
 | --- | --- |
 | **iPhone 15 Pro** (iOS 27) | Code import, site Wi-Fi from its QR code, real setups. |
-| **MacBook** (macOS) | Desktop app. Also the workshop: certifies sensors, issues technician codes (`iot-workshop`). |
+| **MacBook** (macOS) | Desktop app. Also the manufacturer's workshop: certifies sensors, issues technician codes (`sensor-workshop`). |
 | **noe-lab** (Ubuntu 22.04, x86-64) | First real device: joined the Wi-Fi from the iPhone. Also hosts the 200-sensor bench. |
-| **Jetson 019** (Ubuntu 22.04, ARM64) | Staged like a production sensor as `IOT-7B09F20339`: setups from the Mac and the iPhone, reconfiguration. |
+| **Jetson 019** (Ubuntu 22.04, ARM64) | Staged like a production sensor as `SENSOR-7B09F20339`: setups from the Mac and the iPhone, reconfiguration. |
 | **Internet box** (WPA2-Personal) | The site network the sensors join. |
 
 ## Option considered
@@ -237,30 +237,30 @@ A technician walks into a hospital with sensors that have no screen and no netwo
 | --- | --- |
 | **Bluetooth pairing** (the phone's "Pair this device?") | Dropped. The sensor has no screen to show a code, so pairing cannot check which device is on the other end: a fake sensor could receive the password. |
 | **A QR label on each sensor**, scanned before setup | Dropped after I built it: scanning 200 labels takes too long, and each label puts a secret in a patient room. |
-| **An encrypted channel with certificates** ([Noise](https://noiseprotocol.org/noise.html)) | **Chosen.** The sensor proves it is the with a certificate; the technician proves it with a code. Only then does the app send the password, encrypted. |
+| **An encrypted channel with certificates** ([Noise](https://noiseprotocol.org/noise.html)) | **Chosen.** The sensor proves it is the manufacturer's with a certificate; the technician proves it with a code. Only then does the app send the password, encrypted. |
 
-### Compared with the current process
+### Compared with the manufacturer's current process
 
-the installers already set up Wi-Fi from a phone over Bluetooth: *WiFi Broadcast* in the IoT Alerts app
-([installation manual](https://docs.example.com/hubfs/Deployment%20Templates/IoT_Installation_Manual.pdf), v4.0).
+The manufacturer's installers already set up Wi-Fi from a phone over Bluetooth: *WiFi Broadcast* in the manufacturer's alerts app
+(installation manual, v4.0).
 The manual does not describe how the broadcast protects the password, so the "not documented" cells need checking
-with IoT.
+with the manufacturer.
 
-| | IoT today (WiFi Broadcast) | Provide. |
+| | The manufacturer today (WiFi Broadcast) | Provide. |
 | --- | --- | --- |
 | **Channel** | Bluetooth, phone within 3 m | Bluetooth, phone within a few metres |
-| **Who receives the password** | Edge units nearby; checks not documented | Only an Edge that proves it is the, encrypted |
+| **Who receives the password** | Edge units nearby; checks not documented | Only an Edge that proves it is the manufacturer's, encrypted |
 | **Who may configure an Edge** | Installer signed in with an activation code; check on the Edge not documented | A phone with a technician code the Edge verifies |
 | **Result** | *Devices* tab, once the Edge is online | Each Edge answers over Bluetooth: connected with its IP, or the reason it failed |
 | **Wrong password** | The Edge stays offline | The Edge returns to its previous network and says why |
 | **Room mapping** | QR code on each Edge, linked to a bed | Left out on purpose: a scan per sensor would slow a wing of 200. Smith can map each sensor ID to its room once it is online |
-| **Wi-Fi settings** | Per department, from the platform | Per site, typed or scanned in the app |
+| **Wi-Fi settings** | Per department, from the manufacturer's platform | Per site, typed or scanned in the app |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A["Provide.<br/>iPhone / desktop"] <-->|"Bluetooth LE<br/>encrypted, both sides checked"| B["IoT device<br/>Rust · BlueZ"]
+    A["Provide.<br/>iPhone / desktop"] <-->|"Bluetooth LE<br/>encrypted, both sides checked"| B["Sensor device<br/>Rust · BlueZ"]
     B -->|"D-Bus"| C[NetworkManager]
     C -->|"WPA2 + DHCP"| D[Facility Wi-Fi]
 ```
@@ -276,8 +276,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - **Encrypted channel.** Each session gets fresh keys ([Noise](https://noiseprotocol.org/noise.html)). A recorded
   session cannot be read or replayed.
-- **The sensor proves it is genuine** with a certificate from IoT. The app checks it before sending anything.
-- **The technician proves they are authorized** with a code from IoT, per customer, valid 5 days at most.
+- **The sensor proves it is genuine** with a certificate from the manufacturer. The app checks it before sending anything.
+- **The technician proves they are authorized** with a code from the manufacturer, per customer, valid 5 days at most.
 - **Then the SSID and password go out**, encrypted, and nothing logs them.
 
 Threats and limits: [docs/SECURITY.md](docs/SECURITY.md).
@@ -288,7 +288,7 @@ Threats and limits: [docs/SECURITY.md](docs/SECURITY.md).
 
 | Stack | Why |
 | --- | --- |
-| **Rust** | the fleet runs Rust, so the device code fits it. Memory safety for a daemon that parses radio input from anyone in range. |
+| **Rust** | The manufacturer's fleet runs Rust, so the device code fits it. Memory safety for a daemon that parses radio input from anyone in range. |
 | **BlueZ** through `bluer` | Ubuntu's Bluetooth stack. |
 | **NetworkManager over D-Bus** | Ubuntu manages Wi-Fi with it, so the join is real. The password stays off the command line. |
 | **`snow`** (Noise) and **`ed25519-dalek`** | Known implementations: I wrote no cryptography. |
@@ -302,11 +302,11 @@ Threats and limits: [docs/SECURITY.md](docs/SECURITY.md).
 | **`@noble`** cryptography | Audited, pure JavaScript. |
 | iOS Keychain behind Face ID | A lost phone keeps the code and site passwords locked. |
 
-### Workshop (the side, offline)
+### Workshop (the manufacturer's side, offline)
 
 | Stack | Why |
 | --- | --- |
-| **Rust CLI** `iot-workshop`, its own crate on top of the device's protocol library | The workshop and the sensor share one certificate and code format, so they cannot disagree on it. |
+| **Rust CLI** `sensor-workshop`, its own crate on top of the device's protocol library | The workshop and the sensor share one certificate and code format, so they cannot disagree on it. |
 | **Two Ed25519 authorities**, kept off the sensors | One certifies sensors, one issues technician codes. |
 
 ## Why an app, not a website
@@ -325,7 +325,7 @@ A web page needs no install, but it fails the challenge:
   checks their certificate and sends the Wi-Fi encrypted, one sensor or a whole wing.
 - **[The device](device/)**: a Rust service for the sensor, on Ubuntu. It answers over Bluetooth, checks the
   technician's code and joins the Wi-Fi through NetworkManager.
-- **[The workshop](workshop/)**: `iot-workshop`, the Rust CLI IoT runs on its own laptop. It keeps the two
+- **[The workshop](workshop/)**: `sensor-workshop`, the Rust CLI the manufacturer runs on its own laptop. It keeps the two
   authority keys, deploys and certifies sensors over SSH, and issues technician codes.
 - **Tests** on both sides: Noise vectors shared by the device and the app, refusal cases, the batch queue, a
   200-sensor simulation.
@@ -361,9 +361,9 @@ from any folder. Sign in with `gh auth login` using an account with access to th
 
 ```sh
 cargo install --path workshop --locked        # first build: 1-2 minutes
-iot-workshop init                           # once, for every customer: two authorities, their public keys
-iot-workshop deploy user@192.168.55.1 --customer "Noé Home"
-iot-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
+sensor-workshop init                           # once, for every customer: two authorities, their public keys
+sensor-workshop deploy user@192.168.55.1 --customer "Noé Home"
+sensor-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
 ```
 
 `deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It reads the
@@ -371,9 +371,9 @@ sensor's architecture, downloads the v1.1.0 Linux binaries to your laptop, check
 the tool and caches them. It then asks for the sensor's sudo password once, copies the binaries, runs the installer,
 has the sensor create its key, certifies that key for the customer, records your laptop's time as the sensor's
 earliest clock and starts the service. Add the Wi-Fi interface after the host (`deploy <ssh-host> wlo1`) to pin one;
-by default NetworkManager picks. `deploy` refuses a sensor that already runs the service: run `iot-workshop
+by default NetworkManager picks. `deploy` refuses a sensor that already runs the service: run `sensor-workshop
 uninstall <ssh-host>` first. It removes the service and the Wi-Fi the sensor was given, and moves the sensor's key to
-`/root/iot-backup`.
+`/root/sensor-backup`.
 
 You build nothing for Linux, on the laptop or on the sensor. The first deployment per architecture needs internet on
 the laptop; later ones use its cache. Keep the checkout in place after installing the tool: `deploy` reads the
@@ -382,9 +382,9 @@ installer from `device/`. For a local build or a sensor without SSH, see
 
 A customer is a name or an ID: `"Noé Home"` becomes `NOE-HOME`, the ID that certificates and codes carry. Leave out
 `--customer` and the tool offers the last customer again and waits for your yes. A script with no terminal must name
-the customer. `iot-workshop help` lists every command.
+the customer. `sensor-workshop help` lists every command.
 
-Copy the two public keys from `iot-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
+Copy the two public keys from `sensor-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
 `TECHNICIAN_AUTHORITY`) before you build the app.
 
 ### 2. Install the app on a phone
@@ -414,20 +414,30 @@ Provide. in `/Applications`. **Linux** (not tested): `npm run desktop:build`. Wi
 ### 4. Set up the sensor
 
 Open Provide. with no DEMO badge, scan the technician code, enter the site Wi-Fi, then tap **Set up** on
-`IOT-XXXXXXXXXX`. The card ends on **Device connected** with the sensor's address; on Ubuntu,
-`nmcli connection show --active` lists `iot-provisioned`.
+`SENSOR-XXXXXXXXXX`. The card ends on **Device connected** with the sensor's address; on Ubuntu,
+`nmcli connection show --active` lists `sensor-provisioned`.
 
 Troubleshooting, tests and details: [docs/SETUP.md](docs/SETUP.md).
 
 ## Tests
 
-What the automated tests check ([commands](docs/SETUP.md#tests)):
+GitHub Actions runs the automated suites on every push ([commands](docs/SETUP.md#tests)). The other rows ran by hand
+and left a trace in [evidence/](evidence/), with the simulation runs.
 
-- **Interoperability.** The app replays the device's reference messages byte for byte.
-- **Refusals.** A fake sensor, another customer or an expired code stops the session before the password leaves.
-- **Device.** One phone at a time, Wi-Fi fallback, safe retries.
-- **Scale.** A 200-sensor batch, in the device simulation and in the app's queue.
-- **Desktop.** The Bluetooth bridge reaches the service and nothing else.
+| Type | What it checks | Where | How |
+| --- | --- | --- | --- |
+| **Attacks on the protocol** | A fake sensor (forged reply, another ID, another authority, another key) never receives the technician code. A tampered, expired, other-customer or stolen code is refused. Altered, truncated, replayed or reordered messages close the session. | App and sensor | Automated |
+| **Interoperability** | The app replays the sensor's Noise messages byte for byte, produced by `snow`. | App and sensor | Automated |
+| **Hostile input** | Malformed, oversized or early messages, late replies, workshop arguments that try to run commands. | Sensor, workshop | Automated |
+| **Sensor service** | One phone at a time, the advertised state, the clock floor, the NetworkManager profile, the return to the previous network after a failed join. | Sensor (Ubuntu, BlueZ) | Automated |
+| **Host audit** | Commands under a deadline, output never printed, no shell injection. | Sensor | Automated |
+| **App logic** | Batch queue, retry of an unknown result, technician code, Wi-Fi QR codes, sites. | App | Automated |
+| **Desktop bridges** | The Bluetooth bridge scans the manufacturer's service only, the menu bar, the macOS keychain. | macOS | Automated |
+| **Workshop** | Every downloaded sensor binary matches the SHA-256 pinned in the tool. `init`, `issue` and `deploy` arguments. | Workshop CLI | Automated |
+| **Scale** | 200 sensors in one batch, a soak run, benchmarks. | Device simulation, app queue | [Simulated](evidence/simulation/) |
+| **Real setup** | iPhone and Mac set up two Jetsons and an Ubuntu PC, alone and three at a time; reconfiguration; Test (hello, world). | Real hardware | [By hand](evidence/real/) |
+| **Radio capture** | btmon on the sensor during two setups: the SSID never appears in clear, no Bluetooth pairing. | Real hardware, earlier protocol version | [By hand](evidence/real/real-join.txt) |
+| **Workshop deploy** | `deploy`, `uninstall` and reset on a Jetson over USB. | Real hardware | [By hand](evidence/real/) |
 
 ## Compatibility
 
@@ -435,7 +445,7 @@ What the automated tests check ([commands](docs/SETUP.md#tests)):
 | --- | --- | --- | --- |
 | **Device** | Ubuntu 22.04 on x86-64 and on ARM64 (Jetson) | Other Linux with BlueZ, NetworkManager and systemd | Bluetooth adapters without BLE peripheral mode |
 | **Configurator** | iPhone (iOS 27), macOS | Android, Windows and Linux desktop | A plain browser: demo only |
-| **Wi-Fi network** | WPA2-Personal | WPA3-Personal | Enterprise (802.1X) and captive portals |
+| **Wi-Fi network** | WPA2-Personal | WPA3-Personal; WPA2-Enterprise with a username (PEAP/MSCHAPv2) | EAP-TLS, a server certificate from a private CA, captive portals |
 
 On desktop, the app keeps the technician code and site passwords in the system keychain (macOS Keychain, Windows
 Credential Manager, Secret Service on Linux), behind the account's own lock instead of Face ID.
@@ -450,7 +460,7 @@ Credential Manager, Secret Service on Linux), behind the account's own lock inst
 </p>
 
 The MVP worked: on October 20 an iPhone set up a real device after scanning its QR label. The same evening I
-replaced labels with IoT certificates, since scanning 200 labels does not fit a hospital wing.
+replaced labels with device certificates, since scanning 200 labels does not fit a hospital wing.
 
 ## Questions
 
@@ -462,7 +472,7 @@ Measured on simulated sensors.
 about 4. I stopped at six because the links share one Bluetooth radio: more links mean slower connects and more
 failures. The real limit still needs measuring on 200 sensors.
 
-**What if a fake sensor sits in the hallway?** It has no IoT certificate for its key, so the app stops before
+**What if a fake sensor sits in the hallway?** It has no device certificate for its key, so the app stops before
 sending the code or the password.
 
 **What if a technician code leaks?** It works for its customers until it expires: one day by default, five at
@@ -491,25 +501,25 @@ the wing and the app picks up sensors on the way. Options to go further, none bu
 - **Several technicians at once.** Smith splits the floors between them; each phone sets up its own share.
 - **Relay.** Sensors already online pass the Wi-Fi to their neighbours over Bluetooth, with the same certificate
   checks. Each sensor then holds credentials worth stealing.
-- **802.1X.** The hospital network trusts each sensor's IoT certificate, and sensors join at power-on with no phone.
+- **802.1X.** The hospital network trusts each sensor's device certificate, and sensors join at power-on with no phone.
   The hospital's IT has to run it.
 
-**How could Provide. fit the current process?** the
-[installation manual](https://docs.example.com/hubfs/Deployment%20Templates/IoT_Installation_Manual.pdf) (v4.0) already
-uses a phone and Bluetooth: the installer signs in to the IoT Alerts app with a one-time activation code, scans the
+**How could Provide. fit the manufacturer's current process?** The manufacturer's
+installation manual (v4.0) already
+uses a phone and Bluetooth: the installer signs in to the manufacturer's alerts app with a one-time activation code, scans the
 QR code on the back of each Edge to link it to a bed, and turns on *WiFi Broadcast* to share the department's
 network with the Edge units nearby. Provide. would slot into that last step:
 
-- **Same app, same flow.** The Alerts app runs Provide.'s exchange instead of the broadcast. The installer's IoT
+- **Same app, same flow.** The Alerts app runs Provide.'s exchange instead of the broadcast. The installer's manufacturer
   account replaces the technician code, and the department's Wi-Fi settings replace the site form.
-- **Checked, targeted, confirmed.** The phone sends the password only to an Edge that proves it is the, and each
+- **Checked, targeted, confirmed.** The phone sends the password only to an Edge that proves it is the manufacturer's, and each
   Edge reports its own result in the *Devices* tab.
-- **Fleet onboarding.** [Smith](https://docs.smith.example.com) approves a new device by hand today; the Edge's IoT
+- **Fleet onboarding.** Smith approves a new device by hand today; the Edge's device
   certificate could let Smith accept it on its first check-in.
 
-**What would Provide. add to the current process?** A check of the Edge before it gets the password, a check
+**What would Provide. add to the manufacturer's current process?** A check of the Edge before it gets the password, a check
 of the installer on the Edge, and a result per Edge even when it fails: see
-[the comparison](#compared-with-iots-current-process).
+[the comparison](#compared-with-the-manufacturers-current-process).
 
 ## Requirements map
 
@@ -533,11 +543,14 @@ of the installer on the Edge, and a result per Edge even when it fails: see
 - **The sensor's key sits in a file** on an unencrypted disk. A stolen sensor gives up its key and the site password.
 - **No revocation.** A leaked technician code works until it expires, 5 days at most, and the app cannot refuse a
   stolen sensor.
-- **One WPA2-Personal password per site.** Enterprise Wi-Fi (802.1X) is not supported.
+- **One set of Wi-Fi credentials per site.** A site has a shared password, or one username for 802.1X networks (PEAP
+  with MSCHAPv2): every sensor signs in with it. The sensor checks the server's certificate against the system CAs
+  and the server domain typed in the site, so a network whose server certificate comes from a private CA is refused.
+  The 802.1X path is not tested against a real RADIUS server.
 - **The customer is written into the sensor's certificate**, so moving a sensor to another customer needs a new
   certificate.
 - **No transfer between customers yet.** `deploy` refuses a sensor that already has the service, and
-  `iot-stage install` refuses to replace a certificate. `uninstall` then `deploy` gives the sensor a new key, a new ID
+  `sensor-stage install` refuses to replace a certificate. `uninstall` then `deploy` gives the sensor a new key, a new ID
   and a new customer. Moving a sensor while keeping its ID needs a procedure still to define: who authorizes it, and
   what happens to the old customer's Wi-Fi on the sensor.
 - **Customer IDs come from names.** "Hôpital Saint-Louis" and "Hopital Saint Louis" both give `HOPITAL-SAINT-LOUIS`,
@@ -553,11 +566,11 @@ of the installer on the Edge, and a result per Edge even when it fails: see
    [docs/REVOCATION.md](docs/REVOCATION.md).
 3. Connect to Smith: accept certified sensors on first check-in, push revocation lists to sensors in service, map
    sensors to rooms, upload setup results.
-4. Give each sensor its own Wi-Fi credentials (EAP-TLS with its IoT certificate).
+4. Give each sensor its own Wi-Fi credentials (EAP-TLS with its device certificate).
 5. Measure on real sensors: the link limit per phone, a batch of 200, a radio capture.
 6. Ship signed builds (TestFlight, notarized desktop app).
 7. Run Android and the Windows and Linux desktop builds on hardware.
-8. Move the exchange into the IoT Alerts app, in place of *WiFi Broadcast*.
+8. Move the exchange into the manufacturer's alerts app, in place of *WiFi Broadcast*.
 
 ## Pairing time
 
@@ -572,3 +585,8 @@ the tap to the last **Device connected**. Details and method:
 
 The Bluetooth part is short: the Noise handshake and the technician check take 0.12 s, the encrypted Wi-Fi credentials
 another 0.12 s (median of 13 sessions on noe-lab). The sensor joining the Wi-Fi takes the rest, 5.9 s on noe-lab.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md): free to use, change and share for any non-commercial purpose. Commercial
+use is not allowed.

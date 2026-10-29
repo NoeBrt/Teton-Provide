@@ -69,7 +69,7 @@ export function MenuPanel() {
             : state.refresh === 'updated' ? 'List updated' : `${done} set up · ${failed} errors · ${state.sensors.length - done - failed} not set up`}
       </Text>
       <ScrollView style={s.list} contentContainerStyle={s.listContent}>
-        {state?.sensors.length === 0 && <Text style={s.empty}>{state.bluetooth === 'Bluetooth on' ? 'Looking for IoT sensors…\nKeep them within a few metres.' : state.bluetooth}</Text>}
+        {state?.sensors.length === 0 && <Text style={s.empty}>{state.bluetooth === 'Bluetooth on' ? 'Looking for sensors…\nKeep them within a few metres.' : state.bluetooth}</Text>}
         {state?.sensors.map(sensor => (
           <View key={sensor.id} style={s.sensor}>
             <Pressable style={s.grow} accessibilityRole="button" accessibilityLabel={`Open ${sensor.name}`} onPress={() => action({ kind: 'open', id: sensor.id })}>

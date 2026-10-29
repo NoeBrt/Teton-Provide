@@ -16,8 +16,9 @@ const passwordKey = (id: string) => `site-password-${id}`;
 const STORED = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const NB = 'Wi‑Fi';
 
+const strings = (value: unknown, keys: string[]) => keys.every(key => typeof (value as Record<string, unknown> | null)?.[key] === 'string');
 const isSite = (value: unknown): value is Site =>
-  ['id', 'name', 'ssid'].every(key => typeof (value as Record<string, unknown> | null)?.[key] === 'string');
+  strings(value, ['id', 'name', 'ssid']) && ((value as Site).enterprise === undefined || strings((value as Site).enterprise, ['username', 'domain']));
 
 export async function loadSites(): Promise<{ sites: Site[]; activeId: string | null }> {
   await SecureStore.deleteItemAsync(LEGACY).catch(() => {});
@@ -87,17 +88,23 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
   const [editing, setEditing] = useState<Site | 'new' | null>(sites.length === 0 ? 'new' : null);
   const [name, setName] = useState('');
   const [ssid, setSsid] = useState('');
+  const [username, setUsername] = useState(''); // empty: a shared password (WPA2-Personal)
+  const [domain, setDomain] = useState('');
   const [password, setPassword] = useState('');
   const [shown, setShown] = useState(false); // a mistyped password is the most likely failure: let the technician check it
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false); // reading the network's Wi-Fi QR code instead of typing it
   const ssidField = useRef<TextInput>(null);
+  const usernameField = useRef<TextInput>(null);
+  const domainField = useRef<TextInput>(null);
   const passwordField = useRef<TextInput>(null);
 
   const edit = (site: Site | 'new') => {
     setEditing(site);
     setName(site === 'new' ? '' : site.name);
     setSsid(site === 'new' ? '' : site.ssid);
+    setUsername(site === 'new' ? '' : site.enterprise?.username ?? '');
+    setDomain(site === 'new' ? '' : site.enterprise?.domain ?? '');
     setPassword('');
     setError(null);
     setScanning(false);
@@ -108,6 +115,8 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
     const result = parseWifiQr(data);
     if ('error' in result) return setError(result.error);
     setSsid(result.ssid);
+    setUsername(''); // a Wi-Fi QR code carries a shared password
+    setDomain('');
     setPassword(result.password);
     setError(null);
     setScanning(false);
@@ -115,10 +124,11 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
 
   const save = async () => {
     if (!name.trim()) return setError('Give the site a name, for example the building.');
-    const problem = credentialError(ssid, password);
+    const enterprise = username.trim() ? { username: username.trim(), domain: domain.trim().toLowerCase() } : undefined;
+    const problem = credentialError(ssid, password, enterprise);
     if (problem) return setError(problem);
     if (!SecureStore.canUseBiometricAuthentication()) return setError('Turn on Face ID in Settings: saved site passwords are protected by it.');
-    const site = { id: editing === 'new' || !editing ? newId() : editing.id, name: name.trim(), ssid };
+    const site: Site = { id: editing === 'new' || !editing ? newId() : editing.id, name: name.trim(), ssid, ...(enterprise && { enterprise }) };
     try {
       onSaved(await saveSite(sites, site, password), site, password);
     } catch {
@@ -143,7 +153,7 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
             <View key={site.id} style={[s.siteRow, site.id === activeId && s.siteActive]}>
               <Pressable style={s.grow} onPress={() => onPick(site)} accessibilityRole="button" accessibilityLabel={`Use ${site.name}`}>
                 <Text style={s.siteName} numberOfLines={2}>{site.name}</Text>
-                <Text style={s.text} numberOfLines={1}>{site.ssid}</Text>
+                <Text style={s.text} numberOfLines={1}>{site.enterprise ? `${site.ssid} · ${site.enterprise.username}` : site.ssid}</Text>
               </Pressable>
               <Pressable style={s.small} onPress={() => edit(site)} accessibilityRole="button" accessibilityLabel={`Edit ${site.name}`}>
                 <Text style={s.secondaryText}>Edit</Text>
@@ -180,7 +190,20 @@ export function SitesSheet({ visible, sites, activeId, newId, onClose, onPick, o
             onSubmitEditing={() => ssidField.current?.focus()} submitBehavior="submit" accessibilityLabel="Site name" />
           <Text style={s.label}>NETWORK NAME</Text>
           <TextInput ref={ssidField} style={s.input} value={ssid} onChangeText={setSsid} autoCapitalize="none" autoCorrect={false} placeholder="Ward-3"
-            returnKeyType="next" onSubmitEditing={() => passwordField.current?.focus()} submitBehavior="submit" accessibilityLabel="Network name" />
+            returnKeyType="next" onSubmitEditing={() => usernameField.current?.focus()} submitBehavior="submit" accessibilityLabel="Network name" />
+          <Text style={s.label}>USERNAME · OPTIONAL</Text>
+          <TextInput ref={usernameField} style={s.input} value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false}
+            textContentType="username" placeholder="Only for a network with personal sign-in" returnKeyType="next"
+            onSubmitEditing={() => (username.trim() ? domainField : passwordField).current?.focus()} submitBehavior="submit" accessibilityLabel="Username, optional" />
+          {username.trim() !== '' && (
+            <>
+              <Text style={s.label}>SERVER DOMAIN</Text>
+              <TextInput ref={domainField} style={s.input} value={domain} onChangeText={setDomain} autoCapitalize="none" autoCorrect={false}
+                keyboardType="url" placeholder="radius.hospital.org" returnKeyType="next" onSubmitEditing={() => passwordField.current?.focus()}
+                submitBehavior="submit" accessibilityLabel="Server domain" />
+              <Text style={s.text}>The sensors join only if the network's sign-in server proves this name. Ask the site's IT team.</Text>
+            </>
+          )}
           <Text style={s.label}>PASSWORD</Text>
           <View style={s.row}>
             <TextInput ref={passwordField} style={[s.input, s.grow]} value={password} onChangeText={setPassword} secureTextEntry={!shown}

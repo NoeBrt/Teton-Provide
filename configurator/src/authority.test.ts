@@ -58,7 +58,7 @@ test('a token comes from its bare code, the code pasted with the old link prefix
   for (const text of bad) assert.equal(parseTokenText(text), null, text);
 });
 
-// The code `iot-workshop issue` prints (device/tests/noise_vectors.rs writes it as `code` with authority::code_text).
+// The code `sensor-workshop issue` prints (device/tests/noise_vectors.rs writes it as `code` with authority::code_text).
 test('the code the authority prints is read as is', () => {
   assert.match(vectors.code, /^[0-9a-f]+\.[0-9a-f]+$/, 'the bare code, no link prefix');
   const token = parseTokenText(vectors.code);

@@ -1,23 +1,23 @@
-// the two authorities, phone side (device/src/authority.rs on the device): the app checks a sensor's certificate
+// The manufacturer's two authorities, phone side (device/src/authority.rs on the device): the app checks a sensor's certificate
 // before anything secret leaves the phone, and reads and checks the technician token it imports.
 import { ed25519, x25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { concat } from './noise.ts';
 
-// The demo authorities' public keys (`iot-workshop public`); a deployment replaces them with its own.
+// The demo authorities' public keys (`sensor-workshop public`); a deployment replaces them with its own.
 export const DEVICE_AUTHORITY = fromHex('3ef5b95202435ad8eeb62f5aee0cdd62c31eb972039afee13cb10cd8eef96f06');
 export const TECHNICIAN_AUTHORITY = fromHex('2bdfed531076b0b78543ba46eb94796c4a790638aa04abb41e16c0cf313ee726');
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
-const DEVICE_CERT_DOMAIN = encoder.encode('iot-device-cert/1');
-const TECHNICIAN_TOKEN_DOMAIN = encoder.encode('iot-technician-token/2');
+const DEVICE_CERT_DOMAIN = encoder.encode('sensor-device-cert/1');
+const TECHNICIAN_TOKEN_DOMAIN = encoder.encode('sensor-technician-token/2');
 const CERTIFICATE_VERSION = 1;
 const TOKEN_VERSION = 2; // 2 added the holder key; version 1 tokens are refused as malformed
 const KEY_LEN = 32;
 const SIGNATURE_LEN = 64;
 const CUSTOMER = /^[A-Za-z0-9_-]{1,32}$/;
-// `iot-workshop issue` prints the bare code `<token hex>.<holder private key hex>`, imported only inside the app (scan or
+// `sensor-workshop issue` prints the bare code `<token hex>.<holder private key hex>`, imported only inside the app (scan or
 // paste): a link would let another app claim the scheme and receive the code. Pasted with the old link prefix, it still reads.
 export const OLD_LINK = 'provide://technician/';
 
@@ -28,8 +28,8 @@ export function fromHex(hex: string): Uint8Array {
 
 export const toHex = (bytes: Uint8Array) => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 
-/** `IOT-` and 10 hex digits of SHA-256(static public key), as the sensor advertises it. */
-export const deviceId = (publicKey: Uint8Array) => `IOT-${toHex(sha256(publicKey).slice(0, 5)).toUpperCase()}`;
+/** `SENSOR-` and 10 hex digits of SHA-256(static public key), as the sensor advertises it. */
+export const deviceId = (publicKey: Uint8Array) => `SENSOR-${toHex(sha256(publicKey).slice(0, 5)).toUpperCase()}`;
 
 const text = (bytes: Uint8Array) => { try { return decoder.decode(bytes); } catch { return null; } };
 const signed = (bytes: Uint8Array, version: number) =>
@@ -40,7 +40,7 @@ const verified = (domain: Uint8Array, body: Uint8Array, signature: Uint8Array, a
 
 export type Certificate = { publicKey: Uint8Array; customer: string };
 
-/** `[1][public key 32][customer len][customer]` + signature. The certificate if the device authority signed it. */
+/** `[1][public key 32][customer len][customer]` + signature. The certificate if the manufacturer's device authority signed it. */
 export function verifyCertificate(bytes: Uint8Array, authority = DEVICE_AUTHORITY): Certificate | null {
   const parts = signed(bytes, CERTIFICATE_VERSION);
   if (!parts || parts.body.length < 1 + KEY_LEN + 1) return null;

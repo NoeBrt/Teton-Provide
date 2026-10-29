@@ -1,4 +1,4 @@
-Provide. sets up IoT sensors' Wi-Fi over Bluetooth, from a phone or a computer, with no internet.
+Provide. sets up sensors' Wi-Fi over Bluetooth, from a phone or a computer, with no internet.
 
 | File | Platform | Tested on hardware |
 | --- | --- | --- |
@@ -9,7 +9,7 @@ Provide. sets up IoT sensors' Wi-Fi over Bluetooth, from a phone or a computer, 
 
 The iPhone app is not here: it installs from Xcode (see the README).
 
-**Sensor setup from your laptop.** `iot-workshop deploy user@192.168.55.1 --customer "Noé Home"` now downloads
+**Sensor setup from your laptop.** `sensor-workshop deploy user@192.168.55.1 --customer "Noé Home"` now downloads
 the sensor's Linux binaries, checks their SHA-256 and caches them before copying them over SSH. No Rust compiler
 or checkout is needed on the sensor. Install the workshop tool from the latest `main` checkout (includes
 private-download support); see the README's "Try it" section.

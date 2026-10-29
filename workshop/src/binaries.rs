@@ -11,19 +11,19 @@ const REPOSITORY: &str = "NoeBrt/Teton-Provide";
 /// SHA-256 of each RELEASE asset, pinned here: a replaced release asset (with its published .sha256) is refused.
 const PINNED: [(&str, &str); 4] = [
     (
-        "iot-device-v1.1.0-linux-aarch64",
+        "sensor-device-v1.1.0-linux-aarch64",
         "62a1b7aa29786e6edb7e114a9953dd6688e32f33cbf2e8c21b82e4297dd588b4",
     ),
     (
-        "iot-stage-v1.1.0-linux-aarch64",
+        "sensor-stage-v1.1.0-linux-aarch64",
         "0f4d6047a5bbea2948b2c2f1a4536af5c69f89a3f1d37a4b26d012b12ac5395a",
     ),
     (
-        "iot-device-v1.1.0-linux-x86_64",
+        "sensor-device-v1.1.0-linux-x86_64",
         "7645f2d8bca8ca3157dfe70eed9cf4f26b88a50da53b943e041d0663e2dfa2d7",
     ),
     (
-        "iot-stage-v1.1.0-linux-x86_64",
+        "sensor-stage-v1.1.0-linux-x86_64",
         "c889d1f464311d6a87812b82ff134b58f391225ab31d39935bf19a0cace21a70",
     ),
 ];
@@ -86,7 +86,7 @@ fn prepare_with(
         if destination.is_file() {
             continue;
         }
-        let asset = format!("iot-{name}-{RELEASE}-linux-{arch}");
+        let asset = format!("sensor-{name}-{RELEASE}-linux-{arch}");
         eprintln!("Downloading {asset}");
         let bytes = fetch(&asset)?;
         let pin = pinned
@@ -116,7 +116,7 @@ mod tests {
 
     fn fixture(name: &str) -> PathBuf {
         let path =
-            std::env::temp_dir().join(format!("iot-binaries-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("sensor-binaries-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir(&path).unwrap();
         path
@@ -228,7 +228,7 @@ mod tests {
         fs::write(local.join("device"), b"incomplete local build").unwrap();
         assert!(
             prepare_test("aarch64", &root, |asset| {
-                if asset.starts_with("iot-stage-") {
+                if asset.starts_with("sensor-stage-") {
                     Err("network down".into())
                 } else {
                     release_asset(asset)
@@ -238,7 +238,7 @@ mod tests {
         );
         let path = prepare_test("aarch64", &root, |asset| {
             assert!(
-                asset.starts_with("iot-stage-"),
+                asset.starts_with("sensor-stage-"),
                 "reuse the verified device binary"
             );
             release_asset(asset)
@@ -253,7 +253,7 @@ mod tests {
     fn every_downloadable_asset_of_the_release_is_pinned() {
         for arch in ["aarch64", "x86_64"] {
             for name in ["device", "stage"] {
-                let asset = format!("iot-{name}-{RELEASE}-linux-{arch}");
+                let asset = format!("sensor-{name}-{RELEASE}-linux-{arch}");
                 assert!(
                     PINNED
                         .iter()

@@ -3,6 +3,11 @@ export const PROVISION_CHARACTERISTIC_UUID = '3c2c02fa-847e-480c-9f22-b239dfa524
 export const ATTEMPT_ID_LEN = 16;
 export const MAX_SSID = 32;
 export const PASSWORD_LEN = { min: 8, max: 63 }; // WPA2-Personal passphrase (IEEE 802.11i)
+export const ENTERPRISE_MAX = 255; // WPA2-Enterprise username and password: one length byte each
+export const MAX_DOMAIN = 253;
+
+/** WPA2-Enterprise (802.1X) sign-in; the sensor joins only if the RADIUS server's certificate names `domain`. */
+export type Enterprise = { username: string; domain: string };
 
 const encoder = new TextEncoder();
 
@@ -16,23 +21,33 @@ export type Outcome =
   | { state: 'unknown' };
 
 /** Checks what the technician typed before anything is encrypted; returns a message or null. */
-export function credentialError(ssid: string, password: string): string | null {
+export function credentialError(ssid: string, password: string, enterprise?: Enterprise): string | null {
   const ssidBytes = encoder.encode(ssid).length;
   const passwordBytes = encoder.encode(password).length;
   if (ssidBytes === 0) return 'Enter the Wi-Fi network name.';
   if (ssidBytes > MAX_SSID) return 'The network name is too long (32 bytes at most).';
+  if (enterprise) {
+    const usernameBytes = encoder.encode(enterprise.username).length;
+    const domainBytes = encoder.encode(enterprise.domain).length;
+    if (usernameBytes === 0) return 'Enter the username.';
+    if (usernameBytes > ENTERPRISE_MAX) return 'The username is too long (255 bytes at most).';
+    if (domainBytes === 0) return 'Enter the server domain, for example radius.hospital.org: the sensor checks the network is genuine with it.';
+    if (domainBytes > MAX_DOMAIN) return 'The server domain is too long (253 characters at most).';
+    if (passwordBytes === 0) return 'Enter the password.';
+    if (passwordBytes > ENTERPRISE_MAX) return 'The password is too long (255 bytes at most).';
+    return null;
+  }
   if (passwordBytes < PASSWORD_LEN.min) return 'The password needs at least 8 characters.';
   if (passwordBytes > PASSWORD_LEN.max) return 'The password is too long (63 characters at most).';
   return null;
 }
 
-/** `[1][attempt 16][ssid len][ssid][password len][password]` */
-export function provisionRequest(attempt: Uint8Array, ssid: string, password: string): Uint8Array {
-  const error = credentialError(ssid, password);
+/** `[1][attempt 16][ssid len][ssid][password len][password]`, then `[username len][username][domain len][domain]` for 802.1X */
+export function provisionRequest(attempt: Uint8Array, ssid: string, password: string, enterprise?: Enterprise): Uint8Array {
+  const error = credentialError(ssid, password, enterprise);
   if (error || attempt.length !== ATTEMPT_ID_LEN) throw new Error(error ?? 'bad attempt id');
-  const s = encoder.encode(ssid);
-  const p = encoder.encode(password);
-  return Uint8Array.from([1, ...attempt, s.length, ...s, p.length, ...p]);
+  const fields = [ssid, password, ...(enterprise ? [enterprise.username, enterprise.domain] : [])].map(f => encoder.encode(f));
+  return Uint8Array.from([1, ...attempt, ...fields.flatMap(f => [f.length, ...f])]);
 }
 
 /** `[2][attempt 16]` */

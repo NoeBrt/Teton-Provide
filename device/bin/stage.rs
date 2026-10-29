@@ -12,8 +12,8 @@
 
 use std::path::PathBuf;
 use std::process::ExitCode;
-use iot_provisioning::authority::{DeviceCertificate, device_id};
-use iot_provisioning::provision::{Identity, KeyPair, hex, unhex};
+use sensor_provisioning::authority::{DeviceCertificate, device_id};
+use sensor_provisioning::provision::{Identity, KeyPair, hex, unhex};
 
 const USAGE: &str = "usage: stage init STATE_DIRECTORY | stage install STATE_DIRECTORY CERTIFICATE_HEX TECHNICIAN_AUTHORITY_HEX";
 
@@ -52,7 +52,7 @@ fn init(dir: &std::path::Path) -> Result<(), String> {
         .map_err(|e| format!("cannot write the key: {e}"))?;
     println!("{} keyed in {}", device_id(&keys.public_key), dir.display());
     println!(
-        "public key (certify it with `iot-workshop certify`): {}",
+        "public key (certify it with `sensor-workshop certify`): {}",
         hex(&keys.public_key)
     );
     Ok(())

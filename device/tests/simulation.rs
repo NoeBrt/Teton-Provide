@@ -1,6 +1,6 @@
 use std::time::Duration;
-use iot_provisioning::protocol::{DEVICE_ID, REQUEST, RESPONSE};
-use iot_provisioning::simulation::{Device, Error, Fault};
+use sensor_provisioning::protocol::{DEVICE_ID, REQUEST, RESPONSE};
+use sensor_provisioning::simulation::{Device, Error, Fault};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 

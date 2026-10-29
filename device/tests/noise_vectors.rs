@@ -7,8 +7,8 @@
 use curve25519_dalek::MontgomeryPoint;
 use ed25519_dalek::SigningKey;
 use snow::Builder;
-use iot_provisioning::authority::{DeviceCertificate, TechnicianToken, code_text, device_id};
-use iot_provisioning::provision::{
+use sensor_provisioning::authority::{DeviceCertificate, TechnicianToken, code_text, device_id};
+use sensor_provisioning::provision::{
     NOISE_PARAMS, Outcome, PROLOGUE, REFUSED_EXPIRED, REFUSED_INVALID, Request, Response,
     TOKEN_ACCEPTED, TOKEN_REFUSED, hex,
 };
@@ -155,6 +155,7 @@ fn vectors() -> String {
                 attempt,
                 ssid: b"Ward-3".to_vec(),
                 password: b"correct horse".to_vec(),
+                enterprise: None,
             },
             Response {
                 attempt,

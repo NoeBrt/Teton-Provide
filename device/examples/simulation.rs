@@ -1,6 +1,6 @@
 use std::time::Duration;
-use iot_provisioning::protocol::{REQUEST, RESPONSE};
-use iot_provisioning::simulation::{Device, Error, Fault};
+use sensor_provisioning::protocol::{REQUEST, RESPONSE};
+use sensor_provisioning::simulation::{Device, Error, Fault};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("SIMULATION — in-memory software transport; no BLE or Wi-Fi");

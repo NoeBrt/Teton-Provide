@@ -35,7 +35,7 @@ function device(replies: number[][]) {
   return { link, writes };
 }
 
-const advertising = (name: string): Advertising => ({ manufacturerData: { ffff: { bytes: [1, ...hex(name.slice('IOT-'.length))] } } });
+const advertising = (name: string): Advertising => ({ manufacturerData: { ffff: { bytes: [1, ...hex(name.slice('SENSOR-'.length))] } } });
 
 const run = (link: BleLink, extra: SetupOptions = {}, sensor: string = vectors.deviceId, holder: Token = token, steps: string[] = []): Promise<SetupResult> =>
   setup(link, 'id', sensor ? advertising(sensor) : undefined, holder, 'Ward-3', 'correct horse', scripted(), step => steps.push(step), { ...options, ...extra });
@@ -56,8 +56,8 @@ test('an impostor never receives the token: forged reply, another advertised ID,
   forged[90] ^= 1; // inside the encrypted certificate
   const cases: [number[][], SetupOptions, string][] = [
     [[forged], {}, vectors.deviceId],
-    [[m2], {}, 'IOT-0000000000'], // a genuine certificate, but advertised under another sensor's ID
-    [[m2], { deviceAuthority: fromHex(vectors.technicianAuthority) }, vectors.deviceId], // not the device authority
+    [[m2], {}, 'SENSOR-0000000000'], // a genuine certificate, but advertised under another sensor's ID
+    [[m2], { deviceAuthority: fromHex(vectors.technicianAuthority) }, vectors.deviceId], // not the manufacturer's device authority
     [[hex(vectors.impostorReply)], {}, vectors.deviceId], // a copied genuine certificate, but the handshake proved another key
   ];
   for (const [replies, extra, sensor] of cases) {
@@ -155,7 +155,7 @@ test('a sensor that has not advertised its ID yet is not contacted, and the atte
 
 test('stale local name cannot block a valid manufacturer identity and certificate', async () => {
   const { link, writes } = device([m2, accepted, response1, response2]);
-  const result = await setup(link, 'id', { ...advertising(vectors.deviceId), localName: 'IOT-0000000000' },
+  const result = await setup(link, 'id', { ...advertising(vectors.deviceId), localName: 'SENSOR-0000000000' },
     token, 'Ward-3', 'correct horse', scripted(), () => {}, options);
   assert.equal(result.ok, true);
   assert.deepEqual(writes, [[0, ...m1], [1, ...m3], [1, ...request1], [1, ...request2]]);

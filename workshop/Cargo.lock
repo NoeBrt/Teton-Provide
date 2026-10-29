@@ -396,6 +396,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
+name = "sensor-provisioning"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "sha2",
+ "snow",
+]
+
+[[package]]
+name = "sensor-workshop"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "qrcode",
+ "sensor-provisioning",
+ "sha2",
+ "snow",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -503,26 +523,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "iot-provisioning"
-version = "0.1.0"
-dependencies = [
- "ed25519-dalek",
- "sha2",
- "snow",
-]
-
-[[package]]
-name = "iot-workshop"
-version = "0.1.0"
-dependencies = [
- "ed25519-dalek",
- "qrcode",
- "sha2",
- "snow",
- "iot-provisioning",
 ]
 
 [[package]]

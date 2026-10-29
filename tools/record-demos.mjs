@@ -8,7 +8,7 @@ const root = new URL('../evidence/tests/demos/', import.meta.url).pathname;
 await mkdir(root, { recursive: true });
 const browser = await chromium.launch({headless:true,...(process.argv[3] && {executablePath:process.argv[3]})});
 async function record(name, width, height) {
- const output=`/private/tmp/iot-gif-${name}`;
+ const output=`/private/tmp/sensor-gif-${name}`;
  await mkdir(output,{recursive:true});
  const context=await browser.newContext({viewport:{width,height},recordVideo:{dir:output,size:{width,height}}});
  await context.addInitScript(() => {
@@ -81,8 +81,8 @@ async function record(name, width, height) {
   const batchStart=at();
   await shot('fleet');
   await page.waitForTimeout(1800);
-  const row=page.getByRole('button',{name:/^IOT-.*Ready to set up/}).first();
-  const sensor=(await row.getAttribute('aria-label')).match(/^IOT-[0-9A-F]{10}/)[0];
+  const row=page.getByRole('button',{name:/^SENSOR-.*Ready to set up/}).first();
+  const sensor=(await row.getAttribute('aria-label')).match(/^SENSOR-[0-9A-F]{10}/)[0];
   await tap(row);
   await page.waitForTimeout(800);
   await shot('sensor');
@@ -116,7 +116,7 @@ async function record(name, width, height) {
   metadata.video=await video.path();
   await writeFile(`${root}${name}-capture.json`,JSON.stringify(metadata,null,2)+'\n');
   console.log(JSON.stringify(metadata));
- } catch(e) { await page.screenshot({path:`/private/tmp/iot-gif-${name}-failure.png`}); await context.close(); throw e; }
+ } catch(e) { await page.screenshot({path:`/private/tmp/sensor-gif-${name}-failure.png`}); await context.close(); throw e; }
 }
 try { await Promise.all([record('mobile',390,844),record('desktop',1280,800)]); }
 finally { await browser.close(); }

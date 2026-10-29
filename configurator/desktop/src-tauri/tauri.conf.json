@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Provide",
   "version": "1.0.0",
-  "identifier": "dev.iotchallenge.provide",
+  "identifier": "dev.sensorprovisioning.provide",
   "build": {
     "devUrl": "http://localhost:8081",
     "frontendDist": "../../dist",

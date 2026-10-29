@@ -106,7 +106,7 @@ export function TechnicianSheet({ visible, info, onClose, onSaved }: Props) {
           ? `New code: ${codeText(infoOf(replacing))}. It replaces the code of ${codeText(info)}.`
           : info
             ? `${codeText(info)}. Scan or paste a new code to replace it.`
-            : 'Sensors only accept a phone with a code from IoT. Scan the code IoT sent you, or paste it.'}
+            : 'Sensors only accept a phone with a code from the manufacturer. Scan the code the manufacturer sent you, or paste it.'}
       </Text>
       {replacing && info ? (
         <Pressable style={s.primary} onPress={() => save(replacing)} accessibilityRole="button"
@@ -136,7 +136,7 @@ export function TechnicianSheet({ visible, info, onClose, onSaved }: Props) {
   );
 }
 
-// The code is long (about 300 characters: the signature and the holder's key), so it is pasted whole, like a
+// The code is long (about 300 characters: the manufacturer's signature and the holder's key), so it is pasted whole, like a
 // recovery key, never typed or shown. Empty: a paste area (a transparent field over it takes the paste, or a long press and
 // Paste). Pasted: what the code is for (name, customers and expiry are not secret), or why it cannot be used.
 function CodeField({ text, onChangeText }: { text: string; onChangeText: (text: string) => void }) {
@@ -164,7 +164,7 @@ function CodeField({ text, onChangeText }: { text: string; onChangeText: (text: 
       <Text style={s.pasteHow}>{Platform.OS === 'web' ? `Click here, then ${PASTE_KEY}` : 'Press and hold here, then Paste'}</Text>
       <TextInput style={s.pasteInput} value={text} onChangeText={onChangeText} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         caretHidden autoComplete="off" textContentType="none" autoCapitalize="none" autoCorrect={false} spellCheck={false}
-        accessibilityLabel="Technician code" accessibilityHint="Paste the code IoT sent you; it stays hidden" />
+        accessibilityLabel="Technician code" accessibilityHint="Paste the code the manufacturer sent you; it stays hidden" />
     </View>
   );
 }

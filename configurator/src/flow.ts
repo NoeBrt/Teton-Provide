@@ -15,7 +15,7 @@ export type Action =
 /** A code past its expiry counts as missing: the sensor would refuse it anyway. */
 export const expired = (code: { expires: number }) => code.expires <= Date.now() / 1000;
 // Which network an attempt was sent with, as a digest: the password stays here no longer than the app holds it.
-const networkKey = (site: SiteNetwork) => toHex(sha256(new TextEncoder().encode(JSON.stringify([site.ssid, site.password]))));
+const networkKey = (site: SiteNetwork) => toHex(sha256(new TextEncoder().encode(JSON.stringify([site.ssid, site.password, site.enterprise ?? null]))));
 
 export class SetupFlow {
   network: SiteNetwork | null;

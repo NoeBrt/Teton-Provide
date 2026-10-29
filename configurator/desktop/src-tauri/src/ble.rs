@@ -18,23 +18,23 @@ use uuid::Uuid;
 const REPORT_EVERY: Duration = Duration::from_millis(250);
 /// The only service the page may scan for, read or write (configurator/src/probe.ts SERVICE_UUID): a script in the
 /// page cannot reach any other Bluetooth device's data through this bridge.
-const IOT_SERVICE: Uuid = Uuid::from_u128(0x3b0a90ce_9564_40d1_b96b_14cf8858aba3);
+const SENSOR_SERVICE: Uuid = Uuid::from_u128(0x3b0a90ce_9564_40d1_b96b_14cf8858aba3);
 
-/// A scan the page asks for: IoT sensors only (an empty filter would list every device around).
+/// A scan the page asks for: Sensors only (an empty filter would list every device around).
 fn scan_filter(services: &[Uuid]) -> Result<(), String> {
-    if services == [IOT_SERVICE] {
+    if services == [SENSOR_SERVICE] {
         Ok(())
     } else {
-        Err("Only IoT sensors can be scanned for".into())
+        Err("Only sensors can be scanned for".into())
     }
 }
 
-/// A service the page reads or writes: the IoT service only.
-fn iot_service(service: Uuid) -> Result<(), String> {
-    if service == IOT_SERVICE {
+/// A service the page reads or writes: the sensor service only.
+fn sensor_service(service: Uuid) -> Result<(), String> {
+    if service == SENSOR_SERVICE {
         Ok(())
     } else {
-        Err(format!("Not a IoT service: {service}"))
+        Err(format!("Not a sensor service: {service}"))
     }
 }
 
@@ -163,7 +163,7 @@ fn listen(app: AppHandle, adapter: Adapter) {
             let Ok(Some(props)) = peripheral.properties().await else {
                 continue;
             };
-            if !props.services.contains(&IOT_SERVICE) {
+            if !props.services.contains(&SENSOR_SERVICE) {
                 continue; // other devices are neither reported nor remembered
             }
             if heard_at.len() > 1024 {
@@ -223,7 +223,7 @@ async fn characteristic(
     characteristic: &str,
 ) -> Result<btleplug::api::Characteristic, String> {
     let (service, characteristic) = (uuid(service)?, uuid(characteristic)?);
-    iot_service(service)?;
+    sensor_service(service)?;
     p.characteristics()
         .into_iter()
         .find(|c| c.service_uuid == service && c.uuid == characteristic)
@@ -293,7 +293,7 @@ pub async fn ble_services(ble: State<'_, Ble>, id: String) -> Result<Vec<Found>,
     p.discover_services().await.map_err(text)?;
     Ok(p.characteristics()
         .into_iter()
-        .filter(|c| c.service_uuid == IOT_SERVICE)
+        .filter(|c| c.service_uuid == SENSOR_SERVICE)
         .map(|c| Found {
             service: c.service_uuid.to_string(),
             characteristic: c.uuid.to_string(),
@@ -344,20 +344,20 @@ mod tests {
     const BATTERY: Uuid = Uuid::from_u128(0x0000180f_0000_1000_8000_00805f9b34fb);
 
     #[test]
-    fn the_page_can_only_scan_for_iot_sensors() {
-        assert!(scan_filter(&[IOT_SERVICE]).is_ok());
+    fn the_page_can_only_scan_for_sensors_only() {
+        assert!(scan_filter(&[SENSOR_SERVICE]).is_ok());
         assert!(
             scan_filter(&[]).is_err(),
             "an empty filter would list every device around"
         );
         assert!(scan_filter(&[BATTERY]).is_err());
-        assert!(scan_filter(&[IOT_SERVICE, BATTERY]).is_err());
+        assert!(scan_filter(&[SENSOR_SERVICE, BATTERY]).is_err());
     }
 
     #[test]
-    fn the_page_can_only_read_or_write_the_iot_service() {
-        assert!(iot_service(IOT_SERVICE).is_ok());
-        assert!(iot_service(BATTERY).is_err());
+    fn the_page_can_only_read_or_write_the_sensor_service() {
+        assert!(sensor_service(SENSOR_SERVICE).is_ok());
+        assert!(sensor_service(BATTERY).is_err());
     }
 
     #[test]
@@ -378,11 +378,11 @@ mod tests {
         let h = heard(
             "A".into(),
             Some("jetson-019".into()),
-            Some("IOT-AFD042F349".into()),
+            Some("SENSOR-AFD042F349".into()),
             Some(-60),
             &data,
         );
-        assert_eq!(h.advertised.as_deref(), Some("IOT-AFD042F349"));
+        assert_eq!(h.advertised.as_deref(), Some("SENSOR-AFD042F349"));
         assert_eq!(h.manufacturer["ffff"], vec![1]);
         assert_eq!(h.manufacturer["004c"], vec![2, 3]);
         assert_eq!(state_name(CentralState::PoweredOn), "on");

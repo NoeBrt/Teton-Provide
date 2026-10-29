@@ -4,8 +4,8 @@
 //! acknowledged write carries one Noise message and the following read returns the device's reply.
 //! - message 1, phone: `-> e`, empty;
 //! - message 2, device: `<- e, ee, s, es`, carrying its device certificate: the phone checks it was signed by
-//!   the device authority for the static key it just proved, before anything secret leaves the phone;
-//! - message 3, phone: `-> s, se`, carrying the technician token: the device checks it was signed by the
+//!   The manufacturer's device authority for the static key it just proved, before anything secret leaves the phone;
+//! - message 3, phone: `-> s, se`, carrying the technician token: the device checks it was signed by the manufacturer's
 //!   technician authority, names this device's customer, has not expired and names the static key the phone just
 //!   proved as its holder, and answers accepted or refused.
 //!
@@ -26,7 +26,7 @@ use std::path::Path;
 
 pub const NOISE_PARAMS: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 /// Binds the protocol version into the handshake transcript.
-pub const PROLOGUE: &[u8] = b"iot-provision/2";
+pub const PROLOGUE: &[u8] = b"sensor-provision/2";
 pub const PROVISION_CHARACTERISTIC_UUID: u128 = 0x3c2c02fa_847e_480c_9f22_b239dfa524c9;
 /// One Noise message per GATT value; with its frame byte it stays within the 512-byte ATT attribute limit.
 /// ponytail: no chunk layer, the largest message (message 3 with the largest token) is 499 bytes, 500 with its frame
@@ -41,6 +41,10 @@ pub const ATTEMPT_ID_LEN: usize = 16;
 pub const MAX_SSID: usize = 32;
 /// WPA2-Personal passphrase bounds (IEEE 802.11i).
 pub const PASSWORD_LEN: std::ops::RangeInclusive<usize> = 8..=63;
+/// WPA2-Enterprise username and password bounds (one length byte each).
+pub const ENTERPRISE_LEN: std::ops::RangeInclusive<usize> = 1..=255;
+/// The RADIUS server's domain name the sensor checks the server certificate against (RFC 1035 limit).
+pub const DOMAIN_LEN: std::ops::RangeInclusive<usize> = 1..=253;
 
 /// The device's answer to message 3, inside the channel: `[0]` accepted, or `[1][reason]` refused.
 pub const TOKEN_ACCEPTED: u8 = 0;
@@ -52,6 +56,14 @@ pub const REFUSED_EXPIRED: u8 = 3;
 
 pub type AttemptId = [u8; ATTEMPT_ID_LEN];
 
+/// WPA2-Enterprise (802.1X, PEAP/MSCHAPv2) sign-in: with it the password is the user's, not a shared passphrase.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Enterprise {
+    pub username: Vec<u8>,
+    /// The sensor joins only if the RADIUS server's certificate, from a system CA, names this domain.
+    pub domain: Vec<u8>,
+}
+
 /// Requests the phone sends inside the encrypted channel.
 #[derive(PartialEq, Eq)]
 pub enum Request {
@@ -59,6 +71,7 @@ pub enum Request {
         attempt: AttemptId,
         ssid: Vec<u8>,
         password: Vec<u8>,
+        enterprise: Option<Enterprise>,
     },
     Status {
         attempt: AttemptId,
@@ -79,20 +92,25 @@ const PROVISION: u8 = 1;
 const STATUS: u8 = 2;
 
 impl Request {
-    /// `[1][attempt 16][ssid len][ssid][password len][password]` or `[2][attempt 16]`, nothing trailing.
+    /// `[1][attempt 16][ssid len][ssid][password len][password]`, followed for WPA2-Enterprise by
+    /// `[username len][username][domain len][domain]`, or `[2][attempt 16]`; nothing trailing.
     pub fn encode(&self) -> Vec<u8> {
         match self {
             Request::Provision {
                 attempt,
                 ssid,
                 password,
+                enterprise,
             } => {
                 let mut out = vec![PROVISION];
                 out.extend_from_slice(attempt);
-                out.push(ssid.len() as u8);
-                out.extend_from_slice(ssid);
-                out.push(password.len() as u8);
-                out.extend_from_slice(password);
+                let fields = [ssid, password]
+                    .into_iter()
+                    .chain(enterprise.iter().flat_map(|e| [&e.username, &e.domain]));
+                for field in fields {
+                    out.push(field.len() as u8);
+                    out.extend_from_slice(field);
+                }
                 out
             }
             Request::Status { attempt } => [&[STATUS][..], attempt].concat(),
@@ -111,16 +129,36 @@ impl Request {
             PROVISION => {
                 let (ssid, rest) = take_field(rest)?;
                 let (password, rest) = take_field(rest)?;
-                let valid = rest.is_empty()
-                    && (1..=MAX_SSID).contains(&ssid.len())
-                    && PASSWORD_LEN.contains(&password.len());
-                if !valid {
+                let enterprise = if rest.is_empty() {
+                    None
+                } else {
+                    let (username, rest) = take_field(rest)?;
+                    let (domain, rest) = take_field(rest)?;
+                    let valid = rest.is_empty()
+                        && ENTERPRISE_LEN.contains(&username.len())
+                        && DOMAIN_LEN.contains(&domain.len());
+                    if !valid {
+                        return Err(ProtocolError::Malformed);
+                    }
+                    Some(Enterprise {
+                        username: username.to_vec(),
+                        domain: domain.to_vec(),
+                    })
+                };
+                let password_len = if enterprise.is_some() {
+                    ENTERPRISE_LEN
+                } else {
+                    PASSWORD_LEN
+                };
+                if !(1..=MAX_SSID).contains(&ssid.len()) || !password_len.contains(&password.len())
+                {
                     return Err(ProtocolError::Malformed);
                 }
                 Ok(Request::Provision {
                     attempt,
                     ssid: ssid.to_vec(),
                     password: password.to_vec(),
+                    enterprise,
                 })
             }
             _ => Err(ProtocolError::Malformed),
@@ -315,8 +353,8 @@ impl KeyPair {
     }
 }
 
-/// Everything the device needs to provision: its key pair, its certificate from the device authority, and
-/// the public key of the technician authority, which signs the tokens it accepts.
+/// Everything the device needs to provision: its key pair, its certificate from the manufacturer's device authority, and
+/// the public key of the manufacturer's technician authority, which signs the tokens it accepts.
 pub struct Identity {
     pub keys: KeyPair,
     pub certificate: DeviceCertificate,
@@ -587,6 +625,7 @@ pub struct Activation {
     pub attempt: AttemptId,
     pub ssid: Vec<u8>,
     pub password: Vec<u8>,
+    pub enterprise: Option<Enterprise>,
 }
 
 impl fmt::Debug for Activation {
@@ -629,8 +668,9 @@ impl Provisioner {
                 attempt,
                 ssid,
                 password,
+                enterprise,
             } => {
-                let payload_hash = hash(&ssid, &password);
+                let payload_hash = hash(&ssid, &password, enterprise.as_ref());
                 let outcome = match self.records.get(&attempt) {
                     Some(record) if record.payload_hash == payload_hash => record.outcome,
                     Some(_) => Outcome::Failed(Failure::Conflict),
@@ -651,6 +691,7 @@ impl Provisioner {
                             attempt,
                             ssid,
                             password,
+                            enterprise,
                         });
                         Outcome::Pending
                     }
@@ -673,11 +714,17 @@ impl Provisioner {
     }
 }
 
-fn hash(ssid: &[u8], password: &[u8]) -> [u8; 32] {
+fn hash(ssid: &[u8], password: &[u8], enterprise: Option<&Enterprise>) -> [u8; 32] {
     let mut digest = Sha256::new();
-    digest.update([ssid.len() as u8]);
-    digest.update(ssid);
-    digest.update(password);
+    let fields = [ssid, password].into_iter().chain(
+        enterprise
+            .into_iter()
+            .flat_map(|e| [&e.username[..], &e.domain[..]]),
+    );
+    for field in fields {
+        digest.update([field.len() as u8]);
+        digest.update(field);
+    }
     digest.finalize().into()
 }
 
@@ -732,6 +779,19 @@ mod tests {
             attempt,
             ssid: b"Ward-3".to_vec(),
             password: password.to_vec(),
+            enterprise: None,
+        }
+    }
+
+    fn enterprise(password: &[u8], username: &[u8], domain: &[u8]) -> Request {
+        Request::Provision {
+            attempt: ATTEMPT,
+            ssid: b"Ward-3".to_vec(),
+            password: password.to_vec(),
+            enterprise: Some(Enterprise {
+                username: username.to_vec(),
+                domain: domain.to_vec(),
+            }),
         }
     }
 
@@ -766,7 +826,7 @@ mod tests {
             out[..len].to_vec()
         }
 
-        /// Reads message 2 and checks the certificate: the signature, and the key the device just proved.
+        /// Reads message 2 and checks the certificate: The manufacturer's signature, and the key the device just proved.
         fn certificate(&mut self, reply: &[u8]) -> Result<DeviceCertificate, String> {
             let mut out = [0u8; MAX_MESSAGE];
             let handshake = self.handshake.as_mut().unwrap();
@@ -896,7 +956,7 @@ mod tests {
             certificate: genuine.certificate.clone(),
             technician_authority: genuine.technician_authority,
         };
-        // Its own key, certified by an authority that is not the device authority.
+        // Its own key, certified by an authority that is not the manufacturer's device authority.
         let keys = KeyPair::generate().unwrap();
         let rogue_certificate =
             DeviceCertificate::sign(&SigningKey::from_bytes(&[9; 32]), keys.public_key, CUSTOMER)
@@ -1086,6 +1146,8 @@ mod tests {
         for request in [
             provision(ATTEMPT, b"12345678"),
             provision(ATTEMPT, &[b'p'; 63]),
+            enterprise(b"p", b"noe", b"radius.example.org"),
+            enterprise(&[b'p'; 255], &[b'u'; 255], &[b'd'; 253]),
             Request::Status { attempt: ATTEMPT },
         ] {
             assert_eq!(Request::decode(&request.encode()), Ok(request));
@@ -1096,14 +1158,24 @@ mod tests {
             attempt: ATTEMPT,
             ssid: vec![],
             password: b"12345678".to_vec(),
+            enterprise: None,
         }
         .encode();
+        let no_username = enterprise(b"secret", b"", b"radius.example.org").encode();
+        let no_domain = enterprise(b"secret", b"noe", b"").encode();
+        let long_domain = enterprise(b"secret", b"noe", &[b'd'; 254]).encode();
+        let mut username_only = provision(ATTEMPT, b"12345678").encode();
+        username_only.extend_from_slice(&[3, b'n', b'o', b'e']);
         let mut trailing = Request::Status { attempt: ATTEMPT }.encode();
         trailing.push(0);
         for bad in [
             too_short,
             too_long,
             empty_ssid,
+            no_username,
+            no_domain,
+            long_domain,
+            username_only,
             trailing,
             vec![],
             vec![9; 17],
@@ -1121,6 +1193,7 @@ mod tests {
             attempt: ATTEMPT,
             ssid: b"Ward-3".to_vec(),
             password: b"correct horse".to_vec(),
+            enterprise: None,
         };
         assert_eq!(format!("{activation:?}"), "Activation { .. }");
     }
@@ -1252,7 +1325,7 @@ mod tests {
 
     #[test]
     fn a_device_is_ready_only_once_keyed_and_certified_for_its_own_key() {
-        let dir = std::env::temp_dir().join(format!("iot-identity-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sensor-identity-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         assert!(Identity::load(&dir).unwrap().is_none(), "nothing staged");
         let keys = KeyPair::generate().unwrap();

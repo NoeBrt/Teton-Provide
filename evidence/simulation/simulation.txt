@@ -10,7 +10,7 @@ CPU affinity/governor not controlled; shared workstation
 
 Command: target/release/examples/simulation
 SIMULATION — in-memory software transport; no BLE or Wi-Fi
-DISCOVERED IOT-DEMO-001 (synthetic discovery)
+DISCOVERED SENSOR-DEMO-001 (synthetic discovery)
 CONNECTED (local worker)
 REQUEST hello -> RESPONSE world
 CLOSED (worker joined)

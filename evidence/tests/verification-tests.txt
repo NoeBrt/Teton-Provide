@@ -52,7 +52,7 @@ running 0 tests
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
-     Running unittests src/lib.rs (target/debug/deps/iot_provisioning-4f606155ec9216ed)
+     Running unittests src/lib.rs (target/debug/deps/sensor_provisioning-4f606155ec9216ed)
      Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
      Running tests/simulation.rs (target/debug/deps/simulation-9972cadae98b77be)
      Running unittests examples/benchmark.rs (target/debug/examples/benchmark-560393177adeb8c7)
@@ -108,9 +108,9 @@ running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
     Finished `release` profile [optimized] target(s) in 0.35s
-     Running unittests src/lib.rs (target/release/deps/iot_provisioning-a18a1f7fda4bcfaf)
+     Running unittests src/lib.rs (target/release/deps/sensor_provisioning-a18a1f7fda4bcfaf)
      Running tests/scaled.rs (target/release/deps/scaled-6e7ad0b47ca51197)
      Running tests/simulation.rs (target/release/deps/simulation-0d72d86c594ef4c8)
      Running unittests examples/benchmark.rs (target/release/examples/benchmark-aa72c03b7f75d7c0)
@@ -121,7 +121,7 @@ Command: RUSTUP_TOOLCHAIN=stable cargo fmt --all -- --check
 Exit code: 0
 
 Command: RUSTUP_TOOLCHAIN=stable cargo clippy --all-targets --locked --offline -- -D warnings
-    Checking iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+    Checking sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
 Exit code: 0
 

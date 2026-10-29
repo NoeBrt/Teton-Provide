@@ -1,6 +1,6 @@
 import { DynamicColorIOS, Platform, type ColorValue } from 'react-native';
 
-// Palette from example.com with text colours darkened for AA contrast; the dark one keeps AA on the same pairs.
+// Palette with text colours darkened for AA contrast; the dark one keeps AA on the same pairs.
 // `onInk`: text and spinners on an ink or warn fill.
 const LIGHT = { bg: '#ffffff', card: '#f2f4f4', ink: '#1e1e1e', muted: '#646c74', tone: '#8d959d', line: '#e3e5e6', mint: '#bbf0bd', blue: '#2369c4', blueBg: '#e3edfa', warn: '#a8301a', warnBg: '#ffe5dd', onInk: '#ffffff' };
 const DARK: typeof LIGHT = { bg: '#161819', card: '#222527', ink: '#eceeef', muted: '#a3aab0', tone: '#80888f', line: '#35393c', mint: '#1f4d2c', blue: '#7fb0f0', blueBg: '#1c2d44', warn: '#ff9e88', warnBg: '#4b2119', onInk: '#161819' };

@@ -56,9 +56,9 @@ From the latest `main` checkout on macOS or Linux, with Rust, OpenSSH and GitHub
 
 ```sh
 cargo install --path workshop --locked
-iot-workshop init                 # once; reuse an existing authority
-iot-workshop deploy user@192.168.55.1 --customer "Noé Home"
-iot-workshop issue "Evaluator" --customer "Noé Home"
+sensor-workshop init                 # once; reuse an existing authority
+sensor-workshop deploy user@192.168.55.1 --customer "Noé Home"
+sensor-workshop issue "Evaluator" --customer "Noé Home"
 ```
 
 Use an SSH alias or `user@host`; `192.168.55.1` is a Jetson connected over USB. The sensor needs Ubuntu 22.04 or
@@ -78,8 +78,8 @@ The published binaries target Ubuntu 22.04 and later; older Ubuntu and other arc
 
 Copy the two public authority keys from `init` into `configurator/src/authority.ts` before building your app. A new
 authority's sensors are not accepted by the prebuilt apps, which carry the original deployment's public keys.
-If the sensor already runs the service, `iot-workshop uninstall user@host` asks before removing it and its Wi-Fi,
-and keeps its key in `/root/iot-backup`. Redeploying then creates a new identity.
+If the sensor already runs the service, `sensor-workshop uninstall user@host` asks before removing it and its Wi-Fi,
+and keeps its key in `/root/sensor-backup`. Redeploying then creates a new identity.
 
 The steps below are the manual path for a sensor without SSH, or for building and evaluating from source.
 
@@ -109,15 +109,15 @@ If Bluetooth is soft-blocked, run `sudo rfkill unblock bluetooth`. Replace `wlo1
 sudo systemd/install.sh wlo1
 ```
 
-The service runs as `iot`. Its private state lives in `/var/lib/iot-device`, mode `0700`. It cannot accept provisioning until staged below.
+The service runs as `sensor`. Its private state lives in `/var/lib/sensor-device`, mode `0700`. It cannot accept provisioning until staged below.
 
 ### 2. Create your evaluation authorities
 
-For a self-contained evaluation, generate your own authorities. Install the workshop tool once, from the checkout (`cargo install --path workshop --locked`; the first build takes 1-2 minutes). Its short forms keep the authority in `~/iot-authority` (or `$IOT_AUTHORITY`), outside the checkout, and need a customer: `--customer "Noé Home"`, or the last one used after a yes on a terminal. In production these would be kept at the workshop, separate from deployed devices.
+For a self-contained evaluation, generate your own authorities. Install the workshop tool once, from the checkout (`cargo install --path workshop --locked`; the first build takes 1-2 minutes). Its short forms keep the authority in `~/sensor-authority` (or `$SENSOR_AUTHORITY`), outside the checkout, and need a customer: `--customer "Noé Home"`, or the last one used after a yes on a terminal. In production these would be kept at the workshop, separate from deployed devices.
 
 ```sh
-iot-workshop init        # creates ~/iot-authority (private keys 0600) and prints both public keys
-iot-workshop public      # prints them again
+sensor-workshop init        # creates ~/sensor-authority (private keys 0600) and prints both public keys
+sensor-workshop public      # prints them again
 ```
 
 The output names two **public** keys. In `../configurator/src/authority.ts`, replace both `DEVICE_AUTHORITY` and `TECHNICIAN_AUTHORITY` with these values **before building the configurator**. The first verifies devices; the second verifies imported technician codes. The checked-in public keys belong to the existing test deployment; its private keys are not included.
@@ -127,13 +127,13 @@ Never copy authority private keys into the app, the repository or evidence files
 ### 3. Stage the device
 
 ```sh
-sudo -u iot iot-stage init /var/lib/iot-device
+sudo -u sensor sensor-stage init /var/lib/sensor-device
 ```
 
 Copy the device public key printed by this command, then run:
 
 ```sh
-iot-workshop certify <DEVICE_PUBLIC_KEY_HEX> --customer "Noé Home"
+sensor-workshop certify <DEVICE_PUBLIC_KEY_HEX> --customer "Noé Home"
 ```
 
 A customer is a name or an ID (`"Noé Home"` is `NOE-HOME`). One authority serves every customer: never run `init`
@@ -142,24 +142,24 @@ again for a new one.
 Copy the certificate hex and the technician authority public key from step 2:
 
 ```sh
-sudo -u iot iot-stage install /var/lib/iot-device <CERTIFICATE_HEX> <TECHNICIAN_AUTHORITY_PUBLIC_KEY_HEX>
-sudo systemctl restart iot-device
-journalctl -u iot-device -n 20 --no-pager
+sudo -u sensor sensor-stage install /var/lib/sensor-device <CERTIFICATE_HEX> <TECHNICIAN_AUTHORITY_PUBLIC_KEY_HEX>
+sudo systemctl restart sensor-device
+journalctl -u sensor-device -n 20 --no-pager
 ```
 
-Expected: a `IOT-XXXXXXXXXX` identifier and an advertising message. The identity is derived from the device key; app and device firmware must use the current manufacturer-data format. The app rejects older state-only advertisements with firmware-update guidance.
+Expected: a `SENSOR-XXXXXXXXXX` identifier and an advertising message. The identity is derived from the device key; app and device firmware must use the current manufacturer-data format. The app rejects older state-only advertisements with firmware-update guidance.
 
 ### 4. Issue a technician code
 
 ```sh
-iot-workshop issue "Evaluator" --customer "Noé Home"
+sensor-workshop issue "Evaluator" --customer "Noé Home"
 ```
 
 This prints a QR code and a text code valid for one day, authorized for that customer. Repeat `--customer` for a code
 that covers several (8 at most): `--customer "Noé Home" --customer "Hôpital Saint-Louis"`. Without `--customer`, the
 tool offers the last customer again and waits for a yes; with no terminal, it stops instead of waiting. The code contains a private holder key: treat it as a credential. Import it directly inside Provide.; do not include it in screenshots or logs.
 
-One code per technician: run the command again with another name. Name each technician by their full name, or a distinctive nickname: it is only a readable label. A name is letters (accents included), digits, spaces, `-`, `'` or `.`; anything else is refused. `issue` logs each code's ID, name, customers and expiry in `issued.tsv` next to the keys. The authority tool also runs on macOS (it needs no Bluetooth), so codes can be issued from the examiner's laptop. For a longer validity (5 days at most), use the full form with exact IDs: `iot-workshop issue ~/iot-authority "Name" NOE-HOME,HOPITAL-SAINT-LOUIS 5`. `iot-workshop` alone prints the usage.
+One code per technician: run the command again with another name. Name each technician by their full name, or a distinctive nickname: it is only a readable label. A name is letters (accents included), digits, spaces, `-`, `'` or `.`; anything else is refused. `issue` logs each code's ID, name, customers and expiry in `issued.tsv` next to the keys. The authority tool also runs on macOS (it needs no Bluetooth), so codes can be issued from the examiner's laptop. For a longer validity (5 days at most), use the full form with exact IDs: `sensor-workshop issue ~/sensor-authority "Name" NOE-HOME,HOPITAL-SAINT-LOUIS 5`. `sensor-workshop` alone prints the usage.
 
 ## Prepare the configurator
 
@@ -199,7 +199,7 @@ This is what the technician does; the [README videos](../README.md#how-to-use-pr
 </table>
 <sub>iOS Simulator, simulated sensors, earlier build; the README videos show the current one.</sub>
 
-1. **Open the app.** It scans as soon as Bluetooth is on; each sensor appears with its `IOT-XXXXXXXXXX` ID, signal
+1. **Open the app.** It scans as soon as Bluetooth is on; each sensor appears with its `SENSOR-XXXXXXXXXX` ID, signal
    and state (ready, online, not prepared).
 2. **Add the technician code** once: scan its QR code with the app's camera, or paste it. On the desktop, paste it, or
    paste, drop or choose a screenshot of the QR code. The app shows the name, customers and expiry.
@@ -219,7 +219,7 @@ The sensor needs no screen, keyboard or SSH.
 
 1. Open Provide. in normal mode; there must be no **DEMO** indicator. Keep Bluetooth enabled. To demonstrate independence from networking, turn off the configurator's Wi-Fi and mobile data, and ensure the device is not already on the target network.
 2. Add the technician code from [step 4](#4-issue-a-technician-code) by scanning or pasting it inside the app.
-3. Wait for the device's `IOT-XXXXXXXXXX` identifier. **Test** exchanges `hello` / `world`.
+3. Wait for the device's `SENSOR-XXXXXXXXXX` identifier. **Test** exchanges `hello` / `world`.
 4. Tap **Set up**, enter the facility name, target SSID and password, and confirm.
 5. Expect connecting → securing the channel → sending the network → joining Wi-Fi, then **Device connected** with the target SSID and the device's new IPv4 address.
 
@@ -227,10 +227,10 @@ Check independently on the Linux device:
 
 ```sh
 nmcli -f NAME,UUID,DEVICE connection show --active
-journalctl -u iot-device -n 40 --no-pager
+journalctl -u sensor-device -n 40 --no-pager
 ```
 
-Expected: the `iot-provisioned` profile is active and the journal reports the provisioning attempt as connected. The service does not log Wi-Fi credentials. For a headless deployment, the systemd service starts automatically at boot.
+Expected: the `sensor-provisioned` profile is active and the journal reports the provisioning attempt as connected. The service does not log Wi-Fi credentials. For a headless deployment, the systemd service starts automatically at boot.
 
 A configured device offers **Reconfigure**. The implementation rolls back to the previous profile if a new network fails; the wrong-password, absent-network and rollback scenarios still need hardware validation.
 

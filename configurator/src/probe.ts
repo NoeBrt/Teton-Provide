@@ -21,7 +21,7 @@ export function sensorId(advertising?: Advertising): string | null {
   const data = advertising?.manufacturerData?.ffff?.bytes;
   if (!data || data.length !== 6 || !Array.from(data).every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
     || sensorState(advertising) === null) return null;
-  return `IOT-${data.slice(1).map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+  return `SENSOR-${data.slice(1).map(byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
 }
 
 export const sensorLabel = (sensor: { name?: string; advertising?: Advertising }) => sensorId(sensor.advertising) ?? 'Unnamed sensor';

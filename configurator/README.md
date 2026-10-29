@@ -6,7 +6,7 @@ Start with the [root README](../README.md) for videos or the [Ubuntu setup guide
 
 Stack: Expo SDK 57, React Native 0.86 (New Architecture), TypeScript,
 [`react-native-ble-manager`](https://github.com/innoveit/react-native-ble-manager)
-12.5 for Bluetooth. It matches the mobile stack (Expo + React Native).
+12.5 for Bluetooth. It matches the manufacturer's mobile stack (Expo + React Native).
 Bluetooth needs native code, so **Expo Go cannot run it**: use a development build.
 
 ## Checks (Linux, no phone needed)
@@ -49,11 +49,11 @@ server and no network.
 ## Test with the device
 
 On the Ubuntu device: `./target/release/device` (see the root README). In the
-app (“provide.”): the search runs by itself (tap the centre dot to pause/resume), then **Test** on a sensor (`IOT-` and its ID). Expect
+app (“provide.”): the search runs by itself (tap the centre dot to pause/resume), then **Test** on a sensor (`SENSOR-` and its ID). Expect
 “world” received. Repeat, and toggle Bluetooth or walk away to check reconnects.
 Screenshot the log for `evidence/real/phone-hello.txt`.
 
-The bundle identifier `dev.iotchallenge.configurator` in `app.json` can be
+The bundle identifier `dev.sensorprovisioning.configurator` in `app.json` can be
 changed to one from your Apple account.
 
 ## Preview without Bluetooth

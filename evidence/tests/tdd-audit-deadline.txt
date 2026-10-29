@@ -2,7 +2,7 @@ COMMAND_FIXTURE evidence; audit runtime diff from d3217fa.
 
 RED
 Command: RUSTUP_TOOLCHAIN=stable cargo test --test host_audit an_owner_descendant_cannot_hold_the_audit_open_after_parent_exit --locked --offline
-   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
      Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
 
@@ -29,7 +29,7 @@ error: test failed, to rerun pass `--test host_audit`
 
 GREEN
 Command: Same command after fixing supervision
-   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
      Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
 
@@ -41,7 +41,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; fin
 
 MUTATION
 Command: Isolated copy: delete Bash -p; cargo test --test host_audit inherited_shell_code_cannot_replace_the_audit_commands --locked --offline
-   Compiling iot-provisioning v0.1.0 (/tmp/iot-audit-mutation.FWTNUk)
+   Compiling sensor-provisioning v0.1.0 (/tmp/sensor-audit-mutation.FWTNUk)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
      Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
 
@@ -66,7 +66,7 @@ error: test failed, to rerun pass `--test host_audit`
 
 ALL HOST REGRESSIONS
 Command: RUSTUP_TOOLCHAIN=stable cargo test --test host_audit --locked --offline
-   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
      Running tests/host_audit.rs (target/debug/deps/host_audit-5d0714aaca9d2f18)
 

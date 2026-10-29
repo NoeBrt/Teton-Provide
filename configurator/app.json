@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "provide.",
-    "slug": "iot-provisioning-configurator",
+    "slug": "sensor-provisioning-configurator",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "dev.iotchallenge.configurator",
+      "bundleIdentifier": "dev.sensorprovisioning.configurator",
       "infoPlist": {
         "CFBundleDisplayName": "Provide."
       }
@@ -21,7 +21,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "dev.iotchallenge.configurator",
+      "package": "dev.sensorprovisioning.configurator",
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",

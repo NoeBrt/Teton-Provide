@@ -44,7 +44,7 @@ Phone client, secure provisioning, and real Wi-Fi joining remain unverified.
 exit=0
 
 $ timeout -s INT 30 ./target/release/device   # BlueZ queried before, during, after
-IOT-DEMO-001 advertising on hci0; accepts only hello
+SENSOR-DEMO-001 advertising on hci0; accepts only hello
 stopping
 exit=124
 # exit=124 is timeout's status after delivering SIGINT; the binary printed "stopping".
@@ -53,7 +53,7 @@ BlueZ observations (busctl get-property on /org/bluez/hci0):
 --- before
 y 0
 --- during run
-IOT-DEMO-001 advertising on hci0; accepts only hello
+SENSOR-DEMO-001 advertising on hci0; accepts only hello
 b true
 y 1
 service UUID in adapter UUIDs: 1

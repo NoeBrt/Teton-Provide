@@ -1,4 +1,4 @@
-//! BLE peripheral for a IoT sensor, through BlueZ.
+//! BLE peripheral for a sensor, through BlueZ.
 //!
 //! - Hello characteristic: the harmless probe (write `hello`, read `world`); it never carries credentials.
 //! - Provisioning characteristic (once staged and certified): Noise XX channel in which the sensor proves it is
@@ -8,7 +8,7 @@
 //!
 //! Primary manufacturer data carries state then five key-derived identity bytes; the scan-response name is diagnostic.
 //! State directory: `$STATE_DIRECTORY` (systemd `StateDirectory=`), else `./state`.
-//! `IOT_WIFI_INTERFACE` pins the Wi-Fi device to provision (default: the first Wi-Fi device).
+//! `SENSOR_WIFI_INTERFACE` pins the Wi-Fi device to provision (default: the first Wi-Fi device).
 
 mod wifi;
 
@@ -23,12 +23,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use iot_provisioning::authority::{checked_now, device_id, device_id_bytes};
-use iot_provisioning::protocol::{
+use sensor_provisioning::authority::{checked_now, device_id, device_id_bytes};
+use sensor_provisioning::protocol::{
     self, CHARACTERISTIC_UUID, SERVICE_UUID, STATE_COMPANY_ID, STATE_NOT_STAGED, STATE_OFFLINE,
     STATE_ONLINE, STATE_READY,
 };
-use iot_provisioning::provision::{
+use sensor_provisioning::provision::{
     Activation, FRAME_HANDSHAKE, FRAME_TRANSPORT, Failure, Identity, KeyPair, Outcome,
     PROVISION_CHARACTERISTIC_UUID, PROVISIONED_FILE, Provisioner, Session, hex,
 };
@@ -42,6 +42,9 @@ type Pending = Mutex<Option<(Address, &'static [u8])>>;
 const IDLE: Duration = Duration::from_secs(60);
 /// How often a provisioned sensor checks its Wi-Fi profile, to keep its advertised state current.
 const STATE_REFRESH: Duration = Duration::from_secs(30);
+/// How often the service checks BlueZ still broadcasts its advertisement: one was seen gone after a reconfiguration,
+/// leaving a running sensor that no phone could find.
+const ADVERTISING_CHECK: Duration = Duration::from_secs(5);
 /// The firmware's build date (Unix seconds): technician tokens are never checked against an earlier clock.
 /// ponytail: set by hand at release; derive it from SOURCE_DATE_EPOCH in a release pipeline.
 const FIRMWARE_BUILT: u64 = 1_792_454_400; // 2026-10-20
@@ -280,8 +283,13 @@ fn start(context: &Arc<Context>, activation: Activation) {
     tokio::task::spawn_blocking(move || {
         let current = *context.current.lock().unwrap();
         let interface = context.interface.as_deref();
-        let (mut outcome, profile) =
-            wifi::activate(&activation.ssid, &activation.password, interface, current);
+        let (mut outcome, profile) = wifi::activate(
+            &activation.ssid,
+            &activation.password,
+            activation.enterprise.as_ref(),
+            interface,
+            current,
+        );
         let attempt = activation.attempt;
         drop(activation);
         // Success counts only once it survives a restart; otherwise undo it and keep the previous network.
@@ -460,7 +468,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or_else(|| keys.as_ref().map(|keys| &keys.public_key));
     let name = public_key
         .map(device_id)
-        .unwrap_or_else(|| "IOT-UNSTAGED".to_string());
+        .unwrap_or_else(|| "SENSOR-UNSTAGED".to_string());
     let id = public_key.map(device_id_bytes);
     let (current, known) = startup_profile(&state_dir, wifi::profile_active);
     let staged = identity.is_some();
@@ -474,7 +482,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 peers: HashMap::new(),
             })),
             state_dir: state_dir.clone(),
-            interface: std::env::var("IOT_WIFI_INTERFACE").ok(),
+            interface: std::env::var("SENSOR_WIFI_INTERFACE").ok(),
             current: Mutex::new(current),
             floor: AtomicU64::new(floor),
             started: (floor, Instant::now()),
@@ -525,9 +533,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The advertised state follows the Wi-Fi profile, so a technician sees it on the sensor's card: at once after
     // an attempt, and every STATE_REFRESH in case the network drops; that tick also records the clock floor.
     let mut refresh = tokio::time::interval(STATE_REFRESH);
+    let mut check = tokio::time::interval(ADVERTISING_CHECK);
     loop {
         tokio::select! {
             _ = &mut shutdown => break,
+            _ = check.tick() => {
+                // This service registers the adapter's only advertisement: none active means BlueZ lost it.
+                if adapter.active_advertising_instances().await? == 0 {
+                    drop(adv);
+                    adv = adapter.advertise(advertisement(state, &name, id)).await?;
+                    println!("advertisement lost; advertising again");
+                }
+                continue;
+            }
             _ = refresh.tick() => {
                 if let Some(context) = &context {
                     let context = context.clone();
@@ -561,8 +579,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use ed25519_dalek::SigningKey;
-    use iot_provisioning::authority::{DeviceCertificate, TechnicianToken};
-    use iot_provisioning::provision::{NOISE_PARAMS, PROLOGUE, TOKEN_ACCEPTED, TOKEN_REFUSED};
+    use sensor_provisioning::authority::{DeviceCertificate, TechnicianToken};
+    use sensor_provisioning::provision::{NOISE_PARAMS, PROLOGUE, TOKEN_ACCEPTED, TOKEN_REFUSED};
 
     const PHONE: Address = Address::new([1, 2, 3, 4, 5, 6]);
     const OTHER: Address = Address::new([6, 5, 4, 3, 2, 1]);
@@ -759,7 +777,7 @@ mod tests {
     fn the_state_rides_in_manufacturer_data_beside_the_service_and_the_sensor_id() {
         let adv = advertisement(
             STATE_ONLINE,
-            "IOT-3F9A2C81D4",
+            "SENSOR-3F9A2C81D4",
             Some([0x3f, 0x9a, 0x2c, 0x81, 0xd4]),
         );
         assert_eq!(
@@ -767,7 +785,7 @@ mod tests {
             Some(&vec![STATE_ONLINE, 0x3f, 0x9a, 0x2c, 0x81, 0xd4])
         );
         assert!(adv.service_uuids.contains(&Uuid::from_u128(SERVICE_UUID)));
-        assert_eq!(adv.local_name.as_deref(), Some("IOT-3F9A2C81D4"));
+        assert_eq!(adv.local_name.as_deref(), Some("SENSOR-3F9A2C81D4"));
         assert_eq!(adv.service_uuids.len(), 1);
         assert_eq!(adv.manufacturer_data.len(), 1);
         assert_eq!(adv.discoverable, Some(true));
@@ -782,7 +800,7 @@ mod tests {
 
     #[test]
     fn the_working_profile_is_recorded_durably_and_read_back() {
-        let dir = std::env::temp_dir().join(format!("iot-persist-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sensor-persist-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let [first, second] = wifi::PROFILE_UUIDS;
         assert_eq!(current_profile(&dir).unwrap(), None, "never provisioned");
@@ -810,7 +828,7 @@ mod tests {
 
     #[test]
     fn a_garbled_marker_leaves_the_profiles_alone() {
-        let dir = std::env::temp_dir().join(format!("iot-startup-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sensor-startup-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let [_, second] = wifi::PROFILE_UUIDS;
         let active = |p: &str| p == second;
@@ -830,7 +848,7 @@ mod tests {
 
     #[test]
     fn the_floor_never_starts_before_the_firmware_date() {
-        let dir = std::env::temp_dir().join(format!("iot-floor-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sensor-floor-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(initial_floor(&dir), FIRMWARE_BUILT, "no floor recorded yet");
         for (recorded, floor) in [

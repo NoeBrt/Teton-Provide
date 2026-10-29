@@ -6,7 +6,7 @@ OS / kernel    Ubuntu 22.04.5 LTS, Linux 6.8.0-138-generic
 Radios         MediaTek MT7921 combo: Wi-Fi 6 on PCIe (mt7921e, 14c3:7961),
                Bluetooth on USB (btusb, 13d3:3567); both share one antenna/chip
 BlueZ          5.64, bluetooth.service active; adapter hci0 is the default
-hci0 roles     central + peripheral (peripheral needed for iot-device)
+hci0 roles     central + peripheral (peripheral needed for sensor-device)
 LE advertising SupportedInstances 20, ActiveInstances 0,
                SupportedIncludes tx-power, appearance, local-name
 hci0 state     Powered: no — rfkill soft block (unblock requires root)
