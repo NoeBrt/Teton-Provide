@@ -572,3 +572,8 @@ the tap to the last **Device connected**. Details and method:
 
 The Bluetooth part is short: the Noise handshake and the technician check take 0.12 s, the encrypted Wi-Fi credentials
 another 0.12 s (median of 13 sessions on noe-lab). The sensor joining the Wi-Fi takes the rest, 5.9 s on noe-lab.
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md): free to use, change and share for any non-commercial purpose. Commercial
+use is not allowed.
