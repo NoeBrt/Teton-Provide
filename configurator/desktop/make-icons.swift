@@ -59,18 +59,13 @@ tool.waitUntilExit()
 precondition(tool.terminationStatus == 0)
 print("PASS: desktop PNGs and icon.icns regenerated from assets/icon.png; transparent corners checked")
 
-// Native menu-bar template: the app icon's dot and two signal arcs, with no square background.
+// Native menu-bar template: the app icon's dot inside a ring, with no square background.
 let tray = canvas(36)
 tray.setFillColor(NSColor.black.cgColor)
 tray.setStrokeColor(NSColor.black.cgColor)
-let dot = CGPoint(x: 18, y: 9.5)
-tray.fillEllipse(in: CGRect(x: dot.x - 4.5, y: dot.y - 4.5, width: 9, height: 9))
-tray.setLineWidth(4.5)
-tray.setLineCap(.round)
-for radius in [12.0, 20.0] {
-    tray.addArc(center: dot, radius: radius, startAngle: .pi / 4, endAngle: 3 * .pi / 4, clockwise: false)
-    tray.strokePath()
-}
+tray.setLineWidth(3)
+tray.strokeEllipse(in: CGRect(x: 4, y: 4, width: 28, height: 28))
+tray.fillEllipse(in: CGRect(x: 10, y: 10, width: 16, height: 16))
 let template = NSBitmapImageRep(cgImage: tray.makeImage()!)
 precondition(template.colorAt(x: 0, y: 0)!.alphaComponent == 0)
 try template.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("menu-bar.png"))

@@ -1166,9 +1166,11 @@ function Provide({ demo, onDemo }: Mode) {
       <SafeAreaView style={s.screen} edges={['top', 'left', 'right']}>
         <StatusBar style={Platform.OS === 'android' ? 'dark' : 'auto'} /> {/* Android keeps the light palette */}
         <View style={[s.header, s.headerFixed]}>
-          {/* A tap on the wordmark opens the demo with simulated sensors, or leaves it (each asks first). */}
+          {/* A tap on the logo opens the demo with simulated sensors, or leaves it (each asks first). */}
           <Pressable style={s.brand} onPress={askDemo} hitSlop={8} accessibilityRole="button"
             accessibilityLabel={demo ? 'Provide. Leave the demo' : 'Provide.'} accessibilityHint={demo ? undefined : 'Opens a demo with simulated sensors'}>
+            {/* The mark is the radar's centre: a dot inside a ring, in the theme's ink. */}
+            <View style={s.mark}><View style={s.markDot} /></View>
             <Text style={s.wordmark} maxFontSizeMultiplier={1.2}>provide.</Text>
           </Pressable>
           {/* In the demo the chip says so, and a tap on it leaves too; otherwise it shows the Bluetooth the app works over. */}
@@ -1261,6 +1263,8 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottomWidth: 1, borderColor: C.line },
   headerFixed: { marginHorizontal: 20, marginTop: 8 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mark: { width: 26, height: 26, borderRadius: 13, borderWidth: 2.5, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  markDot: { width: 13, height: 13, borderRadius: 6.5, backgroundColor: C.ink },
   wordmark: { fontFamily: 'Onest_600SemiBold', fontSize: 26, letterSpacing: -1.2, color: C.ink },
   chipDemo: { backgroundColor: C.ink, color: C.onInk },
   chipOn: { backgroundColor: C.blueBg, color: C.blue }, // the app's link blue, on a light tint of it
