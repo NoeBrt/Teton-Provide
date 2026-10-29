@@ -28,21 +28,21 @@ The [requirements map](../README.md#requirements-map) tracks which of the tests 
 
 ## Design
 
-1. **Two authorities, at the manufacturer.** `sensor-workshop init` creates two Ed25519 keys (0600, kept offline): the **device
+1. **Two authorities, at the manufacturer.** `iot-workshop init` creates two Ed25519 keys (0600, kept offline): the **device
    authority** certifies sensors, the **technician authority** issues technician codes. The app embeds the device
    authority's public key; each sensor stores the technician authority's.
 2. **Staging, not BLE.** On the sensor, `stage init` creates its static X25519 key (0600, never regenerated) and
-   prints the public key. At the workshop, `sensor-workshop certify` signs `[version][public key][customer]` with the
-   domain `sensor-device-cert/1`; `stage install` stores that certificate and the technician authority's key. A
+   prints the public key. At the workshop, `iot-workshop certify` signs `[version][public key][customer]` with the
+   domain `iot-device-cert/1`; `stage install` stores that certificate and the technician authority's key. A
    sensor without a certificate advertises **not staged** and offers no provisioning. A sensor staged by the first
    protocol kept its unused label secret after the key pair in `identity`; `stage install` rewrites the file without
    it (0600 temporary file, synced, renamed over it, directory synced) before storing the certificate.
 3. **Identity.** Primary manufacturer data under test company `0xFFFF` is `[state][5 identity bytes]`:
-   the first five bytes of SHA-256 of the sensor's public key, rendered as `SENSOR-` plus 10 uppercase hex digits.
+   the first five bytes of SHA-256 of the sensor's public key, rendered as `IOT-` plus 10 uppercase hex digits.
    Flags, service UUID and manufacturer data fill all 31 legacy advertising bytes. The scan-response name and
    OS name caches are diagnostic only; neither identifies a sensor in the app. The static ID is visible to passive
    listeners too; rotating the Bluetooth address cannot prevent tracking while this ID remains broadcast.
-4. **Handshake.** `Noise_XX_25519_ChaChaPoly_SHA256`, prologue `sensor-provision/2`. Message 2 carries the sensor's
+4. **Handshake.** `Noise_XX_25519_ChaChaPoly_SHA256`, prologue `iot-provision/2`. Message 2 carries the sensor's
    static key and certificate, encrypted. Before message 3, the app checks the device authority's signature
    (`verify_strict` semantics, `zip215: false`), the certified key against the Noise-proven key, the certified ID
    against the primary manufacturer-data ID, and the certified customer against the token. Advertisement data
@@ -51,7 +51,7 @@ The [requirements map](../README.md#requirements-map) tracks which of the tests 
    is `old-firmware`, requires a firmware update and is not retried by a batch. Apps and test firmware must be
    updated together; no name fallback remains.
 5. **Technician code.** Message 3 carries the phone's token: `[2][expiry][holder X25519 public key][name][customers]`
-   signed with the domain `sensor-technician-token/2`. `sensor-workshop issue` generates the holder key pair with each code,
+   signed with the domain `iot-technician-token/2`. `iot-workshop issue` generates the holder key pair with each code,
    and the phone uses the holder's private key as its Noise static key. The sensor checks the signature, that its own
    customer is listed, that its clock (see Clock below) is before the expiry, and that the static key the phone just
    proved is the holder key, then answers inside the channel: accepted, or refused with a reason (invalid, other
@@ -72,7 +72,7 @@ On macOS, Keychain authorizes the signed app. Local installation uses an existin
 available so updates retain that identity; ad-hoc builds can trigger new access prompts after every update.
 
 - **Device key:** unique per sensor, never leaves its state directory. The certificate is public.
-- **Technician code:** `<token hex>.<holder private key hex>`, which `sensor-workshop issue` prints as text and as a QR
+- **Technician code:** `<token hex>.<holder private key hex>`, which `iot-workshop issue` prints as text and as a QR
   code, is a credential that works on any phone. A sensor receives only the token, which names the holder's public
   key, so a sensor that records it cannot present it. The app keeps the code in its own Keychain entry behind Face ID
   (`requireAuthentication`, this device only); its name, customers and expiry sit beside it, unprotected, so the app
@@ -133,7 +133,7 @@ available so updates retain that identity; ad-hoc builds can trigger new access 
   revocation yet ([REVOCATION.md](REVOCATION.md)). `deploy` records the workshop's time as the sensor's clock floor,
   so a sensor that boots with its clock in the past still refuses a code that expired before its deployment. A
   token recorded by a sensor, without the code's holder key, is refused.
-- `sensor-workshop deploy` trusts the sensor's SSH host key on first use: it certifies whatever key answers at that
+- `iot-workshop deploy` trusts the sensor's SSH host key on first use: it certifies whatever key answers at that
   address. Deploy over USB, and check the host key fingerprint on first contact.
 - The code reaches the technician outside the app (a printed QR code, or text over a channel the manufacturer trusts). After a
   paste, the app does not clear the clipboard, so the code stays there (and in Universal Clipboard) until something
@@ -152,7 +152,7 @@ available so updates retain that identity; ad-hoc builds can trigger new access 
   certified by the real device authority; their private keys sit in 0600 files on noe-lab (`~/noe-ws/lab-sensors`).
   Any phone whose code covers `LAB` sends them the site password, so the bench is used with a throwaway site; the
   simulator never joins Wi-Fi. A technician code for `LAB` and `DEMO` was issued for 30 days.
-- **Root simulator.** `tools/sensor_sim.py` runs as root to take hci0 through the HCI user channel and receives the site
+- **Root simulator.** `tools/iot_sim.py` runs as root to take hci0 through the HCI user channel and receives the site
   password in memory, like a sensor. Its log holds sensor IDs, attempt IDs, the technician's name and outcomes, never
   a key or a password.
 
@@ -163,7 +163,7 @@ available so updates retain that identity; ad-hoc builds can trigger new access 
 - Tokens for another customer, expired, forged or presented without their holder key are refused and close the
   session. (`device/src/provision.rs`, `device/src/authority.rs`)
 - Demo sensors are refused as not genuine under the real device authority. (`configurator/src/demo.test.ts`)
-- The code `sensor-workshop issue` prints is the code the app reads. (`device/tests/noise_vectors.rs`,
+- The code `iot-workshop issue` prints is the code the app reads. (`device/tests/noise_vectors.rs`,
   `configurator/src/authority.test.ts`)
 - The clock floor never starts before the firmware date and rises no faster than the uptime. (`device/bin/main.rs`)
 - Tampered, truncated, reordered, and replayed frames are rejected. (`configurator/src/noise.test.ts`,

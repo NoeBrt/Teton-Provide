@@ -3,18 +3,18 @@ Date: 2026-10-20
 
 Configurator: iPhone 15 Pro, iOS 27.0, app "provide." built from commit 327edf0 (Release, free Apple ID).
               Phone network off (Wi-Fi and mobile data), Bluetooth on: reported by the user.
-Device:       noe-lab, Ubuntu 22.04.5, BlueZ 5.64; service sensor-device installed with
-              device/systemd/install.sh, running as user sensor, started by systemd, no SSH session involved
+Device:       noe-lab, Ubuntu 22.04.5, BlueZ 5.64; service iot-device installed with
+              device/systemd/install.sh, running as user iot, started by systemd, no SSH session involved
               in the exchange. Identity copied from the staged state, so the printed label stays valid.
 
-systemctl show sensor-device:
+systemctl show iot-device:
 MainPID=1925723
 NRestarts=0
-User=sensor
+User=iot
 ActiveEnterTimestamp=Tue 2026-10-20 17:01:40 CEST
 
-journalctl -u sensor-device (outcomes only; the service never logs payloads or addresses):
-2026-10-20T17:01:40+0200 noe-lab sensor-device[1925723]: SENSOR-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning
-2026-10-20T17:33:01+0200 noe-lab sensor-device[1925723]: hello exchanged
+journalctl -u iot-device (outcomes only; the service never logs payloads or addresses):
+2026-10-20T17:01:40+0200 noe-lab iot-device[1925723]: IOT-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning
+2026-10-20T17:33:01+0200 noe-lab iot-device[1925723]: hello exchanged
 
 Not covered here: service restart and machine reboot (pending), the encrypted Wi-Fi setup itself.

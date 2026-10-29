@@ -12,7 +12,7 @@ use dbus::arg::{PropMap, Variant};
 use dbus::blocking::stdintf::org_freedesktop_dbus::Properties;
 use dbus::blocking::{Connection, Proxy};
 use dbus::message::MatchRule;
-use sensor_provisioning::provision::{Enterprise, Failure, Outcome};
+use iot_provisioning::provision::{Enterprise, Failure, Outcome};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
@@ -57,7 +57,7 @@ struct Eap<'a> {
 }
 
 /// Joins the network with the profile not in use and reports the outcome and that profile;
-/// `interface` pins the Wi-Fi device (`SENSOR_WIFI_INTERFACE`), `current` is the working profile, if any.
+/// `interface` pins the Wi-Fi device (`IOT_WIFI_INTERFACE`), `current` is the working profile, if any.
 pub fn activate(
     ssid: &[u8],
     password: &[u8],
@@ -231,7 +231,7 @@ fn settings(
             "connection",
             section(vec![
                 ("type", text("802-11-wireless")),
-                ("id", text("sensor-provisioned")),
+                ("id", text("iot-provisioned")),
                 ("uuid", text(uuid)),
                 ("autoconnect", Variant(Box::new(autoconnect))),
             ]),

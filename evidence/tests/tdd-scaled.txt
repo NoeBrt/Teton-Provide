@@ -2,15 +2,15 @@ SIMULATION ONLY — TDD execution evidence
 Public seam: simulation::batch::run_batch(device_count, concurrency)
 RED 1 — a queued batch must complete each device once within its concurrency cap
 Command: RUSTUP_TOOLCHAIN=stable cargo test --test scaled --locked --offline
-   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
-error[E0432]: unresolved import `sensor_provisioning::simulation::batch`
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
+error[E0432]: unresolved import `iot_provisioning::simulation::batch`
  --> tests/scaled.rs:1:37
   |
-1 | use sensor_provisioning::simulation::batch::run_batch;
+1 | use iot_provisioning::simulation::batch::run_batch;
   |                                     ^^^^^ could not find `batch` in `simulation`
 
 For more information about this error, try `rustc --explain E0432`.
-error: could not compile `sensor-provisioning` (test "scaled") due to 1 previous error
+error: could not compile `iot-provisioning` (test "scaled") due to 1 previous error
 Exit code: 101 (nonzero expected before implementation)
 
 GREEN 1 — minimal bounded batch implementation
@@ -21,7 +21,7 @@ test each_queued_device_finishes_once_with_bounded_concurrency ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.41s
      Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
 Exit code: 0
@@ -46,7 +46,7 @@ failures:
 
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
 
-   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
      Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
 error: test failed, to rerun pass `--test scaled`
@@ -61,7 +61,7 @@ test each_queued_device_finishes_once_with_bounded_concurrency ... ok
 
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
      Running tests/scaled.rs (target/debug/deps/scaled-fe899e3d53875eea)
 Exit code: 0
@@ -78,9 +78,9 @@ test protocol::tests::rejects_every_single_byte_mutation ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
 
-   Compiling sensor-provisioning v0.1.0 (/tmp/sensor-contract-mutation-t5h1fwo7)
+   Compiling iot-provisioning v0.1.0 (/tmp/iot-contract-mutation-t5h1fwo7)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
-     Running unittests src/lib.rs (target/debug/deps/sensor_provisioning-4f606155ec9216ed)
+     Running unittests src/lib.rs (target/debug/deps/iot_provisioning-4f606155ec9216ed)
 Exit code: 0 (zero exposes the test gap)
 
 RED 3 — hardened public protocol test kills the same isolated mutation
@@ -108,9 +108,9 @@ failures:
 
 test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
 
-   Compiling sensor-provisioning v0.1.0 (/tmp/sensor-contract-mutation-ieo0g7z3)
+   Compiling iot-provisioning v0.1.0 (/tmp/iot-contract-mutation-ieo0g7z3)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
-     Running unittests src/lib.rs (target/debug/deps/sensor_provisioning-4f606155ec9216ed)
+     Running unittests src/lib.rs (target/debug/deps/iot_provisioning-4f606155ec9216ed)
 error: test failed, to rerun pass `--lib`
 Exit code: 101 (nonzero expected)
 
@@ -125,14 +125,14 @@ test protocol::tests::rejects_every_single_byte_mutation ... ok
 
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
 
-   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
-     Running unittests src/lib.rs (target/debug/deps/sensor_provisioning-4f606155ec9216ed)
+     Running unittests src/lib.rs (target/debug/deps/iot_provisioning-4f606155ec9216ed)
 Exit code: 0
 
 RED 4 — public benchmark CLI does not yet accept --scale
 Command: RUSTUP_TOOLCHAIN=stable cargo run --release --example benchmark --locked --offline -- --scale
-   Compiling sensor-provisioning v0.1.0 (/home/noe/noe-ws/sensor-provisioning)
+   Compiling iot-provisioning v0.1.0 (/home/noe/noe-ws/iot-provisioning)
     Finished `release` profile [optimized] target(s) in 0.46s
      Running `target/release/examples/benchmark --scale`
 Error: "Usage: cargo run --release --offline --example benchmark -- [--soak SECONDS]\nSECONDS must be an integer from 1 to 3600."

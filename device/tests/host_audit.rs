@@ -15,7 +15,7 @@ struct HostFixture(PathBuf);
 impl HostFixture {
     fn new() -> Self {
         let root = std::env::temp_dir().join(format!(
-            "sensor-host-audit-{}-{}",
+            "iot-host-audit-{}-{}",
             std::process::id(),
             NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed)
         ));

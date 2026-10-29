@@ -4,19 +4,19 @@ Evidence class: ACTUAL
 Hardware: noe-lab (Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MT7921), admin over Ethernet (eno1).
 Phone: iPhone 15 Pro, iOS 27.0, provide. Release build of commit 52644b3 + f980486.
 Device build: commit 52644b3 (release, features ble,stage), installed by ~/noe-ws/stage-lab.sh (lab-only script,
-not in the repository): stage init as user sensor, certificate from the demo device authority for customer DEMO,
+not in the repository): stage init as user iot, certificate from the demo device authority for customer DEMO,
 stage install with the demo technician authority's public key.
 
-Startup (journalctl -u sensor-device):
-  21:01:19 SENSOR-AFD042F349 advertising on hci0; accepts hello and encrypted provisioning
+Startup (journalctl -u iot-device):
+  21:01:19 IOT-AFD042F349 advertising on hci0; accepts hello and encrypted provisioning
 
 The sensor kept its Wi-Fi from the first protocol: the empty legacy marker reads as the first profile UUID.
-  nmcli (before): sensor-provisioned 4a7db77c-6fda-47aa-95ca-d186c5096b32 wlo1 activated
+  nmcli (before): iot-provisioned 4a7db77c-6fda-47aa-95ca-d186c5096b32 wlo1 activated
 
 Technician code: issued on noe-lab with `authority issue … "Noé" DEMO 30`, printed as a QR on the thermal printer
 (the code never left noe-lab otherwise), scanned with the iPhone Camera, saved behind Face ID in provide.
 
-Run: the card showed SENSOR-AFD042F349 online; the user tapped Reconfigure and picked the site. The app showed
+Run: the card showed IOT-AFD042F349 online; the user tapped Reconfigure and picked the site. The app showed
 Device connected (user report: "ça marche").
 
 Device journal (short-precise; no SSID, password, code or address is logged):
@@ -24,7 +24,7 @@ Device journal (short-precise; no SSID, password, code or address is logged):
   21:18:36.020078 attempt 2fda714b958e3e05a645b9e0cc257cfc pending
   21:18:41.862478 attempt 2fda714b958e3e05a645b9e0cc257cfc connected
 
-  nmcli (after):  sensor-provisioned b5b2bc3f-8221-4a28-8c40-5e078953fcf2 wlo1 activated
+  nmcli (after):  iot-provisioned b5b2bc3f-8221-4a28-8c40-5e078953fcf2 wlo1 activated
 
 What this shows on real hardware:
 - the phone verified the sensor's certificate and the sensor accepted the technician code (otherwise no

@@ -1,28 +1,28 @@
-//! sensor-workshop: The manufacturer's authorities, run at the workshop. Offline except the first deployment downloads.
+//! iot-workshop: The manufacturer's authorities, run at the workshop. Offline except the first deployment downloads.
 //! Two Ed25519 keys, kept apart from the devices:
 //!
 //! ```text
-//! sensor-workshop init | public | certify DEVICE_PUBLIC_KEY_HEX --customer C | issue NAME --customer C [--customer C2...]
-//!     short forms: the authority lives in $SENSOR_AUTHORITY, else ~/sensor-authority; codes are valid one day. A
+//! iot-workshop init | public | certify DEVICE_PUBLIC_KEY_HEX --customer C | issue NAME --customer C [--customer C2...]
+//!     short forms: the authority lives in $IOT_AUTHORITY, else ~/iot-authority; codes are valid one day. A
 //!     customer is a name or an ID ("Noé Home" is NOE-HOME). Without --customer, the last customer is offered again,
 //!     on a terminal only and after a yes
-//! sensor-workshop init DIR
+//! iot-workshop init DIR
 //!     creates the device authority and the technician authority (private keys 0600) and prints their public keys
-//! sensor-workshop public DIR
+//! iot-workshop public DIR
 //!     prints both public keys: the device authority's goes into the app, the technician authority's onto sensors
-//! sensor-workshop certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER
+//! iot-workshop certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER
 //!     prints the certificate for a sensor's key (from `stage init`), for one customer
-//! sensor-workshop issue DIR NAME CUSTOMER[,CUSTOMER...] [DAYS]
+//! iot-workshop issue DIR NAME CUSTOMER[,CUSTOMER...] [DAYS]
 //!     prints a technician code as text and a QR code, valid DAYS days (default and at most 5) for those
 //!     customers, and its code ID; the ID is logged in DIR/issued.tsv with the name, never the code
-//! sensor-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C
+//! iot-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C
 //!     installs the service on a blank Ubuntu sensor over SSH (USB or network) and makes it ready for setup: copies
 //!     the released binaries for its architecture (downloaded once, SHA-256 checked), runs systemd/install.sh, has
 //!     the sensor create its key, certifies that key here for the customer and installs the certificate. The authority's
 //!     private keys stay on this machine; the sudo password is read here, without echo, and sent over SSH only
-//! sensor-workshop uninstall SSH_HOST [--yes]
+//! iot-workshop uninstall SSH_HOST [--yes]
 //!     undoes deploy: forgets the Wi-Fi the sensor was given, removes the service, its files and the sensor account,
-//!     and keeps the sensor's key in /root/sensor-backup
+//!     and keeps the sensor's key in /root/iot-backup
 //! ```
 //!
 //! The code is `<token hex>.<holder private key hex>`: the token names a holder key generated for this code, and
@@ -33,12 +33,12 @@
 mod binaries;
 
 use ed25519_dalek::SigningKey;
-use qrcode::QrCode;
-use qrcode::render::unicode;
-use sensor_provisioning::authority::{
+use iot_provisioning::authority::{
     DeviceCertificate, MAX_CUSTOMER, MAX_CUSTOMERS, TechnicianToken, code_text, device_id,
 };
-use sensor_provisioning::provision::{KeyPair, NOISE_PARAMS, hex, unhex};
+use iot_provisioning::provision::{KeyPair, NOISE_PARAMS, hex, unhex};
+use qrcode::QrCode;
+use qrcode::render::unicode;
 use snow::Builder;
 use std::fmt::Display;
 use std::fs::{DirBuilder, OpenOptions};
@@ -54,16 +54,16 @@ const TECHNICIAN_KEY: &str = "technician-authority.key";
 const ISSUED_LOG: &str = "issued.tsv";
 /// Codes are valid 5 days at most: with no revocation yet, expiry bounds a leaked code.
 const MAX_DAYS: u64 = 5;
-const USAGE: &str = "usage: sensor-workshop init | public | certify DEVICE_PUBLIC_KEY_HEX --customer C | issue NAME --customer C... \
-                     (in $SENSOR_AUTHORITY, else ~/sensor-authority; 1 day)\n       \
-                     sensor-workshop init DIR | public DIR | certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER | issue DIR NAME CUSTOMERS [DAYS]\n       \
-                     sensor-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C   (default: the first Wi-Fi device) | uninstall SSH_HOST [--yes]\n\
-                     Run `sensor-workshop help` for what each command does.";
-/// `sensor-workshop help`, by what the user wants to do; `{dir}` is the authority folder in use.
-const HELP: &str = "sensor-workshop: The manufacturer's workshop tool. It holds the two authority keys, on this machine only.
+const USAGE: &str = "usage: iot-workshop init | public | certify DEVICE_PUBLIC_KEY_HEX --customer C | issue NAME --customer C... \
+                     (in $IOT_AUTHORITY, else ~/iot-authority; 1 day)\n       \
+                     iot-workshop init DIR | public DIR | certify DIR DEVICE_PUBLIC_KEY_HEX CUSTOMER | issue DIR NAME CUSTOMERS [DAYS]\n       \
+                     iot-workshop deploy SSH_HOST [WIFI_INTERFACE] --customer C   (default: the first Wi-Fi device) | uninstall SSH_HOST [--yes]\n\
+                     Run `iot-workshop help` for what each command does.";
+/// `iot-workshop help`, by what the user wants to do; `{dir}` is the authority folder in use.
+const HELP: &str = "iot-workshop: The manufacturer's workshop tool. It holds the two authority keys, on this machine only.
 
 Authority folder: {dir}
-  ($SENSOR_AUTHORITY, else ~/sensor-authority. One folder for every customer; the short forms below use it.)
+  ($IOT_AUTHORITY, else ~/iot-authority. One folder for every customer; the short forms below use it.)
 
 Customers
   --customer C                  a name or an ID: \"Noé Home\" is NOE-HOME, the ID that certificates and codes carry
@@ -78,9 +78,9 @@ Add a sensor
                                 install, key, certify for C and start a blank Ubuntu sensor over SSH (USB: 192.168.55.1)
                                 downloads Linux binaries once; no compiler needed on the sensor
   certify SENSOR_PUBLIC_KEY --customer C
-                                manual path: certify the key `sensor-stage init` printed
+                                manual path: certify the key `iot-stage init` printed
   uninstall SSH_HOST [--yes]    forget the Wi-Fi it was given and remove the sensor service: a blank sensor again
-                                (its key is kept in /root/sensor-backup); asks first, a script passes --yes
+                                (its key is kept in /root/iot-backup); asks first, a script passes --yes
 
 Give a technician access
   issue NAME --customer C [--customer C2...]
@@ -92,12 +92,12 @@ Long forms (any folder, customer, validity)
   init DIR | public DIR | certify DIR KEY CUSTOMER | issue DIR NAME CUSTOMER[,CUSTOMER...] [DAYS<=5]
 
 Example
-  sensor-workshop init                                        once, for every customer
-  sensor-workshop deploy jetson-027 --customer \"Noé Home\"
-  sensor-workshop issue \"Alex\" --customer \"Noé Home\" --customer \"Hôpital Saint-Louis\"";
+  iot-workshop init                                        once, for every customer
+  iot-workshop deploy jetson-027 --customer \"Noé Home\"
+  iot-workshop issue \"Alex\" --customer \"Noé Home\" --customer \"Hôpital Saint-Louis\"";
 /// Where `deploy` copies the binaries and the installer on the sensor, removed once installed.
-const REMOTE_DIR: &str = "sensor-deploy";
-const STATE_DIR: &str = "/var/lib/sensor-device";
+const REMOTE_DIR: &str = "iot-deploy";
+const STATE_DIR: &str = "/var/lib/iot-device";
 /// The sensor crate of the checkout this binary was built from: `deploy` takes the sensor binaries and systemd/ from
 /// there, so it runs from any folder. Reinstall after moving the checkout.
 const DEVICE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../device");
@@ -319,10 +319,10 @@ fn remember(dir: &Path, customer: &Customer) -> Result<(), String> {
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let dir = std::env::var_os("SENSOR_AUTHORITY")
+    let dir = std::env::var_os("IOT_AUTHORITY")
         .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join("sensor-authority")))
-        .unwrap_or_else(|| PathBuf::from("sensor-authority"));
+        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join("iot-authority")))
+        .unwrap_or_else(|| PathBuf::from("iot-authority"));
     match run(&args, &dir) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
@@ -446,7 +446,7 @@ fn init(dir: &Path) -> Result<(), String> {
         "\n{} put both keys into configurator/src/authority.ts (DEVICE_AUTHORITY, TECHNICIAN_AUTHORITY) and rebuild \
          the app; then {}",
         err(BOLD, "Next:"),
-        err(CYAN, "sensor-workshop deploy SSH_HOST")
+        err(CYAN, "iot-workshop deploy SSH_HOST")
     );
     Ok(())
 }
@@ -502,8 +502,8 @@ fn certify(dir: &Path, key: &str, customer: &Customer) -> Result<(), String> {
         err(
             CYAN,
             format!(
-                "sudo -u sensor sensor-stage install {STATE_DIR} {certificate} {authority} && sudo systemctl restart \
-                 sensor-device"
+                "sudo -u iot iot-stage install {STATE_DIR} {certificate} {authority} && sudo systemctl restart \
+                 iot-device"
             )
         )
     );
@@ -546,12 +546,12 @@ fn deploy(dir: &Path, host: &str, interface: Option<&str>, given: &[String]) -> 
             let answer = remote(
                 host,
                 ssh_options,
-                &["uname -m; test -e /usr/local/bin/sensor-device && echo installed || true"],
+                &["uname -m; test -e /usr/local/bin/iot-device && echo installed || true"],
                 None,
             )?;
             if answer.contains("installed") {
                 return Err(format!(
-                    "sensor-device is already installed on {host}: deploy sets up a blank sensor only, and moving a \
+                    "iot-device is already installed on {host}: deploy sets up a blank sensor only, and moving a \
                      sensor to another customer is not defined yet (README, Limits)"
                 ));
             }
@@ -658,7 +658,7 @@ fn over_ssh<T>(host: &str, work: impl FnOnce(&[&str]) -> Result<T, String>) -> R
         "-o",
         "ControlMaster=auto",
         "-o",
-        "ControlPath=~/.ssh/sensor-deploy-%C",
+        "ControlPath=~/.ssh/iot-deploy-%C",
         "-o",
         "ControlPersist=60",
     ];
@@ -690,7 +690,7 @@ fn uninstall(
             Some(false) => return Err("uninstall cancelled".to_string()),
             None => {
                 return Err(format!(
-                    "uninstall asks first; with no terminal to ask, a script passes --yes: sensor-workshop uninstall \
+                    "uninstall asks first; with no terminal to ask, a script passes --yes: iot-workshop uninstall \
                      {host} --yes"
                 ));
             }
@@ -725,7 +725,7 @@ fn uninstall(
         println!(
             "\n{} {host} is blank again: deploy it with {}",
             out(GREEN, "✓"),
-            out(CYAN, format!("sensor-workshop deploy {host} --customer C"))
+            out(CYAN, format!("iot-workshop deploy {host} --customer C"))
         );
         Ok(())
     })
@@ -738,7 +738,7 @@ fn ask_uninstall(host: &str) -> Option<bool> {
     }
     eprint!(
         "{} remove the sensor service from {host} and forget the Wi-Fi it was given? Its key is kept in \
-         /root/sensor-backup. [y/N] ",
+         /root/iot-backup. [y/N] ",
         err(YELLOW, "Uninstall:")
     );
     let mut answer = String::new();
@@ -756,15 +756,15 @@ fn uninstall_command(now: u64) -> String {
         .map(|uuid| format!("nmcli connection delete uuid {uuid}"))
         .join("; ");
     format!(
-        "sudo -k -S -p '' sh -c 'exec </dev/null; systemctl disable --now sensor-device 2>/dev/null; \
-         rm -f /etc/systemd/system/sensor-device.service /usr/local/bin/sensor-device /usr/local/bin/sensor-stage \
-         /etc/default/sensor-device /etc/polkit-1/localauthority/50-local.d/sensor-device.pkla \
-         /etc/polkit-1/rules.d/50-sensor-device.rules /etc/systemd/system/bluetooth.service.d/sensor-device.conf; \
+        "sudo -k -S -p '' sh -c 'exec </dev/null; systemctl disable --now iot-device 2>/dev/null; \
+         rm -f /etc/systemd/system/iot-device.service /usr/local/bin/iot-device /usr/local/bin/iot-stage \
+         /etc/default/iot-device /etc/polkit-1/localauthority/50-local.d/iot-device.pkla \
+         /etc/polkit-1/rules.d/50-iot-device.rules /etc/systemd/system/bluetooth.service.d/iot-device.conf; \
          rmdir /etc/systemd/system/bluetooth.service.d 2>/dev/null; \
-         if [ -d {STATE_DIR} ]; then install -d -m 700 /root/sensor-backup && \
-         mv {STATE_DIR} /root/sensor-backup/sensor-device-{now} && echo key kept in /root/sensor-backup/sensor-device-{now}; fi; \
-         id sensor >/dev/null 2>&1 && userdel sensor; systemctl daemon-reload; systemctl restart bluetooth; \
-         echo service, files and sensor account removed; \
+         if [ -d {STATE_DIR} ]; then install -d -m 700 /root/iot-backup && \
+         mv {STATE_DIR} /root/iot-backup/iot-device-{now} && echo key kept in /root/iot-backup/iot-device-{now}; fi; \
+         id iot >/dev/null 2>&1 && userdel iot; systemctl daemon-reload; systemctl restart bluetooth; \
+         echo service, files and iot account removed; \
          setsid sh -c \"sleep 2; {forget}\" >/dev/null 2>&1 &' && rm -rf {REMOTE_DIR}"
     )
 }
@@ -775,7 +775,7 @@ fn install_command(interface: Option<&str>) -> String {
     let interface = interface.map(|name| format!(" {name}")).unwrap_or_default();
     format!(
         "sudo -k -S -p '' sh -c 'exec </dev/null; {REMOTE_DIR}/systemd/install.sh{interface} >/dev/null && \
-         sudo -u sensor sensor-stage init {STATE_DIR}'"
+         sudo -u iot iot-stage init {STATE_DIR}'"
     )
 }
 
@@ -786,9 +786,9 @@ fn install_command(interface: Option<&str>) -> String {
 fn start_command(certificate: &str, authority: &str, now: u64) -> String {
     let floor = format!("{STATE_DIR}/clock-floor");
     format!(
-        "sudo -k -S -p '' sh -c 'exec </dev/null; sudo -u sensor sensor-stage install {STATE_DIR} {certificate} {authority} >/dev/null && \
-         sudo -u sensor sh -c \"umask 077; echo {now} > {floor}\" && \
-         systemctl restart sensor-device && sleep 2 && journalctl -u sensor-device -n 1 -o cat' && rm -rf {REMOTE_DIR}"
+        "sudo -k -S -p '' sh -c 'exec </dev/null; sudo -u iot iot-stage install {STATE_DIR} {certificate} {authority} >/dev/null && \
+         sudo -u iot sh -c \"umask 077; echo {now} > {floor}\" && \
+         systemctl restart iot-device && sleep 2 && journalctl -u iot-device -n 1 -o cat' && rm -rf {REMOTE_DIR}"
     )
 }
 
@@ -1025,8 +1025,7 @@ mod tests {
 
     /// A fresh authority directory for one test.
     fn initialized(test: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("sensor-authority-{test}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iot-authority-{test}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         init(&dir).unwrap();
         dir
@@ -1034,8 +1033,7 @@ mod tests {
 
     #[test]
     fn the_short_forms_use_the_default_directory_and_name_their_customer() {
-        let dir =
-            std::env::temp_dir().join(format!("sensor-authority-short-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iot-authority-short-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let key = "11".repeat(32);
         assert_eq!(run(&["init"], &dir), Ok(()));
@@ -1248,19 +1246,21 @@ mod tests {
     fn deploy_sets_the_sensor_clock_floor_to_the_workshop_time() {
         let command = start_command("CERT", "AUTHORITY", 1_792_879_921);
         let floor = command
-            .find("echo 1792879921 > /var/lib/sensor-device/clock-floor")
+            .find("echo 1792879921 > /var/lib/iot-device/clock-floor")
             .expect("the workshop time becomes the floor");
-        let restart = command.find("systemctl restart sensor-device").unwrap();
+        let restart = command.find("systemctl restart iot-device").unwrap();
         assert!(floor < restart, "the service reads the floor at startup");
         assert!(
-            command.contains("sudo -u sensor sh -c \"umask 077; echo 1792879921 > /var/lib/sensor-device/clock-floor\""),
+            command.contains(
+                "sudo -u iot sh -c \"umask 077; echo 1792879921 > /var/lib/iot-device/clock-floor\""
+            ),
             "written as the service's account: root never follows a link it planted"
         );
         assert!(
             command.starts_with("sudo -k -S -p '' sh -c 'exec </dev/null;"),
             "the password never reaches a child"
         );
-        assert!(command.contains("sensor-stage install /var/lib/sensor-device CERT AUTHORITY"));
+        assert!(command.contains("iot-stage install /var/lib/iot-device CERT AUTHORITY"));
     }
 
     #[test]
@@ -1271,28 +1271,27 @@ mod tests {
             "the password never reaches a child"
         );
         for path in [
-            "/etc/systemd/system/sensor-device.service",
-            "/usr/local/bin/sensor-device",
-            "/usr/local/bin/sensor-stage",
-            "/etc/default/sensor-device",
-            "/etc/polkit-1/localauthority/50-local.d/sensor-device.pkla",
-            "/etc/polkit-1/rules.d/50-sensor-device.rules",
-            "/etc/systemd/system/bluetooth.service.d/sensor-device.conf",
+            "/etc/systemd/system/iot-device.service",
+            "/usr/local/bin/iot-device",
+            "/usr/local/bin/iot-stage",
+            "/etc/default/iot-device",
+            "/etc/polkit-1/localauthority/50-local.d/iot-device.pkla",
+            "/etc/polkit-1/rules.d/50-iot-device.rules",
+            "/etc/systemd/system/bluetooth.service.d/iot-device.conf",
         ] {
             assert!(command.contains(path), "systemd/install.sh puts {path}");
         }
         assert!(
-            command
-                .contains("mv /var/lib/sensor-device /root/sensor-backup/sensor-device-1792879921"),
+            command.contains("mv /var/lib/iot-device /root/iot-backup/iot-device-1792879921"),
             "the sensor key is kept, root only"
         );
-        assert!(command.contains("userdel sensor"));
+        assert!(command.contains("userdel iot"));
         for uuid in WIFI_PROFILES {
             let wifi = command
                 .find(uuid)
                 .expect("both Wi-Fi profiles are forgotten");
             assert!(
-                wifi > command.find("userdel sensor").unwrap(),
+                wifi > command.find("userdel iot").unwrap(),
                 "last: over Wi-Fi, the link drops there"
             );
         }
@@ -1321,12 +1320,11 @@ mod tests {
     #[test]
     fn deploy_pins_a_wifi_interface_only_when_asked() {
         assert!(
-            install_command(None).contains("sensor-deploy/systemd/install.sh >/dev/null"),
+            install_command(None).contains("iot-deploy/systemd/install.sh >/dev/null"),
             "no interface: the service takes the first Wi-Fi device (noe-lab's is wlo1, not wlan0)"
         );
         assert!(
-            install_command(Some("wlo1"))
-                .contains("sensor-deploy/systemd/install.sh wlo1 >/dev/null")
+            install_command(Some("wlo1")).contains("iot-deploy/systemd/install.sh wlo1 >/dev/null")
         );
         assert!(install_command(None).starts_with("sudo -k -S -p '' sh -c 'exec </dev/null;"));
     }
@@ -1366,7 +1364,7 @@ mod tests {
             assert_eq!(run(&[help], dir), Ok(()), "{help}");
         }
         let mistake = run(&["isue", "Bob"], dir).unwrap_err();
-        assert!(mistake.contains("sensor-workshop help"), "{mistake}");
+        assert!(mistake.contains("iot-workshop help"), "{mistake}");
     }
 
     #[test]
@@ -1389,10 +1387,10 @@ mod tests {
     fn deploy_reads_the_public_key_stage_init_prints() {
         let key = "ab".repeat(32);
         let output = format!(
-            "SENSOR-0123456789 keyed in /var/lib/sensor-device\npublic key (certify it with `sensor-workshop certify`): {key}\n"
+            "IOT-0123456789 keyed in /var/lib/iot-device\npublic key (certify it with `iot-workshop certify`): {key}\n"
         );
         assert_eq!(public_key_in(&output), Ok(key));
-        assert!(public_key_in("SENSOR-0123456789 keyed in /var/lib/sensor-device\n").is_err());
+        assert!(public_key_in("IOT-0123456789 keyed in /var/lib/iot-device\n").is_err());
     }
 
     #[test]
@@ -1410,10 +1408,7 @@ mod tests {
 
     #[test]
     fn a_sensor_answer_is_printed_without_control_characters() {
-        assert_eq!(
-            printable("SENSOR-1 advertising\n"),
-            "SENSOR-1 advertising\n"
-        );
+        assert_eq!(printable("IOT-1 advertising\n"), "IOT-1 advertising\n");
         assert_eq!(
             printable("\x1b]52;c;bad\x07ok\x1b[2K"),
             "?]52;c;bad?ok?[2K",

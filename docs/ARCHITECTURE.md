@@ -11,7 +11,7 @@ it received for that exact attempt.
 | Configurator, **Provide.** | `configurator/`: Expo / React Native, TypeScript; desktop shell in Tauri with a Rust Bluetooth bridge | iPhone and macOS (tested on hardware); Android and Windows/Linux desktop not run |
 | Device service | `device/bin/main.rs`, `device/bin/wifi.rs`: Rust, BlueZ (`bluer`), NetworkManager over D-Bus | Ubuntu 22.04 with a BLE adapter and Wi-Fi |
 | Protocol library | `device/src/`: Noise (`snow`), certificates and codes (`ed25519-dalek`) | Shared by the device and its tools |
-| Staging and workshop tools | `device/bin/stage.rs`, `workshop/` (`sensor-workshop`) | The sensor once before deployment; the manufacturer's workshop, offline |
+| Staging and workshop tools | `device/bin/stage.rs`, `workshop/` (`iot-workshop`) | The sensor once before deployment; the manufacturer's workshop, offline |
 
 How to run it: [SETUP.md](SETUP.md). Security design and its tests: [SECURITY.md](SECURITY.md). Every decision with
 its alternatives: [DECISIONS.md](DECISIONS.md). What is proven: the [requirements map](../README.md#requirements-map).
@@ -69,7 +69,7 @@ flowchart LR
 ```
 
 **Discovery.** Each sensor advertises the provisioning service, its state (not staged, ready, online, Wi-Fi lost) and
-its ID, `SENSOR-` and 10 hex digits of the hash of its key, in one manufacturer-data record: `[state][5 ID bytes]`
+its ID, `IOT-` and 10 hex digits of the hash of its key, in one manufacturer-data record: `[state][5 ID bytes]`
 under test company `0xFFFF`. Flags, service UUID and this record fill the 31-byte legacy packet exactly. The service
 has two characteristics: **Hello** answers `world` to `hello` (a radio check, never credentials) and **Provisioning**
 carries Noise messages, one per acknowledged write.
@@ -182,7 +182,7 @@ device/src/protocol.rs    service and characteristic UUIDs, advertisement format
 device/bin/main.rs        BLE peripheral: hello and provisioning, one phone at a time, advertised state
 device/bin/wifi.rs        NetworkManager over D-Bus: two alternating profiles, rollback, failure reasons
 device/bin/stage.rs       staging: key, then certificate and technician authority
-workshop/src/main.rs      sensor-workshop: The manufacturer's authorities; deploy and certify a sensor, issue a technician code
+workshop/src/main.rs      iot-workshop: The manufacturer's authorities; deploy and certify a sensor, issue a technician code
 configurator/src/         noise.ts (Noise initiator), authority.ts (certificate and code checks), probe.ts (scan,
                           state and ID), setup.ts (one sensor), batch.ts (queue, six at a time), demo.ts (200
                           simulated sensors)

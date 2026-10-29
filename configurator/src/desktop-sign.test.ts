@@ -21,7 +21,7 @@ test('local installation signs with an existing Apple identity and verifies the 
     let result = run();
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(readFileSync(trace, 'utf8').trim().split('\n'), [
-      '--force', '--sign', identity, '--identifier', 'dev.sensorprovisioning.provide', join(dir, 'Provide test.app'),
+      '--force', '--sign', identity, '--identifier', 'dev.iotprovisioning.provide', join(dir, 'Provide test.app'),
       '--verify', '--deep', '--strict', join(dir, 'Provide test.app'),
     ]);
     writeFileSync(trace, '');

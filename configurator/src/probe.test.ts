@@ -78,17 +78,17 @@ test('the advertised state byte (manufacturer data 0xFFFF) tells what a sensor i
 });
 
 test('identity requires a complete manufacturer record and ignores names', () => {
-  const adv = (bytes: number[]) => ({ localName: 'SENSOR-0000000000', manufacturerData: { ffff: { bytes } } });
-  for (const state of [0, 1, 2, 3]) assert.equal(sensorId(adv([state, 0x7b, 9, 0xf2, 3, 0x39])), 'SENSOR-7B09F20339');
+  const adv = (bytes: number[]) => ({ localName: 'IOT-0000000000', manufacturerData: { ffff: { bytes } } });
+  for (const state of [0, 1, 2, 3]) assert.equal(sensorId(adv([state, 0x7b, 9, 0xf2, 3, 0x39])), 'IOT-7B09F20339');
   for (const bytes of [[], [1], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6, 7], [4, 1, 2, 3, 4, 5],
     [1, -1, 2, 3, 4, 5], [1, 256, 2, 3, 4, 5], [1, 1.5, 2, 3, 4, 5], [1, NaN, 2, 3, 4, 5]]) {
     assert.equal(sensorId(adv(bytes)), null, `invalid record: ${bytes}`);
   }
-  assert.equal(sensorId({ localName: 'SENSOR-7B09F20339' }), null);
+  assert.equal(sensorId({ localName: 'IOT-7B09F20339' }), null);
   assert.equal(sensorId({ manufacturerData: { '004c': { bytes: [1, 0x7b, 9, 0xf2, 3, 0x39] } } }), null);
   assert.equal(sensorId(undefined), null);
-  assert.equal(sensorLabel({ name: 'SENSOR-7B09F20339', advertising: { localName: 'SENSOR-7B09F20339' } }), 'Unnamed sensor');
-  assert.equal(sensorLabel({ name: 'jetson-019', advertising: adv([1, 0x7b, 9, 0xf2, 3, 0x39]) }), 'SENSOR-7B09F20339');
+  assert.equal(sensorLabel({ name: 'IOT-7B09F20339', advertising: { localName: 'IOT-7B09F20339' } }), 'Unnamed sensor');
+  assert.equal(sensorLabel({ name: 'jetson-019', advertising: adv([1, 0x7b, 9, 0xf2, 3, 0x39]) }), 'IOT-7B09F20339');
 });
 
 test('redraw follows identity, state and signal, ignoring cached names', () => {
@@ -106,14 +106,14 @@ test('packets without manufacturer identity retain the last complete record atom
   const before: { rssi: number; advertising: Advertising } = { rssi: -50, advertising: { localName: 'old', manufacturerData: { ffff: { bytes: [1, 0, 0, 0, 0, 1] } } } };
   const bare: { rssi: number; advertising: Advertising } = { rssi: -44, advertising: { localName: 'new', manufacturerData: { '004c': { bytes: [2] } } } };
   const merged = keepAdvertised(before, bare);
-  assert.equal(sensorId(merged.advertising), 'SENSOR-0000000001');
+  assert.equal(sensorId(merged.advertising), 'IOT-0000000001');
   assert.equal(sensorState(merged.advertising), 'ready');
   assert.equal(merged.rssi, -44);
   assert.equal(merged.advertising.manufacturerData?.['004c'], undefined, 'unrelated manufacturer records are not retained');
   const update = { rssi: -40, advertising: { manufacturerData: { ffff: { bytes: [2, 0, 0, 0, 0, 2] } } } };
   const replaced = keepAdvertised(before, update);
   assert.equal(sensorState(replaced.advertising), 'online');
-  assert.equal(sensorId(replaced.advertising), 'SENSOR-0000000002');
+  assert.equal(sensorId(replaced.advertising), 'IOT-0000000002');
   const malformed = { rssi: -40, advertising: { manufacturerData: { ffff: { bytes: [1] } } } };
   assert.equal(sensorId(keepAdvertised(before, malformed).advertising), null, 'a new record is not patched with an old ID');
   assert.equal(keepAdvertised(undefined, bare), bare);

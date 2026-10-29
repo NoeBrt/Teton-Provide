@@ -3,7 +3,7 @@
 Observed on 24 October 2026, macOS 26.6.2, Apple Silicon, locally built Provide. with Tauri 2.12.5.
 
 - **Window → Nearby Sensors** opened the native panel. The panel showed the same two Bluetooth sensors as the main
-  window: `SENSOR-6B1E844588` and `SENSOR-4FF546816F`.
+  window: `IOT-6B1E844588` and `IOT-4FF546816F`.
 - The installed panel displayed **“world” received** for both sensors after interactive hello tests. These were real
   Bluetooth exchanges, not simulated sensors. No Wi-Fi setup was run as part of this verification.
 - Refresh completed with **List updated** in the panel.

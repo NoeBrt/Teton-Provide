@@ -6,15 +6,15 @@ Requires=bluetooth.service
 Wants=NetworkManager.service
 
 [Service]
-ExecStart=/usr/local/bin/sensor-device
-# NetworkManager lets this user manage its profile through polkit (sensor-device.pkla / 50-sensor-device.rules).
-User=sensor
-# /var/lib/sensor-device ($STATE_DIRECTORY): device key, certificate, technician authority, provisioned marker,
+ExecStart=/usr/local/bin/iot-device
+# NetworkManager lets this user manage its profile through polkit (iot-device.pkla / 50-iot-device.rules).
+User=iot
+# /var/lib/iot-device ($STATE_DIRECTORY): device key, certificate, technician authority, provisioned marker,
 # clock floor.
-StateDirectory=sensor-device
+StateDirectory=iot-device
 StateDirectoryMode=0700
-# Optional SENSOR_WIFI_INTERFACE=wlo1 (default: the first Wi-Fi device).
-EnvironmentFile=-/etc/default/sensor-device
+# Optional IOT_WIFI_INTERFACE=wlo1 (default: the first Wi-Fi device).
+EnvironmentFile=-/etc/default/iot-device
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=yes

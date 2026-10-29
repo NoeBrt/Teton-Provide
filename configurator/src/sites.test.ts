@@ -36,7 +36,7 @@ test('Wi-Fi QR: undoes backslash escapes and optional quotes', () => {
 test('Wi-Fi QR: refuses what the sensors cannot join, and says why', () => {
   const cases: [string, string][] = [
     ['https://example.com', 'not a Wi-Fi QR code'],
-    ['T1:SENSOR-DEMO-001:aa:bb', 'not a Wi-Fi QR code'],
+    ['T1:IOT-DEMO-001:aa:bb', 'not a Wi-Fi QR code'],
     ['WIFI:T:nopass;S:Guest;;', 'no password'],
     ['WIFI:T:WEP;S:Old;P:12345;;', 'another kind of network'],
     ['WIFI:T:WPA2-EAP;S:Staff;E:PEAP;I:me;P:secret123;;', 'another kind of network'],

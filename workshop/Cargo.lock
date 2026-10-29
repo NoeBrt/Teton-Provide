@@ -396,7 +396,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
-name = "sensor-provisioning"
+name = "iot-provisioning"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
@@ -405,12 +405,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "sensor-workshop"
+name = "iot-workshop"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "qrcode",
- "sensor-provisioning",
+ "iot-provisioning",
  "sha2",
  "snow",
 ]

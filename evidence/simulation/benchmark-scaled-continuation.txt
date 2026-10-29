@@ -2,7 +2,7 @@ SIMULATION ONLY: valid --scale path after benchmark argv repair.
 Measured release binary SHA-256: 8ba75f7c85880ddcc5f12fb88b2668e0d033d65f359b2f60ac1d70e51b2f8e70
 
 PROCESS 1
-Command: /tmp/sensor-benchmark-cli-args-58mrruag/benchmark-after --scale
+Command: /tmp/iot-benchmark-cli-args-58mrruag/benchmark-after --scale
 Exit: 0; stderr empty
 SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
 Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
@@ -26,7 +26,7 @@ devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_servic
 1000,8,7,7000,8,11.760,84.177,162.975,11.163,85036.5,74605.1,88288.3
 
 PROCESS 2
-Command: /tmp/sensor-benchmark-cli-args-58mrruag/benchmark-after --scale
+Command: /tmp/iot-benchmark-cli-args-58mrruag/benchmark-after --scale
 Exit: 0; stderr empty
 SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
 Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.
@@ -50,7 +50,7 @@ devices,concurrency,samples,checked_jobs,peak_clients,median_batch_ms,p50_servic
 1000,8,7,7000,8,12.106,84.558,165.991,11.614,82604.9,75928.8,87615.5
 
 PROCESS 3
-Command: /tmp/sensor-benchmark-cli-args-58mrruag/benchmark-after --scale
+Command: /tmp/iot-benchmark-cli-args-58mrruag/benchmark-after --scale
 Exit: 0; stderr empty
 SIMULATION ONLY: std channels and worker threads; no radio or network measurements.
 Independent fake device jobs; all queued at batch start. Concurrency limits active clients, not radio connections.

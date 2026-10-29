@@ -10,8 +10,8 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 
-pub const DEVICE_CERT_DOMAIN: &[u8] = b"sensor-device-cert/1";
-pub const TECHNICIAN_TOKEN_DOMAIN: &[u8] = b"sensor-technician-token/2";
+pub const DEVICE_CERT_DOMAIN: &[u8] = b"iot-device-cert/1";
+pub const TECHNICIAN_TOKEN_DOMAIN: &[u8] = b"iot-technician-token/2";
 const CERTIFICATE_VERSION: u8 = 1;
 /// Version 2 added the holder key; version 1 tokens are refused as malformed.
 const TOKEN_VERSION: u8 = 2;
@@ -48,14 +48,14 @@ impl std::fmt::Display for AuthorityError {
 
 impl std::error::Error for AuthorityError {}
 
-/// `SENSOR-` and 10 upper-case hex digits of SHA-256(static public key): unique without a registry (40 bits keep
+/// `IOT-` and 10 upper-case hex digits of SHA-256(static public key): unique without a registry (40 bits keep
 /// collisions unlikely across millions of sensors), and only the holder of that key can prove it.
 pub fn device_id(public_key: &[u8; KEY_LEN]) -> String {
     let hex: String = device_id_bytes(public_key)
         .iter()
         .map(|b| format!("{b:02X}"))
         .collect();
-    format!("SENSOR-{hex}")
+    format!("IOT-{hex}")
 }
 
 /// The identity in primary BLE manufacturer data, without its constant text prefix.
@@ -123,7 +123,7 @@ fn split_signed(bytes: &[u8], version: u8) -> Result<(&[u8], [u8; SIGNATURE_LEN]
 }
 
 /// `[1][device static public key 32][customer len][customer]` then an Ed25519 signature over
-/// `"sensor-device-cert/1" ‖ body`.
+/// `"iot-device-cert/1" ‖ body`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceCertificate {
     pub public_key: [u8; KEY_LEN],
@@ -198,7 +198,7 @@ impl DeviceCertificate {
 }
 
 /// `[2][expires, Unix seconds, u64 BE][holder X25519 public key 32][name len][name][count][customer len][customer]…`
-/// then an Ed25519 signature over `"sensor-technician-token/2" ‖ body`. The authority generates the holder key pair
+/// then an Ed25519 signature over `"iot-technician-token/2" ‖ body`. The authority generates the holder key pair
 /// with each code; the code carries the private half and the phone uses it as its Noise static key, so a sensor
 /// that records the token cannot present it anywhere. Still not bound to one phone: any phone with the code works.
 #[derive(Clone, PartialEq, Eq)]
@@ -476,11 +476,11 @@ mod tests {
         let id = device_id(&[7; 32]);
         assert_eq!(id, device_id(&[7; 32]));
         assert_ne!(id, device_id(&[8; 32]));
-        assert_eq!(id.len(), "SENSOR-".len() + 10);
+        assert_eq!(id.len(), "IOT-".len() + 10);
         assert_eq!(
             id,
             format!(
-                "SENSOR-{}",
+                "IOT-{}",
                 device_id_bytes(&[7; 32])
                     .iter()
                     .map(|b| format!("{b:02X}"))
@@ -488,8 +488,8 @@ mod tests {
             )
         );
         assert!(
-            id.starts_with("SENSOR-")
-                && id[7..]
+            id.starts_with("IOT-")
+                && id[4..]
                     .bytes()
                     .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_lowercase())
         );

@@ -1,6 +1,6 @@
 use std::fmt;
 
-pub const DEVICE_ID: &str = "SENSOR-DEMO-001";
+pub const DEVICE_ID: &str = "IOT-DEMO-001";
 pub const REQUEST: &[u8] = b"hello";
 pub const RESPONSE: &[u8] = b"world";
 /// BLE GATT identifiers of the hello probe, generated once for this project.

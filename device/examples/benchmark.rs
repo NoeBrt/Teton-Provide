@@ -1,8 +1,8 @@
 //! Simulation measurements only; no BLE, Wi-Fi, or 200-device throughput claims.
 
-use sensor_provisioning::protocol::{DEVICE_ID, REQUEST, RESPONSE};
-use sensor_provisioning::simulation::batch::run_batch;
-use sensor_provisioning::simulation::{Connection, Device, Error, Fault};
+use iot_provisioning::protocol::{DEVICE_ID, REQUEST, RESPONSE};
+use iot_provisioning::simulation::batch::run_batch;
+use iot_provisioning::simulation::{Connection, Device, Error, Fault};
 use std::time::{Duration, Instant};
 
 const TIMEOUT: Duration = Duration::from_secs(2);

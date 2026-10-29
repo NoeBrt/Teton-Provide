@@ -4,17 +4,17 @@ admin link). noe-lab administration and the user's jobs ran over Ethernet (eno1)
 
 Configurator: iPhone 15 Pro, iOS 27.0, app "provide." from commit 327edf0, phone network on (site entered
               from the network's Wi-Fi QR code, kept behind Face ID); the device's printed QR label scanned.
-Device:       noe-lab, Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MediaTek MT7921; sensor-device service
-              (systemd, user sensor, SENSOR_WIFI_INTERFACE=wlo1), device code 12b6e19 plus this step's fixes.
+Device:       noe-lab, Ubuntu 22.04.5, BlueZ 5.64, NetworkManager 1.36.6, MediaTek MT7921; iot-device service
+              (systemd, user iot, IOT_WIFI_INTERFACE=wlo1), device code 12b6e19 plus this step's fixes.
 Capture:      sudo btmon -w on the device during each attempt; checked with a script, raw capture not kept.
 
 == Run 1 (17:48): the device joined, the phone never got the result ==
-journalctl -u sensor-device:
+journalctl -u iot-device:
 2026-10-20T17:48:24+0200 attempt ce8f639904db97b974b0e746df5adcfb pending
 2026-10-20T17:48:30+0200 attempt ce8f639904db97b974b0e746df5adcfb connected
 2026-10-20T17:48:50+0200 provisioning closed; accepts only hello
-NetworkManager: 'sensor-provisioned' (4a7db77c-...) activated on wlo1 at 17:48:30, WPA2 4-way handshake
-completed, DHCP address 192.168.1.12; autoconnect turned on by uid 999 (sensor).
+NetworkManager: 'iot-provisioned' (4a7db77c-...) activated on wlo1 at 17:48:30, WPA2 4-way handshake
+completed, DHCP address 192.168.1.12; autoconnect turned on by uid 999 (iot).
 App: "Wi-Fi setup failed. The sensor did not join in time. Try again."
 
 Cause, from the capture (packet numbers of that capture):
@@ -30,17 +30,17 @@ Fix: bluetoothd runs with --noplugin=battery (device/systemd/install.sh, drop-in
 provisioning service stays 2 min after success instead of 20 s, so Try again can recover a lost result.
 
 == Run 2 (17:57), after the fix: success end to end ==
-journalctl -u sensor-device:
-2026-10-20T17:54:36+0200 SENSOR-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning
+journalctl -u iot-device:
+2026-10-20T17:54:36+0200 IOT-DEMO-001 advertising on hci0; accepts hello and encrypted provisioning
 2026-10-20T17:57:10+0200 attempt e3bdeb73cb8e9de812705b84e95a2234 pending
 2026-10-20T17:57:16+0200 attempt e3bdeb73cb8e9de812705b84e95a2234 connected
 journalctl -u NetworkManager:
-2026-10-20T17:57:10+0200 device (wlo1): Activation: starting connection 'sensor-provisioned' (4a7db77c-6fda-47aa-95ca-d186c5096b32)
+2026-10-20T17:57:10+0200 device (wlo1): Activation: starting connection 'iot-provisioned' (4a7db77c-6fda-47aa-95ca-d186c5096b32)
 2026-10-20T17:57:16+0200 device (wlo1): Activation: (wifi) Stage 2 of 5 (Device Configure) successful. Connected to wireless network "<site network>"
 2026-10-20T17:57:16+0200 dhcp4 (wlo1): state changed new lease, address=192.168.1.12
 2026-10-20T17:57:16+0200 device (wlo1): Activation: successful, device activated.
-2026-10-20T17:57:16+0200 audit: op="connection-update" uuid="4a7db77c-6fda-47aa-95ca-d186c5096b32" name="sensor-provisioned" args="802-11-wireless-security.auth-alg,connection.interface-name,connection.autoconnect" pid=2039672 uid=999 result="success"
-nmcli connection show --active: sensor-provisioned 4a7db77c-6fda-47aa-95ca-d186c5096b32 wlo1 (wpa-psk, autoconnect yes)
+2026-10-20T17:57:16+0200 audit: op="connection-update" uuid="4a7db77c-6fda-47aa-95ca-d186c5096b32" name="iot-provisioned" args="802-11-wireless-security.auth-alg,connection.interface-name,connection.autoconnect" pid=2039672 uid=999 result="success"
+nmcli connection show --active: iot-provisioned 4a7db77c-6fda-47aa-95ca-d186c5096b32 wlo1 (wpa-psk, autoconnect yes)
 App: "Device connected", joined the site network with 192.168.1.12 (reported by the user).
 
 Over the air (run 2 capture, provisioning characteristic = handle 0x0017 after the BlueZ restart):

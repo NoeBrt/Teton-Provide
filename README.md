@@ -216,9 +216,9 @@ A technician walks into a hospital with sensors that have no screen and no netwo
 | Machine | What it did |
 | --- | --- |
 | **iPhone 15 Pro** (iOS 27) | Code import, site Wi-Fi from its QR code, real setups. |
-| **MacBook** (macOS) | Desktop app. Also the manufacturer's workshop: certifies sensors, issues technician codes (`sensor-workshop`). |
+| **MacBook** (macOS) | Desktop app. Also the manufacturer's workshop: certifies sensors, issues technician codes (`iot-workshop`). |
 | **noe-lab** (Ubuntu 22.04, x86-64) | First real device: joined the Wi-Fi from the iPhone. Also hosts the 200-sensor bench. |
-| **Jetson 019** (Ubuntu 22.04, ARM64) | Staged like a production sensor as `SENSOR-7B09F20339`: setups from the Mac and the iPhone, reconfiguration. |
+| **Jetson 019** (Ubuntu 22.04, ARM64) | Staged like a production sensor as `IOT-7B09F20339`: setups from the Mac and the iPhone, reconfiguration. |
 | **Internet box** (WPA2-Personal) | The site network the sensors join. |
 
 ## Option considered
@@ -306,7 +306,7 @@ Threats and limits: [docs/SECURITY.md](docs/SECURITY.md).
 
 | Stack | Why |
 | --- | --- |
-| **Rust CLI** `sensor-workshop`, its own crate on top of the device's protocol library | The workshop and the sensor share one certificate and code format, so they cannot disagree on it. |
+| **Rust CLI** `iot-workshop`, its own crate on top of the device's protocol library | The workshop and the sensor share one certificate and code format, so they cannot disagree on it. |
 | **Two Ed25519 authorities**, kept off the sensors | One certifies sensors, one issues technician codes. |
 
 ## Why an app, not a website
@@ -325,7 +325,7 @@ A web page needs no install, but it fails the challenge:
   checks their certificate and sends the Wi-Fi encrypted, one sensor or a whole wing.
 - **[The device](device/)**: a Rust service for the sensor, on Ubuntu. It answers over Bluetooth, checks the
   technician's code and joins the Wi-Fi through NetworkManager.
-- **[The workshop](workshop/)**: `sensor-workshop`, the Rust CLI the manufacturer runs on its own laptop. It keeps the two
+- **[The workshop](workshop/)**: `iot-workshop`, the Rust CLI the manufacturer runs on its own laptop. It keeps the two
   authority keys, deploys and certifies sensors over SSH, and issues technician codes.
 - **Tests** on both sides: Noise vectors shared by the device and the app, refusal cases, the batch queue, a
   200-sensor simulation.
@@ -361,9 +361,9 @@ from any folder. Sign in with `gh auth login` using an account with access to th
 
 ```sh
 cargo install --path workshop --locked        # first build: 1-2 minutes
-sensor-workshop init                           # once, for every customer: two authorities, their public keys
-sensor-workshop deploy user@192.168.55.1 --customer "Noé Home"
-sensor-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
+iot-workshop init                           # once, for every customer: two authorities, their public keys
+iot-workshop deploy user@192.168.55.1 --customer "Noé Home"
+iot-workshop issue "Your full name" --customer "Noé Home" --customer "Hôpital Saint-Louis"   # a code for both
 ```
 
 `deploy` takes any SSH host: an alias from `~/.ssh/config`, or `user@192.168.55.1` for a Jetson over USB. It reads the
@@ -371,9 +371,9 @@ sensor's architecture, downloads the v1.1.0 Linux binaries to your laptop, check
 the tool and caches them. It then asks for the sensor's sudo password once, copies the binaries, runs the installer,
 has the sensor create its key, certifies that key for the customer, records your laptop's time as the sensor's
 earliest clock and starts the service. Add the Wi-Fi interface after the host (`deploy <ssh-host> wlo1`) to pin one;
-by default NetworkManager picks. `deploy` refuses a sensor that already runs the service: run `sensor-workshop
+by default NetworkManager picks. `deploy` refuses a sensor that already runs the service: run `iot-workshop
 uninstall <ssh-host>` first. It removes the service and the Wi-Fi the sensor was given, and moves the sensor's key to
-`/root/sensor-backup`.
+`/root/iot-backup`.
 
 You build nothing for Linux, on the laptop or on the sensor. The first deployment per architecture needs internet on
 the laptop; later ones use its cache. Keep the checkout in place after installing the tool: `deploy` reads the
@@ -382,9 +382,9 @@ installer from `device/`. For a local build or a sensor without SSH, see
 
 A customer is a name or an ID: `"Noé Home"` becomes `NOE-HOME`, the ID that certificates and codes carry. Leave out
 `--customer` and the tool offers the last customer again and waits for your yes. A script with no terminal must name
-the customer. `sensor-workshop help` lists every command.
+the customer. `iot-workshop help` lists every command.
 
-Copy the two public keys from `sensor-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
+Copy the two public keys from `iot-workshop init` into `configurator/src/authority.ts` (`DEVICE_AUTHORITY`,
 `TECHNICIAN_AUTHORITY`) before you build the app.
 
 ### 2. Install the app on a phone
@@ -414,8 +414,8 @@ Provide. in `/Applications`. **Linux** (not tested): `npm run desktop:build`. Wi
 ### 4. Set up the sensor
 
 Open Provide. with no DEMO badge, scan the technician code, enter the site Wi-Fi, then tap **Set up** on
-`SENSOR-XXXXXXXXXX`. The card ends on **Device connected** with the sensor's address; on Ubuntu,
-`nmcli connection show --active` lists `sensor-provisioned`.
+`IOT-XXXXXXXXXX`. The card ends on **Device connected** with the sensor's address; on Ubuntu,
+`nmcli connection show --active` lists `iot-provisioned`.
 
 Troubleshooting, tests and details: [docs/SETUP.md](docs/SETUP.md).
 
@@ -550,7 +550,7 @@ of the installer on the Edge, and a result per Edge even when it fails: see
 - **The customer is written into the sensor's certificate**, so moving a sensor to another customer needs a new
   certificate.
 - **No transfer between customers yet.** `deploy` refuses a sensor that already has the service, and
-  `sensor-stage install` refuses to replace a certificate. `uninstall` then `deploy` gives the sensor a new key, a new ID
+  `iot-stage install` refuses to replace a certificate. `uninstall` then `deploy` gives the sensor a new key, a new ID
   and a new customer. Moving a sensor while keeping its ID needs a procedure still to define: who authorizes it, and
   what happens to the old customer's Wi-Fi on the sensor.
 - **Customer IDs come from names.** "Hôpital Saint-Louis" and "Hopital Saint Louis" both give `HOPITAL-SAINT-LOUIS`,

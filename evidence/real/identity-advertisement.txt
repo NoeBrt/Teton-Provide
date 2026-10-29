@@ -27,16 +27,16 @@ reports=4 identityMatches=4
 
 ACTUAL_HOST — deployment to jetson-019:
 Final btmon check: properties 0x0013, Connectable + Scannable, legacy ADV_IND.
-/home/<user>/sensor-factory/target/release/device.identity: OK
+/home/<user>/iot-factory/target/release/device.identity: OK
 active
-3361419b2f3dbf6b8e8bc96813dfd2ed21ccdc494a1ac2f65fb5ef83007888d2  /usr/local/bin/sensor-device
+3361419b2f3dbf6b8e8bc96813dfd2ed21ccdc494a1ac2f65fb5ef83007888d2  /usr/local/bin/iot-device
       LE Set Extended Advertising Data (0x08|0x0037) ncmd 2
         Status: Success (0x00)
 < HCI Command: Read Local Name (0x03|0x0014) plen 0         #16 [hci0] 1.953844
 > HCI Event: Command Complete (0x0e) plen 252               #17 [hci0] 1.969804
       Read Local Name (0x03|0x0014) ncmd 2
         Status: Success (0x00)
-        Name: SENSOR-7B09F20339
+        Name: IOT-7B09F20339
 < HCI Command: LE Set Extended Adv.. (0x08|0x0037) plen 35  #18 [hci0] 1.969839
         Handle: 0x01
         Operation: Complete extended advertising data (0x03)
@@ -57,7 +57,7 @@ active
         Number of sets: 1 (0x01)
 
 ACTUAL_BLE / ACTUAL_WIFI — observed after deployment:
-Mac Provide UI: SENSOR-7B09F20339; hello success at 12:59:48;
+Mac Provide UI: IOT-7B09F20339; hello success at 12:59:48;
 Wi-Fi setup success at 13:00:52, IP 192.168.1.15.
 Device journal independently: hello exchanged; provisioning session (MTU 517);
 technician accepted; attempt pending, then connected at 13:00:52.

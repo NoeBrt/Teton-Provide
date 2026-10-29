@@ -4,9 +4,9 @@
 # key is never regenerated. Private keys stay in 0600 files; argv carries public keys and certificates only.
 set -eu
 umask 077
-BIN=$HOME/noe-ws/sensor-dev/target/release   # stage, built in device/
-WORKSHOP=${WORKSHOP:-sensor-workshop}       # cargo install --path workshop --locked
-AUTHORITY=$HOME/noe-ws/sensor-authority
+BIN=$HOME/noe-ws/iot-dev/target/release   # stage, built in device/
+WORKSHOP=${WORKSHOP:-iot-workshop}       # cargo install --path workshop --locked
+AUTHORITY=$HOME/noe-ws/iot-authority
 OUT=$HOME/noe-ws/lab-sensors
 mkdir -p "$OUT"
 technician=$("$WORKSHOP" public "$AUTHORITY" | sed -n 's/^technician authority.*: //p')

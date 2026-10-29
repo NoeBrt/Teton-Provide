@@ -6,7 +6,7 @@ DEBUG
 Command: RUSTUP_TOOLCHAIN=stable cargo test --all-targets --locked --offline
 Exit: 0
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
-     Running unittests src/lib.rs (target/debug/deps/sensor_provisioning-4f606155ec9216ed)
+     Running unittests src/lib.rs (target/debug/deps/iot_provisioning-4f606155ec9216ed)
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
      Running unittests device/audit.rs (target/debug/deps/audit_host-837ea2430c6e32a0)
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
@@ -25,7 +25,7 @@ RELEASE
 Command: RUSTUP_TOOLCHAIN=stable cargo test --release --all-targets --locked --offline
 Exit: 0
     Finished `release` profile [optimized] target(s) in 0.20s
-     Running unittests src/lib.rs (target/release/deps/sensor_provisioning-a18a1f7fda4bcfaf)
+     Running unittests src/lib.rs (target/release/deps/iot_provisioning-a18a1f7fda4bcfaf)
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
      Running unittests device/audit.rs (target/release/deps/audit_host-73b09bff84971cb7)
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

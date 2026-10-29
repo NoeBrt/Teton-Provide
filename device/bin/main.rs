@@ -8,7 +8,7 @@
 //!
 //! Primary manufacturer data carries state then five key-derived identity bytes; the scan-response name is diagnostic.
 //! State directory: `$STATE_DIRECTORY` (systemd `StateDirectory=`), else `./state`.
-//! `SENSOR_WIFI_INTERFACE` pins the Wi-Fi device to provision (default: the first Wi-Fi device).
+//! `IOT_WIFI_INTERFACE` pins the Wi-Fi device to provision (default: the first Wi-Fi device).
 
 mod wifi;
 
@@ -18,12 +18,12 @@ use bluer::gatt::local::{
     CharacteristicWriteMethod, ReqError, Service,
 };
 use bluer::{Adapter, Address, Uuid};
-use sensor_provisioning::authority::{checked_now, device_id, device_id_bytes};
-use sensor_provisioning::protocol::{
+use iot_provisioning::authority::{checked_now, device_id, device_id_bytes};
+use iot_provisioning::protocol::{
     self, CHARACTERISTIC_UUID, SERVICE_UUID, STATE_COMPANY_ID, STATE_NOT_STAGED, STATE_OFFLINE,
     STATE_ONLINE, STATE_READY,
 };
-use sensor_provisioning::provision::{
+use iot_provisioning::provision::{
     Activation, FRAME_HANDSHAKE, FRAME_TRANSPORT, Failure, Identity, KeyPair, Outcome,
     PROVISION_CHARACTERISTIC_UUID, PROVISIONED_FILE, Provisioner, Session, hex,
 };
@@ -468,7 +468,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or_else(|| keys.as_ref().map(|keys| &keys.public_key));
     let name = public_key
         .map(device_id)
-        .unwrap_or_else(|| "SENSOR-UNSTAGED".to_string());
+        .unwrap_or_else(|| "IOT-UNSTAGED".to_string());
     let id = public_key.map(device_id_bytes);
     let (current, known) = startup_profile(&state_dir, wifi::profile_active);
     let staged = identity.is_some();
@@ -482,7 +482,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 peers: HashMap::new(),
             })),
             state_dir: state_dir.clone(),
-            interface: std::env::var("SENSOR_WIFI_INTERFACE").ok(),
+            interface: std::env::var("IOT_WIFI_INTERFACE").ok(),
             current: Mutex::new(current),
             floor: AtomicU64::new(floor),
             started: (floor, Instant::now()),
@@ -579,8 +579,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use ed25519_dalek::SigningKey;
-    use sensor_provisioning::authority::{DeviceCertificate, TechnicianToken};
-    use sensor_provisioning::provision::{NOISE_PARAMS, PROLOGUE, TOKEN_ACCEPTED, TOKEN_REFUSED};
+    use iot_provisioning::authority::{DeviceCertificate, TechnicianToken};
+    use iot_provisioning::provision::{NOISE_PARAMS, PROLOGUE, TOKEN_ACCEPTED, TOKEN_REFUSED};
 
     const PHONE: Address = Address::new([1, 2, 3, 4, 5, 6]);
     const OTHER: Address = Address::new([6, 5, 4, 3, 2, 1]);
@@ -777,7 +777,7 @@ mod tests {
     fn the_state_rides_in_manufacturer_data_beside_the_service_and_the_sensor_id() {
         let adv = advertisement(
             STATE_ONLINE,
-            "SENSOR-3F9A2C81D4",
+            "IOT-3F9A2C81D4",
             Some([0x3f, 0x9a, 0x2c, 0x81, 0xd4]),
         );
         assert_eq!(
@@ -785,7 +785,7 @@ mod tests {
             Some(&vec![STATE_ONLINE, 0x3f, 0x9a, 0x2c, 0x81, 0xd4])
         );
         assert!(adv.service_uuids.contains(&Uuid::from_u128(SERVICE_UUID)));
-        assert_eq!(adv.local_name.as_deref(), Some("SENSOR-3F9A2C81D4"));
+        assert_eq!(adv.local_name.as_deref(), Some("IOT-3F9A2C81D4"));
         assert_eq!(adv.service_uuids.len(), 1);
         assert_eq!(adv.manufacturer_data.len(), 1);
         assert_eq!(adv.discoverable, Some(true));
@@ -800,7 +800,7 @@ mod tests {
 
     #[test]
     fn the_working_profile_is_recorded_durably_and_read_back() {
-        let dir = std::env::temp_dir().join(format!("sensor-persist-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iot-persist-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let [first, second] = wifi::PROFILE_UUIDS;
         assert_eq!(current_profile(&dir).unwrap(), None, "never provisioned");
@@ -828,7 +828,7 @@ mod tests {
 
     #[test]
     fn a_garbled_marker_leaves_the_profiles_alone() {
-        let dir = std::env::temp_dir().join(format!("sensor-startup-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iot-startup-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let [_, second] = wifi::PROFILE_UUIDS;
         let active = |p: &str| p == second;
@@ -848,7 +848,7 @@ mod tests {
 
     #[test]
     fn the_floor_never_starts_before_the_firmware_date() {
-        let dir = std::env::temp_dir().join(format!("sensor-floor-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iot-floor-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(initial_floor(&dir), FIRMWARE_BUILT, "no floor recorded yet");
         for (recorded, floor) in [

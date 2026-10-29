@@ -9,5 +9,5 @@ if (!identity) {
   identity = identities.match(/\b([A-Fa-f0-9]{40})\s+"(?:Apple Development:|Developer ID Application:)[^"]+"/)?.[1] ?? '-';
 }
 if (identity === '-') console.warn('Ad-hoc signing: Keychain access may be requested again after updates. Install an Apple signing certificate for a stable identity.');
-execFileSync('codesign', ['--force', '--sign', identity, '--identifier', 'dev.sensorprovisioning.provide', app], { stdio: 'inherit' });
+execFileSync('codesign', ['--force', '--sign', identity, '--identifier', 'dev.iotprovisioning.provide', app], { stdio: 'inherit' });
 execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });

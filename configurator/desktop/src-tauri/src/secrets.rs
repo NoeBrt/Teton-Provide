@@ -1,7 +1,7 @@
 // Secret storage: the system keychain (macOS Keychain, Windows Credential Manager, Secret Service on Linux), one entry
 // per name under the app's identifier. The page reads and writes through secureStore.web.ts; nothing is kept here.
 
-const SERVICE: &str = "dev.sensorprovisioning.provide";
+const SERVICE: &str = "dev.iotprovisioning.provide";
 
 /// Only the names the app stores (`technician-token`, `site-password-<UUID>`…): the page cannot reach other entries.
 fn entry(key: &str) -> Result<keyring::Entry, String> {

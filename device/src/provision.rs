@@ -26,7 +26,7 @@ use std::path::Path;
 
 pub const NOISE_PARAMS: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 /// Binds the protocol version into the handshake transcript.
-pub const PROLOGUE: &[u8] = b"sensor-provision/2";
+pub const PROLOGUE: &[u8] = b"iot-provision/2";
 pub const PROVISION_CHARACTERISTIC_UUID: u128 = 0x3c2c02fa_847e_480c_9f22_b239dfa524c9;
 /// One Noise message per GATT value; with its frame byte it stays within the 512-byte ATT attribute limit.
 /// ponytail: no chunk layer, the largest message (message 3 with the largest token) is 499 bytes, 500 with its frame
@@ -1325,7 +1325,7 @@ mod tests {
 
     #[test]
     fn a_device_is_ready_only_once_keyed_and_certified_for_its_own_key() {
-        let dir = std::env::temp_dir().join(format!("sensor-identity-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iot-identity-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         assert!(Identity::load(&dir).unwrap().is_none(), "nothing staged");
         let keys = KeyPair::generate().unwrap();

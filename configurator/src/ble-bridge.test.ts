@@ -21,14 +21,14 @@ test('an advertisement reaches the app as a react-native-ble-manager peripheral'
   const heard: unknown[] = [];
   ble.onDiscoverPeripheral(p => heard.push(p));
   await new Promise(resolve => setTimeout(resolve));
-  emit('ble-discover', { id: 'A', name: 'jetson-019', advertised: 'SENSOR-AFD042F349', rssi: -61, manufacturer: { ffff: [1, 0x7b, 9, 0xf2, 3, 0x39] } });
+  emit('ble-discover', { id: 'A', name: 'jetson-019', advertised: 'IOT-AFD042F349', rssi: -61, manufacturer: { ffff: [1, 0x7b, 9, 0xf2, 3, 0x39] } });
   emit('ble-discover', { id: 'B', name: 'jetson-019', advertised: null, rssi: null, manufacturer: {} });
   assert.deepEqual(heard, [
-    { id: 'A', name: 'jetson-019', rssi: -61, advertising: { localName: 'SENSOR-AFD042F349', manufacturerData: { ffff: { bytes: [1, 0x7b, 9, 0xf2, 3, 0x39] } } } },
+    { id: 'A', name: 'jetson-019', rssi: -61, advertising: { localName: 'IOT-AFD042F349', manufacturerData: { ffff: { bytes: [1, 0x7b, 9, 0xf2, 3, 0x39] } } } },
     // The system's cached name is never passed off as the advertised one.
     { id: 'B', name: 'jetson-019', rssi: 127, advertising: { localName: undefined, manufacturerData: {} } },
   ]);
-  assert.equal(sensorId((heard[0] as { advertising: Parameters<typeof sensorId>[0] }).advertising), 'SENSOR-7B09F20339');
+  assert.equal(sensorId((heard[0] as { advertising: Parameters<typeof sensorId>[0] }).advertising), 'IOT-7B09F20339');
 });
 
 test('scan, write, read and state go to the matching commands; remove stops listening', async () => {

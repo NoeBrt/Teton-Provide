@@ -163,7 +163,7 @@ work stops before Wi-Fi, UI, cloud infrastructure, and advanced cryptography.
 
 **Original proposal:** One GitHub repository containing reproducible code and evidence.
 
-**Final choice:** Use `sensor-provisioning/` because the workspace root Git metadata
+**Final choice:** Use `iot-provisioning/` because the workspace root Git metadata
 is unavailable. Private GitHub creation is authorized but not completed.
 
 **Reason:** Neither hardware success nor remote publication can be inferred from
@@ -248,7 +248,7 @@ Bleak documents BlueZ >=5.55, met by the workstation's tools, not yet verified o
 
 **Original proposal:** Private GitHub repository and hardware-first milestone.
 
-**Final choice:** Continue in the existing local `sensor-provisioning/` Git
+**Final choice:** Continue in the existing local `iot-provisioning/` Git
 repository. Write `docs/ARCHITECTURE.md` and the plan and to-do list (development notes, git history).
 Do not change the existing workspace AGENTS.md or implement future features now.
 
@@ -591,7 +591,7 @@ and a `device` binary that serves the shared handler over one GATT characteristi
 A single pending slot holds `(client address, response)`: every write clears it,
 `hello` fills it, and a read returns `world` once and only to that client. Nonzero
 offsets fail with `InvalidOffset`, other payloads with `NotSupported`. The binary
-powers the default adapter, advertises `SENSOR-DEMO-001` plus the service UUID, and
+powers the default adapter, advertises `IOT-DEMO-001` plus the service UUID, and
 unregisters on SIGINT/SIGTERM. The systemd unit uses `DynamicUser`, because
 Ubuntu's BlueZ D-Bus policy allows the default context, and `Requires=bluetooth.service`,
 because registrations do not survive a `bluetoothd` restart.
@@ -689,7 +689,7 @@ architecture writeup and for production.
 
 | Alternative | Conclusion |
 | --- | --- |
-| **No proof** (anonymous key exchange, BLE "Just Works") | Rejected. It meets "no plaintext over the air" literally but anyone in range can advertise `SENSOR-DEMO-001`, receive the password, and even relay to the real sensor so the app still shows *Device connected*. It saves the technician one scan. |
+| **No proof** (anonymous key exchange, BLE "Just Works") | Rejected. It meets "no plaintext over the air" literally but anyone in range can advertise `IOT-DEMO-001`, receive the password, and even relay to the real sensor so the app still shows *Device connected*. It saves the technician one scan. |
 | **Short code on the label** (8 digits, HomeKit style) + PAKE (SRP6a or SPAKE2) | Viable if sensor labels cannot carry a QR. Each wrong guess costs one live attempt. Needs a different protocol: `NKpsk2` requires a 256-bit secret that nobody can type. |
 | **Sensor list sent by Smith** before the visit (IDs, keys, work order) | Production target for 200 devices: no secret on the label, authorization comes with the work order. Needs the phone to sync before the visit. |
 | **Sensor device attestation** (per-device key, certificate signed by a manufacturer CA, CA public key in the app; Matter's model) | Best long-term identity proof: nothing secret printed in patient rooms. Must be per-device (one shared fleet key extracted from one sensor would impersonate all), ideally in a secure element; the app must still match the certificate's device ID to the sensor in front of the technician, and Smith revokes stolen units. Authorization stays separate (single use, work order). |
@@ -766,7 +766,7 @@ a sensor get a unique ID on a channel that no malicious device can use to pass a
 | Question | Choice |
 | --- | --- |
 | Threat | A rogue device in radio range that advertises like a sensor (to collect the site password or mislead the technician). Labels are dropped: scanning 200 of them is the bottleneck. |
-| Sensor identity | `SENSOR-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
+| Sensor identity | `IOT-` and 10 hex digits of SHA-256 of the sensor's static key (40 bits: no collision expected within a fleet; 6 digits would collide around 4,000 sensors). The certificate binds key, ID and customer. A secure element and Smith are out of scope for the demo. |
 | Phone authorization | Personal phones, app reserved to technicians: a signed token, delivered as the code `<token hex>.<holder key hex>`, a QR code scanned inside the app or pasted text, kept in the Keychain behind Face ID, valid 30 days, scoped to customers, checked by the sensor. The first build delivered it as a `provide://technician/` link; the link was removed after the security review, since another app could claim the scheme and receive the code. Not bound to one phone, but bound to a holder key the code carries (added after review). The sensor's clock floor is the later of its firmware build date and the time it last recorded, and rises no faster than its uptime. |
 | Reconfiguration | Allowed with a valid token. The device keeps two NetworkManager profiles and rolls back to the working one if the new network fails. |
 | Batch | Every ready sensor in range, six BLE links at a time (three before 2026-10-21). A wrong site password or a refused token stops new starts; a failure that belongs to one sensor does not. Counters, filters and **Retry failed** (the overall card of decision 28 replaced the filters and their failures-first sort). |
@@ -784,7 +784,7 @@ on any phone until it expires; 5 days bounds that (30 at first). Import inside t
 would bring it back without a scheme another app can claim. The clock floor follows a clock set far ahead only as
 fast as the uptime, so it cannot lock codes out, but after a long power-off it trails real time by the downtime.
 The authorities' private keys must stay offline at the manufacturer; the
-demo keeps them in `~/noe-ws/sensor-authority` on noe-lab (0600, outside the repository).
+demo keeps them in `~/noe-ws/iot-authority` on noe-lab (0600, outside the repository).
 
 **Evidence / test:** `device/src/authority.rs` and `device/src/provision.rs` tests (impostor with a copied certificate, other
 authority, other customer, expired and forged tokens, reconfiguration, rollback profile order);
@@ -924,7 +924,7 @@ the repository. Nothing let a reviewer see a wing, and nothing loaded the phone'
 | Entry | Tap the logo and confirm; the chip reads **DEMO**; the logo or the chip leaves (not while a test or a batch runs). The launch argument `-demo 1` (simctl) starts in it. |
 | Isolation | Switching remounts the screen: no sensor, result, scan or credential crosses modes. The demo authority (seeds filled with 0x51 and 0x52, public) is passed to `setup()` only in demo mode; real sensors are always checked against `DEVICE_AUTHORITY`. The demo's code and site live in memory; nothing saved is read or written, and the code and site sheets never open. |
 | Demo wing | `configurator/src/demo.ts`: each sensor runs the sensor side of Noise `XX` with its own key. 6 set up before, 4 not prepared, 3 out of Wi-Fi range, 3 impostors (a copied certificate without its key), 2 of another customer, some slow joins. About half is heard within 4 s, the rest over a minute. |
-| Bench | `tools/sensor_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `tools/mint-lab.sh` (`stage init`, `sensor-workshop certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `tools/sim-lab.sh` stops `sensor-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
+| Bench | `tools/iot_sim.py` (Bumble) takes hci0 through the HCI user channel. 200 identities from `tools/mint-lab.sh` (`stage init`, `iot-workshop certify` for `LAB`, 194 to 196 for `OTHER`, `stage install`; keys in 0600 files in `~/noe-ws/lab-sensors`), rotated over the advertising sets the MT7921 enables at once (it reports 20, enabled 16), 6 kept free for the phone's links. GATT and Noise byte for byte (`--selftest` replays `configurator/src/noise-vectors.json`); a simulated join outcome per identity (5.5 s, slow, not in range, busy, timeout, online, offline, clone); the password `wrong-password` gives `WrongPsk`. `tools/sim-lab.sh` stops `iot-device` and `bluetooth`, runs the bench, gives hci0 back on exit. |
 
 **Reason:** One app for both: the demo runs the real code paths (handshake, checks, batch, overall), so what a
 reviewer sees is what a technician gets. The bench measures what the Simulator cannot: the radio, iOS's links, the

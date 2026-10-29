@@ -7,7 +7,7 @@ sooner. This page sets out the problem and the plan.
 
 | Stage | Where | Network on the sensor |
 | --- | --- | --- |
-| 1. `sensor-workshop deploy`: install, key, certify for one customer | The manufacturer's workshop | None |
+| 1. `iot-workshop deploy`: install, key, certify for one customer | The manufacturer's workshop | None |
 | 2. Shipping and mounting | Hospital | None |
 | 3. Wi-Fi setup from Provide., over Bluetooth | Hospital | None, then the hospital Wi-Fi |
 | 4. In service | Hospital | Hospital Wi-Fi |

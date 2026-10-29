@@ -45,7 +45,7 @@ try {
   panel.on('pageerror', error => errors.push(error.message));
   await panel.goto('http://localhost:8081/?menubar=1');
   await panel.getByText('200 sensors nearby', { exact: true }).waitFor();
-  assert.equal(await panel.getByRole('button', { name: /^Open SENSOR-/ }).count(), 200);
+  assert.equal(await panel.getByRole('button', { name: /^Open IOT-/ }).count(), 200);
   const sensor = snapshot.sensors.find(sensor => sensor.id === 'demo-1').name;
   const test = panel.getByRole('button', { name: `Test ${sensor}`, exact: true });
   await test.click();

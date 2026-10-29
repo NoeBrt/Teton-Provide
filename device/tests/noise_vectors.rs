@@ -6,8 +6,8 @@
 
 use curve25519_dalek::MontgomeryPoint;
 use ed25519_dalek::SigningKey;
-use sensor_provisioning::authority::{DeviceCertificate, TechnicianToken, code_text, device_id};
-use sensor_provisioning::provision::{
+use iot_provisioning::authority::{DeviceCertificate, TechnicianToken, code_text, device_id};
+use iot_provisioning::provision::{
     NOISE_PARAMS, Outcome, PROLOGUE, REFUSED_EXPIRED, REFUSED_INVALID, Request, Response,
     TOKEN_ACCEPTED, TOKEN_REFUSED, hex,
 };

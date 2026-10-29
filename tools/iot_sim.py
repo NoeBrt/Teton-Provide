@@ -2,12 +2,12 @@
 """Simulated sensors over real Bluetooth LE, for the iPhone app (configurator/).
 
 One Bumble host owns hci0 through the kernel's HCI user channel. Each identity directory (`stage init` +
-`sensor-workshop certify` + `stage install`, the same files as /var/lib/sensor-device) becomes one sensor with its own
+`iot-workshop certify` + `stage install`, the same files as /var/lib/iot-device) becomes one sensor with its own
 static random address; ~20 legacy ADV_IND sets rotate over all identities. The GATT and Noise behaviour is a port of
 device/bin/main.rs and device/src/provision.rs; NetworkManager is replaced by a timed outcome per identity (PLAN).
 
-  sudo .venv/bin/python sensor_sim.py ~/noe-ws/lab-sensors      # sensor-device + bluetooth stopped, hci0 down
-  .venv/bin/python sensor_sim.py --selftest .../configurator/src/noise-vectors.json
+  sudo .venv/bin/python iot_sim.py ~/noe-ws/lab-sensors      # iot-device + bluetooth stopped, hci0 down
+  .venv/bin/python iot_sim.py --selftest .../configurator/src/noise-vectors.json
 """
 import asyncio
 import hashlib
@@ -33,8 +33,8 @@ SERVICE_UUID = '3b0a90ce-9564-40d1-b96b-14cf8858aba3'  # device/src/protocol.rs:
 HELLO_UUID = '29b3765c-de49-4114-889e-89b05852c968'  # device/src/protocol.rs:8
 PROVISION_UUID = '3c2c02fa-847e-480c-9f22-b239dfa524c9'  # device/src/provision.rs:30
 NOISE_NAME = b'Noise_XX_25519_ChaChaPoly_SHA256'  # exactly 32 bytes, so h = name
-PROLOGUE = b'sensor-provision/2'  # device/src/provision.rs:29
-CERT_DOMAIN, TOKEN_DOMAIN = b'sensor-device-cert/1', b'sensor-technician-token/2'  # device/src/authority.rs:13-14
+PROLOGUE = b'iot-provision/2'  # device/src/provision.rs:29
+CERT_DOMAIN, TOKEN_DOMAIN = b'iot-device-cert/1', b'iot-technician-token/2'  # device/src/authority.rs:13-14
 FIRMWARE_BUILT = 1_792_454_400  # device/bin/main.rs:47: token expiry is never checked against an earlier clock
 IDLE_S = 60  # device/bin/main.rs:42
 MAX_MESSAGE = 511  # device/src/provision.rs:34
@@ -163,7 +163,7 @@ CUSTOMER = re.compile(rb'[A-Za-z0-9_-]{1,32}')
 
 
 def device_id(public_key):
-    return 'SENSOR-' + hashlib.sha256(public_key).digest()[:5].hex().upper()
+    return 'IOT-' + hashlib.sha256(public_key).digest()[:5].hex().upper()
 
 
 def field(data, at):
@@ -296,7 +296,7 @@ class Sensor:
         self.profile, self.name = profile, device_id(public)
         # 'clone': the certificate and ID of a genuine sensor, without its key (the app must say not-genuine).
         self.static_private = os.urandom(32) if profile == 'clone' else identity[:32]
-        digest = hashlib.sha256(b'sensor-sim address' + public).digest()
+        digest = hashlib.sha256(b'iot-sim address' + public).digest()
         self.address = hci.Address(digest[:5] + bytes([digest[5] | 0xC0]))  # LSB first; 0b11 = static random
         n = int(directory.name)
         self.ipv4 = bytes([10, 77, n >> 8, n & 0xFF])

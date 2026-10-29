@@ -10,8 +10,8 @@
 //!
 //! Nothing here is secret on the command line: the private key never leaves the state directory (0600).
 
-use sensor_provisioning::authority::{DeviceCertificate, device_id};
-use sensor_provisioning::provision::{Identity, KeyPair, hex, unhex};
+use iot_provisioning::authority::{DeviceCertificate, device_id};
+use iot_provisioning::provision::{Identity, KeyPair, hex, unhex};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -52,7 +52,7 @@ fn init(dir: &std::path::Path) -> Result<(), String> {
         .map_err(|e| format!("cannot write the key: {e}"))?;
     println!("{} keyed in {}", device_id(&keys.public_key), dir.display());
     println!(
-        "public key (certify it with `sensor-workshop certify`): {}",
+        "public key (certify it with `iot-workshop certify`): {}",
         hex(&keys.public_key)
     );
     Ok(())
